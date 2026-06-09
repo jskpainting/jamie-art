@@ -10,6 +10,13 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/admin/login") ||
     pathname.startsWith("/admin/auth/")
 
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ADMIN_AUTH_BYPASS === "true"
+  ) {
+    return response
+  }
+
   if (isAdminPath && !isPublicAdminPath && !user) {
     const url = new URL("/admin/login", request.url)
     url.searchParams.set("next", pathname)
