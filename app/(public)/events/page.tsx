@@ -26,7 +26,7 @@ export default async function EventsPage() {
       {upcoming.length === 0 && past.length === 0 ? (
         <EmptyState
           title="No events scheduled"
-          description="Sign up for the mailing list in the footer to be notified when shows are announced."
+          description="Check back soon — sign up for the mailing list to be notified when shows are announced."
         />
       ) : (
         <div className="space-y-16">

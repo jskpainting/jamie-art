@@ -19,9 +19,6 @@ export function Footer() {
             >
               Jamie Kendrioski
             </Link>
-            <p className="text-sm text-muted-foreground mt-1">
-              Painter · Boston · Oils &amp; Acrylics
-            </p>
             {/* Social placeholders */}
             <div className="flex items-center gap-3 mt-4">
               <span
