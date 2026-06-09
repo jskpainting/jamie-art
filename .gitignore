@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# nested scaffold (accidental create-next-app run inside project root)
+/jamie-art/
