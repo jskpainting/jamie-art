@@ -1,20 +1,26 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
-import { ComingSoonCard } from "@/components/admin/coming-soon-card"
+import { getAllContacts, getContactsStats } from "@/lib/db/queries"
+import { ContactsClient } from "./contacts-client"
 
 export const metadata: Metadata = {
   title: "Contacts · Admin · Jamie Kendrioski",
 }
 
-export default function ContactsAdminPage() {
+export default async function ContactsAdminPage() {
+  const [contacts, stats] = await Promise.all([
+    getAllContacts(),
+    getContactsStats(),
+  ])
+
   return (
     <div>
       <PageHeader
-        eyebrow="Contacts"
+        eyebrow="Admin"
         title="Contacts"
         description="Mailing list and newsletter subscribers."
       />
-      <ComingSoonCard description="Phase 4 adds a contacts list with CSV/Excel import (papaparse), deduplication by email, and tag management." />
+      <ContactsClient contacts={contacts} stats={stats} />
     </div>
   )
 }

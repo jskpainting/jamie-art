@@ -92,3 +92,19 @@ export interface PaintingWithImages extends Painting {
 export interface SectionWithCount extends Section {
   painting_count: number
 }
+
+export interface InquiryWithPainting extends Inquiry {
+  painting_title: string | null
+}
+
+export interface ContactsStats {
+  total: number
+  subscribed: number
+  unsubscribed: number
+}
+
+export interface InquiriesStats {
+  new_count: number
+  replied_count: number
+  closed_count: number
+}

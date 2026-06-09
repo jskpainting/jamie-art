@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import type {
   Bio,
+  Contact,
+  ContactsStats,
   Event,
+  Inquiry,
+  InquiriesStats,
+  InquiryWithPainting,
   Painting,
   PaintingWithImages,
   Section,
@@ -218,5 +223,144 @@ export async function getNewInquiriesCount(): Promise<number> {
   } catch (err) {
     console.error("getNewInquiriesCount error:", err)
     return 0
+  }
+}
+
+export async function getPaintingsWithImagesForSection(
+  sectionId: string
+): Promise<PaintingWithImages[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("*, painting_images(id, url, alt, sort_order)")
+      .eq("section_id", sectionId)
+      .order("sort_order")
+    if (error) throw error
+    return (data ?? []).map((p) => ({
+      ...p,
+      painting_images: ((p.painting_images ?? []) as PaintingWithImages["painting_images"]).sort(
+        (a, b) => a.sort_order - b.sort_order
+      ),
+    }))
+  } catch (err) {
+    console.error("getPaintingsWithImagesForSection error:", err)
+    return []
+  }
+}
+
+export async function getAllContacts(): Promise<Contact[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .order("created_at", { ascending: false })
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getAllContacts error:", err)
+    return []
+  }
+}
+
+export async function getContactsStats(): Promise<ContactsStats> {
+  try {
+    const supabase = await createClient()
+    const { count: total } = await supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+    const { count: subscribed } = await supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("subscribed", true)
+    return {
+      total: total ?? 0,
+      subscribed: subscribed ?? 0,
+      unsubscribed: (total ?? 0) - (subscribed ?? 0),
+    }
+  } catch (err) {
+    console.error("getContactsStats error:", err)
+    return { total: 0, subscribed: 0, unsubscribed: 0 }
+  }
+}
+
+export async function getInquiriesWithPainting(): Promise<InquiryWithPainting[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("inquiries")
+      .select("*, paintings(title)")
+      .order("created_at", { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((inq) => ({
+      ...inq,
+      painting_title:
+        (inq.paintings as { title: string } | null)?.title ?? null,
+      paintings: undefined,
+    }))
+  } catch (err) {
+    console.error("getInquiriesWithPainting error:", err)
+    return []
+  }
+}
+
+export async function getInquiriesStats(): Promise<InquiriesStats> {
+  try {
+    const supabase = await createClient()
+    const [{ count: n }, { count: r }, { count: c }] = await Promise.all([
+      supabase
+        .from("inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "new"),
+      supabase
+        .from("inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "replied"),
+      supabase
+        .from("inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "closed"),
+    ])
+    return {
+      new_count: n ?? 0,
+      replied_count: r ?? 0,
+      closed_count: c ?? 0,
+    }
+  } catch (err) {
+    console.error("getInquiriesStats error:", err)
+    return { new_count: 0, replied_count: 0, closed_count: 0 }
+  }
+}
+
+export async function getRecentInquiries(limit = 5): Promise<Inquiry[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("inquiries")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getRecentInquiries error:", err)
+    return []
+  }
+}
+
+export async function getRecentContacts(limit = 5): Promise<Contact[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getRecentContacts error:", err)
+    return []
   }
 }

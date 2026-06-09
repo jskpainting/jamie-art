@@ -1,0 +1,149 @@
+"use client"
+
+import { useState } from "react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { Plus, Pencil, Trash2, ExternalLink } from "lucide-react"
+import { deleteEvent } from "@/lib/actions/events"
+import { ConfirmDialog } from "@/components/admin/confirm-dialog"
+import { Button } from "@/components/ui/button"
+import { EventFormDialog } from "./event-form-dialog"
+import type { Event } from "@/lib/types"
+import { cn } from "@/lib/utils"
+
+const STATUS_COLORS: Record<string, string> = {
+  upcoming: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  past: "bg-muted text-muted-foreground",
+  cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+}
+
+function EventRow({
+  event,
+  onEdit,
+}: {
+  event: Event
+  onEdit: (e: Event) => void
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-medium">{event.title}</p>
+          <span
+            className={cn(
+              "text-xs px-2 py-0.5 rounded-full font-medium",
+              STATUS_COLORS[event.status] ?? ""
+            )}
+          >
+            {event.status}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {format(new Date(event.starts_at), "MMM d, yyyy")}
+          {event.ends_at &&
+            ` — ${format(new Date(event.ends_at), "MMM d, yyyy")}`}
+          {event.location ? ` · ${event.location}` : ""}
+        </p>
+        {event.link && (
+          <a
+            href={event.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {event.link}
+          </a>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onEdit(event)}
+          aria-label="Edit event"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <ConfirmDialog
+          trigger={
+            <Button variant="ghost" size="icon-sm" aria-label="Delete event">
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          }
+          title="Delete event"
+          description={`"${event.title}" will be permanently deleted.`}
+          destructive
+          onConfirm={async () => {
+            const result = await deleteEvent(event.id)
+            if (!result.ok) throw new Error(result.error)
+            toast.success("Event deleted")
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+interface EventsClientProps {
+  upcoming: Event[]
+  past: Event[]
+}
+
+export function EventsClient({ upcoming, past }: EventsClientProps) {
+  const [addOpen, setAddOpen] = useState(false)
+  const [editEvent, setEditEvent] = useState<Event | null>(null)
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add event
+        </Button>
+      </div>
+
+      {/* Upcoming */}
+      <section className="space-y-3">
+        <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+          Upcoming
+        </h2>
+        {upcoming.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center rounded-xl border border-dashed border-border">
+            No upcoming events.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {upcoming.map((e) => (
+              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Past */}
+      {past.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+            Past
+          </h2>
+          <div className="space-y-2">
+            {past.map((e) => (
+              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <EventFormDialog open={addOpen} onOpenChange={setAddOpen} />
+      {editEvent && (
+        <EventFormDialog
+          open={!!editEvent}
+          onOpenChange={(o) => !o && setEditEvent(null)}
+          event={editEvent}
+        />
+      )}
+    </div>
+  )
+}

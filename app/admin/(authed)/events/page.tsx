@@ -1,20 +1,26 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
-import { ComingSoonCard } from "@/components/admin/coming-soon-card"
+import { getUpcomingEvents, getPastEvents } from "@/lib/db/queries"
+import { EventsClient } from "./events-client"
 
 export const metadata: Metadata = {
   title: "Events · Admin · Jamie Kendrioski",
 }
 
-export default function EventsAdminPage() {
+export default async function EventsAdminPage() {
+  const [upcoming, past] = await Promise.all([
+    getUpcomingEvents(),
+    getPastEvents(),
+  ])
+
   return (
     <div>
       <PageHeader
-        eyebrow="Events"
+        eyebrow="Admin"
         title="Events"
         description="Manage upcoming and past shows."
       />
-      <ComingSoonCard description="Phase 4 adds events CRUD — create shows, set dates and locations, add links, and mark events as past or cancelled." />
+      <EventsClient upcoming={upcoming} past={past} />
     </div>
   )
 }
