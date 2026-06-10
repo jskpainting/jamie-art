@@ -3,6 +3,8 @@ import { isAuthBypassed } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   Bio,
+  CommissionInquiry,
+  CommissionInquiriesStats,
   Contact,
   ContactsStats,
   Event,
@@ -12,6 +14,7 @@ import type {
   Painting,
   PaintingWithImages,
   Section,
+  Settings,
   SectionWithCount,
 } from "@/lib/types"
 
@@ -373,6 +376,86 @@ export async function getRecentContacts(limit = 5): Promise<Contact[]> {
     return data ?? []
   } catch (err) {
     console.error("getRecentContacts error:", err)
+    return []
+  }
+}
+
+// settings has public RLS — no db() needed
+export async function getSettings(): Promise<Settings | null> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("settings")
+      .select("*")
+      .single()
+    if (error) throw error
+    return data
+  } catch (err) {
+    console.error("getSettings error:", err)
+    return null
+  }
+}
+
+// Uses db() — commission_inquiries has auth-only read RLS
+export async function getAllCommissionInquiries(): Promise<CommissionInquiry[]> {
+  try {
+    const supabase = await db()
+    const { data, error } = await supabase
+      .from("commission_inquiries")
+      .select("*")
+      .order("created_at", { ascending: false })
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getAllCommissionInquiries error:", err)
+    return []
+  }
+}
+
+// Uses db() — commission_inquiries has auth-only read RLS
+export async function getCommissionInquiriesStats(): Promise<CommissionInquiriesStats> {
+  try {
+    const supabase = await db()
+    const [{ count: n }, { count: r }, { count: c }] = await Promise.all([
+      supabase
+        .from("commission_inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "new"),
+      supabase
+        .from("commission_inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "replied"),
+      supabase
+        .from("commission_inquiries")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "closed"),
+    ])
+    return {
+      new_count: n ?? 0,
+      replied_count: r ?? 0,
+      closed_count: c ?? 0,
+    }
+  } catch (err) {
+    console.error("getCommissionInquiriesStats error:", err)
+    return { new_count: 0, replied_count: 0, closed_count: 0 }
+  }
+}
+
+// Uses db() — commission_inquiries has auth-only read RLS
+export async function getRecentCommissionInquiries(
+  limit = 5
+): Promise<CommissionInquiry[]> {
+  try {
+    const supabase = await db()
+    const { data, error } = await supabase
+      .from("commission_inquiries")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getRecentCommissionInquiries error:", err)
     return []
   }
 }

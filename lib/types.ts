@@ -3,6 +3,7 @@
 export type PaintingStatus = "available" | "sold" | "nfs" | "reserved"
 export type EventStatus = "upcoming" | "past" | "cancelled"
 export type InquiryStatus = "new" | "replied" | "closed"
+export type CommissionInquiryStatus = "new" | "replied" | "closed"
 
 export interface Section {
   id: string
@@ -28,6 +29,11 @@ export interface Painting {
   primary_image_url: string | null
   sort_order: number
   created_at: string
+  width: number | null
+  height: number | null
+  print_available: boolean
+  commission_available: boolean
+  sold_at: string | null
 }
 
 export interface PaintingImage {
@@ -104,6 +110,44 @@ export interface ContactsStats {
 }
 
 export interface InquiriesStats {
+  new_count: number
+  replied_count: number
+  closed_count: number
+}
+
+export interface Tag {
+  id: string
+  name: string
+  created_at: string
+}
+
+export interface PaintingTag {
+  painting_id: string
+  tag_id: string
+}
+
+export interface Settings {
+  id: string
+  phone: string | null
+  email: string | null
+  instagram_handle: string | null
+  newsletter_from_name: string | null
+  updated_at: string
+}
+
+export interface CommissionInquiry {
+  id: string
+  from_name: string | null
+  from_email: string
+  from_phone: string | null
+  message: string | null
+  reference_painting_id: string | null
+  reference_painting_title: string | null
+  status: CommissionInquiryStatus
+  created_at: string
+}
+
+export interface CommissionInquiriesStats {
   new_count: number
   replied_count: number
   closed_count: number
