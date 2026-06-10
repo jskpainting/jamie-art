@@ -119,7 +119,7 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {rows.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
           {/* Preview table */}
           <div className="rounded-md border border-border overflow-x-auto">
             <table className="w-full text-xs min-w-[300px]">

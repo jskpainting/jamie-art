@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import type { User } from "@supabase/supabase-js"
 
-function isAuthBypassed(): boolean {
+export function isAuthBypassed(): boolean {
   return (
     process.env.NODE_ENV !== "production" &&
     process.env.ADMIN_AUTH_BYPASS === "true"

@@ -1,9 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
-import { getUser } from "@/lib/supabase/auth"
+import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { EventWriteSchema, type EventWriteInput } from "@/lib/schemas"
+
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
 
 function revalidateEvents() {
   revalidatePath("/events")
@@ -21,7 +26,7 @@ export async function createEvent(input: EventWriteInput) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("events")
       .insert(parsed.data)
@@ -46,7 +51,7 @@ export async function updateEvent(id: string, input: EventWriteInput) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("events")
       .update(parsed.data)
@@ -65,7 +70,7 @@ export async function deleteEvent(id: string) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase.from("events").delete().eq("id", id)
     if (error) throw error
     revalidateEvents()

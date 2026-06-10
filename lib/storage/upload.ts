@@ -1,5 +1,3 @@
-import { createClient } from "@/lib/supabase/client"
-
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -21,12 +19,6 @@ export interface UploadResult {
   path: string
 }
 
-function extFromType(type: AllowedType): string {
-  if (type === "image/jpeg") return "jpg"
-  if (type === "image/png") return "png"
-  return "webp"
-}
-
 export async function uploadImage(
   bucket: string,
   file: File
@@ -39,22 +31,17 @@ export async function uploadImage(
     throw new UploadError("type", "Only JPEG, PNG, and WebP images are allowed")
   }
 
-  const ext = extFromType(file.type as AllowedType)
-  const path = `${crypto.randomUUID()}.${ext}`
+  const form = new FormData()
+  form.set("file", file)
+  form.set("bucket", bucket)
 
-  const supabase = createClient()
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  })
+  const res = await fetch("/api/admin/upload", { method: "POST", body: form })
 
-  if (error) {
-    throw new UploadError("network", error.message)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    throw new UploadError("network", body.error ?? "Upload failed")
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(bucket).getPublicUrl(path)
-
-  return { url: publicUrl, path }
+  const data = await res.json() as { url: string; path: string }
+  return { url: data.url, path: data.path }
 }

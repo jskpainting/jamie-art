@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from "react"
 import {
   DndContext,
   closestCenter,
@@ -73,6 +74,7 @@ export function SortableList<T extends { id: string }>({
   onReorder,
   renderItem,
 }: SortableListProps<T>) {
+  const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -91,6 +93,7 @@ export function SortableList<T extends { id: string }>({
 
   return (
     <DndContext
+      id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToVerticalAxis]}

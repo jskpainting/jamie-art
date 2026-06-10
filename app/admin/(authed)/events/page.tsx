@@ -7,7 +7,12 @@ export const metadata: Metadata = {
   title: "Events · Admin · Jamie Kendrioski",
 }
 
-export default async function EventsAdminPage() {
+export default async function EventsAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ add?: string }>
+}) {
+  const params = await searchParams
   const [upcoming, past] = await Promise.all([
     getUpcomingEvents(),
     getPastEvents(),
@@ -20,7 +25,7 @@ export default async function EventsAdminPage() {
         title="Events"
         description="Manage upcoming and past shows."
       />
-      <EventsClient upcoming={upcoming} past={past} />
+      <EventsClient upcoming={upcoming} past={past} initialAddOpen={params.add === "1"} />
     </div>
   )
 }

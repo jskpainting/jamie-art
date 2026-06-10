@@ -1,9 +1,15 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { isAuthBypassed } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getUser } from "@/lib/supabase/auth"
 import { InquiryStatusSchema, type InquiryStatusInput } from "@/lib/schemas"
+
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
 
 function revalidateInquiries() {
   revalidatePath("/admin/inquiries")
@@ -23,7 +29,7 @@ export async function updateInquiryStatus(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("inquiries")
       .update({ status: parsed.data })
@@ -43,7 +49,7 @@ export async function deleteInquiry(id: string) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase.from("inquiries").delete().eq("id", id)
     if (error) throw error
     revalidateInquiries()

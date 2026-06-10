@@ -17,7 +17,7 @@ export default async function AdminAuthedLayout({
   return (
     <>
       <AdminShell user={user}>{children}</AdminShell>
-      <Toaster />
+      <Toaster position="top-right" duration={5000} />
     </>
   )
 }

@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Plus, Pencil, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Pencil, Trash2, ExternalLink, Calendar } from "lucide-react"
 import { deleteEvent } from "@/lib/actions/events"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
+import { EmptyState } from "@/components/admin/empty-state"
 import { Button } from "@/components/ui/button"
 import { EventFormDialog } from "./event-form-dialog"
 import type { Event } from "@/lib/types"
@@ -28,10 +30,10 @@ function EventRow({
     <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium">{event.title}</p>
+          <p className="text-sm font-medium min-w-0 truncate">{event.title}</p>
           <span
             className={cn(
-              "text-xs px-2 py-0.5 rounded-full font-medium",
+              "text-xs px-2 py-0.5 rounded-full font-medium shrink-0",
               STATUS_COLORS[event.status] ?? ""
             )}
           >
@@ -61,6 +63,7 @@ function EventRow({
         <Button
           variant="ghost"
           size="icon-sm"
+          className="text-foreground/60 hover:text-foreground"
           onClick={() => onEdit(event)}
           aria-label="Edit event"
         >
@@ -89,11 +92,17 @@ function EventRow({
 interface EventsClientProps {
   upcoming: Event[]
   past: Event[]
+  initialAddOpen?: boolean
 }
 
-export function EventsClient({ upcoming, past }: EventsClientProps) {
-  const [addOpen, setAddOpen] = useState(false)
+export function EventsClient({ upcoming, past, initialAddOpen = false }: EventsClientProps) {
+  const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (initialAddOpen) router.replace("/admin/events")
+  }, [initialAddOpen, router])
 
   return (
     <div className="space-y-8">
@@ -110,9 +119,11 @@ export function EventsClient({ upcoming, past }: EventsClientProps) {
           Upcoming
         </h2>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center rounded-xl border border-dashed border-border">
-            No upcoming events.
-          </p>
+          <EmptyState
+            icon={Calendar}
+            message="No upcoming events."
+            action={{ label: "Add event", onClick: () => setAddOpen(true) }}
+          />
         ) : (
           <div className="space-y-2">
             {upcoming.map((e) => (

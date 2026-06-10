@@ -59,10 +59,10 @@ function SidebarContent({ user, onNavClick }: SidebarContentProps) {
               href={href}
               onClick={onNavClick}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                "flex items-center gap-2.5 pr-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
-                  ? "bg-accent/10 text-foreground font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-accent/10 text-foreground font-medium border-l-[3px] border-accent pl-[9px]"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground pl-3"
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />

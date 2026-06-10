@@ -68,6 +68,7 @@ export function ImageUpload({
             src={value}
             alt="Uploaded image"
             fill
+            sizes="(max-width: 768px) 100vw, 50vw"
             className={cn(
               "object-cover",
               !reduceMotion && "transition-opacity duration-200"

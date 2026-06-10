@@ -1,16 +1,21 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
-import { getUser } from "@/lib/supabase/auth"
+import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import {
   PaintingWriteSchema,
   PaintingImageSchema,
   type PaintingImageInput,
 } from "@/lib/schemas"
 
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
+
 async function getSectionSlug(sectionId: string): Promise<string | null> {
-  const supabase = await createClient()
+  const supabase = await db()
   const { data } = await supabase
     .from("sections")
     .select("slug")
@@ -38,7 +43,7 @@ export async function createPainting(input: unknown) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { price_dollars: price_cents, ...rest } = parsed.data
     const { data, error } = await supabase
       .from("paintings")
@@ -66,7 +71,7 @@ export async function updatePainting(id: string, input: unknown) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { price_dollars: price_cents, ...rest } = parsed.data
     const { error } = await supabase
       .from("paintings")
@@ -76,7 +81,6 @@ export async function updatePainting(id: string, input: unknown) {
 
     const slug = await getSectionSlug(parsed.data.section_id)
     revalidateSectionPaths(slug)
-    // Also revalidate painting detail page
     const { data: painting } = await supabase
       .from("paintings")
       .select("slug")
@@ -97,7 +101,7 @@ export async function deletePainting(id: string) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data: painting } = await supabase
       .from("paintings")
       .select("section_id, slug")
@@ -124,7 +128,7 @@ export async function reorderPaintings(sectionId: string, ids: string[]) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     await Promise.all(
       ids.map((id, i) =>
         supabase.from("paintings").update({ sort_order: i }).eq("id", id)
@@ -152,7 +156,7 @@ export async function addPaintingImage(
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { count } = await supabase
       .from("painting_images")
       .select("*", { count: "exact", head: true })
@@ -176,7 +180,7 @@ export async function deletePaintingImage(id: string) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("painting_images")
       .delete()
@@ -197,7 +201,7 @@ export async function reorderPaintingImages(
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     await Promise.all(
       ids.map((id, i) =>
         supabase

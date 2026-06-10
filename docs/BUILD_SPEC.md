@@ -489,4 +489,8 @@ exactly. Use Plan Mode first — show me the file changes before executing.
 | 2026-06-08 | Magic-link auth (no passwords) | One less thing for Jamie to lose |
 | 2026-06-09 | Next.js 16 renamed middleware.ts → proxy.ts, export fn must be `proxy` | Framework requirement — not middleware.ts |
 | 2026-06-09 | `(authed)` route group for sidebar pages | Keeps login standalone (no sidebar); route group is URL-transparent |
+| 2026-06-10 | Dev-mode RLS escape hatch via `isAuthBypassed()` | `ADMIN_AUTH_BYPASS=true` makes server actions call `createAdminClient()` (secret key, bypasses RLS) instead of `createServerClient()` (publishable key, RLS enforced). Never set on Vercel. |
+| 2026-06-10 | Image uploads via `/api/admin/upload` server route | Browser can't use `createAdminClient()`. Route handler uses secret key for storage upload; `getUser()` (not `requireUser()`) for auth gate to return 401 not 308. |
+| 2026-06-10 | Theme toggle: CSS `dark:hidden`/`dark:block` for icon switching | Avoids `useState`/`useEffect` mounted guard pattern that triggers `react-hooks/set-state-in-effect` lint error. CSS dark-mode utilities respond to the `dark` class set by `next-themes` on `<html>`. |
+| 2026-06-10 | `async function db()` helper per action file | Centralises the bypass check: `isAuthBypassed() ? createAdminClient() : await createServerClient()`. Single import pattern, no repetition per query. |
 | 2026-06-09 | `updateSession` returns `{ response, user }` | Avoids second getUser() network call in proxy; user surfaced from the same auth refresh call |

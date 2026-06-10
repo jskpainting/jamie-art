@@ -1,9 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
-import { getUser } from "@/lib/supabase/auth"
+import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { BioSchema, type BioInput } from "@/lib/schemas"
+
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
 
 export async function updateBio(input: BioInput) {
   const user = await getUser()
@@ -15,7 +20,7 @@ export async function updateBio(input: BioInput) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data: existing } = await supabase.from("bio").select("id").single()
 
     if (existing) {

@@ -1,9 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
-import { getUser } from "@/lib/supabase/auth"
+import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { SectionUpdateSchema, type SectionUpdateInput } from "@/lib/schemas"
+
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
 
 export async function updateSection(id: string, input: SectionUpdateInput) {
   const user = await getUser()
@@ -15,7 +20,7 @@ export async function updateSection(id: string, input: SectionUpdateInput) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("sections")
       .update(parsed.data)
@@ -36,7 +41,7 @@ export async function reorderSections(ids: string[]) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     await Promise.all(
       ids.map((id, i) =>
         supabase.from("sections").update({ sort_order: i }).eq("id", id)

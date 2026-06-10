@@ -3,11 +3,12 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Plus, Pencil, Trash2, Search } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, Users } from "lucide-react"
 import { updateContact, deleteContact } from "@/lib/actions/contacts"
 import { CsvImport } from "@/components/admin/csv-import"
 import { DataTable } from "@/components/admin/data-table"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
+import { EmptyState } from "@/components/admin/empty-state"
 import { ContactFormDialog } from "./contact-form-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -131,6 +132,7 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
+                className="text-foreground/60 hover:text-foreground"
                 onClick={() => setEditContact(contact)}
                 aria-label="Edit contact"
               >
@@ -155,9 +157,16 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
           )
         }}
         emptyState={
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            {search ? "No contacts match your search." : "No contacts yet."}
-          </div>
+          search ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              No contacts match your search.
+            </div>
+          ) : (
+            <EmptyState
+              icon={Users}
+              message="Import or add contacts to get started."
+            />
+          )
         }
       />
 

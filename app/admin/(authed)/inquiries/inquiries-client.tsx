@@ -3,9 +3,10 @@
 import { Fragment, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Trash2, Mail, ChevronDown, ChevronRight } from "lucide-react"
+import { Trash2, Mail, ChevronDown, ChevronRight, Inbox } from "lucide-react"
 import { updateInquiryStatus, deleteInquiry } from "@/lib/actions/inquiries"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
+import { EmptyState } from "@/components/admin/empty-state"
 import { Button } from "@/components/ui/button"
 import type { InquiryWithPainting, InquiriesStats, InquiryStatus } from "@/lib/types"
 
@@ -91,11 +92,14 @@ export function InquiriesClient({ inquiries, stats }: InquiriesClientProps) {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-border bg-muted/30 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            No inquiries in this category.
-          </p>
-        </div>
+        <EmptyState
+          icon={Inbox}
+          message={
+            filter === "all"
+              ? "When someone inquires about a painting it'll show here."
+              : "No inquiries in this category."
+          }
+        />
       ) : (
         <div className="w-full overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm min-w-[600px]">
@@ -177,7 +181,7 @@ export function InquiriesClient({ inquiries, stats }: InquiriesClientProps) {
                         <div className="flex items-center justify-end gap-1">
                           <a
                             href={`mailto:${inq.from_email}?subject=Re: Your inquiry about ${inq.painting_title ?? "my work"}`}
-                            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted transition-colors text-foreground/60 hover:text-foreground"
                             aria-label="Reply by email"
                           >
                             <Mail className="h-3.5 w-3.5" />

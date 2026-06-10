@@ -18,11 +18,8 @@ export const metadata: Metadata = {
 }
 
 const QUICK_LINKS = [
-  { href: "/admin/bio", label: "Bio" },
-  { href: "/admin/portfolio", label: "Portfolio" },
-  { href: "/admin/events", label: "Events" },
-  { href: "/admin/contacts", label: "Contacts" },
-  { href: "/admin/inquiries", label: "Inquiries" },
+  { href: "/admin/portfolio", label: "Add painting" },
+  { href: "/admin/events?add=1", label: "Add event" },
 ]
 
 export default async function DashboardPage() {
@@ -53,7 +50,7 @@ export default async function DashboardPage() {
         {[
           { label: "Paintings", value: paintings },
           { label: "Events", value: events },
-          { label: "New Inquiries", value: inquiries },
+          { label: "Inquiries", value: inquiries },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-border bg-card p-6">
             <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
@@ -195,7 +192,7 @@ export default async function DashboardPage() {
                 <li key={event.id} className="flex items-start gap-3">
                   <span className="mt-1 inline-block h-2 w-2 rounded-full bg-amber-500 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm truncate font-medium">{event.title}</p>
+                    <p className="text-sm line-clamp-2 font-medium">{event.title}</p>
                     {event.location && (
                       <p className="text-xs text-muted-foreground truncate">
                         {event.location}

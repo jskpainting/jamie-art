@@ -1,13 +1,19 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { isAuthBypassed } from "@/lib/supabase/auth"
+import { createClient as createServerClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getUser } from "@/lib/supabase/auth"
 import {
   ContactWriteSchema,
   ContactImportRowSchema,
   type ContactImportRow,
 } from "@/lib/schemas"
+
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
 
 function revalidateContacts() {
   revalidatePath("/admin/contacts")
@@ -23,7 +29,7 @@ export async function createContact(input: unknown) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("contacts")
       .insert(parsed.data)
@@ -48,7 +54,7 @@ export async function updateContact(id: string, input: unknown) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("contacts")
       .update(parsed.data)
@@ -67,7 +73,7 @@ export async function deleteContact(id: string) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase.from("contacts").delete().eq("id", id)
     if (error) throw error
     revalidateContacts()
@@ -93,7 +99,7 @@ export async function importContacts(rows: ContactImportRow[]) {
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const inserts = validRows.map((r) => ({
       email: r.email,
       first_name: r.first_name ?? null,
@@ -123,7 +129,7 @@ export async function bulkUnsubscribe(ids: string[]) {
   if (!user) return { ok: false, error: "Unauthorized" }
 
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { error } = await supabase
       .from("contacts")
       .update({ subscribed: false })
