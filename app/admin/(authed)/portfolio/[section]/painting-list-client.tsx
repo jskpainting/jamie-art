@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useOptimistic, useTransition } from "react"
+import { useState, useOptimistic, useTransition, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import Image from "next/image"
 import { Pencil, Trash2, Plus, ImageIcon } from "lucide-react"
@@ -23,16 +24,23 @@ const STATUS_COLORS: Record<string, string> = {
 interface PaintingListClientProps {
   section: Section
   initialPaintings: PaintingWithImages[]
+  initialAddOpen?: boolean
 }
 
 export function PaintingListClient({
   section,
   initialPaintings,
+  initialAddOpen = false,
 }: PaintingListClientProps) {
   const [paintings, setOptimistic] = useOptimistic(initialPaintings)
   useTransition()
-  const [addOpen, setAddOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editPainting, setEditPainting] = useState<PaintingWithImages | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (initialAddOpen) router.replace(`/admin/portfolio/${section.slug}`)
+  }, [initialAddOpen, router, section.slug])
 
   function handleLocalReorder(newIds: string[]) {
     const reordered = newIds

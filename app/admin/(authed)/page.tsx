@@ -11,14 +11,15 @@ import {
   getRecentContacts,
   getUpcomingEvents,
 } from "@/lib/db/queries"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = {
   title: "Dashboard · Admin · Jamie Kendrioski",
 }
 
 const QUICK_LINKS = [
-  { href: "/admin/portfolio", label: "Add painting" },
+  { href: "/admin/portfolio/abstracts?add=1", label: "Add painting" },
   { href: "/admin/events?add=1", label: "Add event" },
 ]
 
@@ -68,14 +69,13 @@ export default async function DashboardPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           {QUICK_LINKS.map((link) => (
-            <Button
+            <Link
               key={link.href}
-              variant="outline"
-              size="sm"
-              render={<Link href={link.href} />}
+              href={link.href}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               {link.label}
-            </Button>
+            </Link>
           ))}
         </div>
       </div>

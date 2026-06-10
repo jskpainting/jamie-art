@@ -4,7 +4,8 @@ import Image from "next/image"
 import { PageHeader } from "@/components/admin/page-header"
 import { getSections } from "@/lib/db/queries"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { SectionEditButton } from "./section-edit-button"
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default async function PortfolioAdminPage() {
                   src={section.cover_image_url}
                   alt={section.title}
                   fill
+                  sizes="(max-width: 640px) 100vw, 50vw"
                   className="object-cover"
                 />
               )}
@@ -58,13 +60,12 @@ export default async function PortfolioAdminPage() {
 
               <div className="flex gap-2">
                 <SectionEditButton section={section} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  render={<Link href={`/admin/portfolio/${section.slug}`} />}
+                <Link
+                  href={`/admin/portfolio/${section.slug}`}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 >
                   Manage →
-                </Button>
+                </Link>
               </div>
             </div>
           </div>

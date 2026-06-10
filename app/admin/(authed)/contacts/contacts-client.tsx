@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Plus, Pencil, Trash2, Search, Users } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, Users, Upload, X } from "lucide-react"
 import { updateContact, deleteContact } from "@/lib/actions/contacts"
 import { CsvImport } from "@/components/admin/csv-import"
 import { DataTable } from "@/components/admin/data-table"
@@ -24,6 +24,7 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
   const [search, setSearch] = useState("")
   const [addOpen, setAddOpen] = useState(false)
   const [editContact, setEditContact] = useState<Contact | null>(null)
+  const [showImport, setShowImport] = useState(contacts.length === 0)
 
   const filtered = contacts.filter((c) => {
     if (!search) return true
@@ -78,13 +79,25 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* CSV Import */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-3">
-          Import from CSV
-        </p>
-        <CsvImport existingEmails={existingEmails} />
-      </div>
+      {/* CSV Import — collapsible */}
+      {showImport && (
+        <div className="rounded-xl border border-border bg-card p-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              Import from CSV
+            </p>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowImport(false)}
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <CsvImport existingEmails={existingEmails} />
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
@@ -114,6 +127,12 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
             className="pl-8"
           />
         </div>
+        {!showImport && (
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+            <Upload className="h-4 w-4 mr-1" />
+            Import CSV
+          </Button>
+        )}
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4 mr-1" />
           Add contact

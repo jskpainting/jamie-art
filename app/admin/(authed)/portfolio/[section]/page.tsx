@@ -13,6 +13,7 @@ const VALID_SLUGS = [
 
 interface Props {
   params: Promise<{ section: string }>
+  searchParams: Promise<{ add?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -20,8 +21,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: `${section} · Portfolio · Admin · Jamie Kendrioski` }
 }
 
-export default async function SectionDetailPage({ params }: Props) {
-  const { section: slug } = await params
+export default async function SectionDetailPage({ params, searchParams }: Props) {
+  const [{ section: slug }, sp] = await Promise.all([params, searchParams])
 
   if (!VALID_SLUGS.includes(slug)) notFound()
 
@@ -37,7 +38,11 @@ export default async function SectionDetailPage({ params }: Props) {
         title={section.title}
         description={`${paintings.length} painting${paintings.length !== 1 ? "s" : ""} · drag to reorder`}
       />
-      <PaintingListClient section={section} initialPaintings={paintings} />
+      <PaintingListClient
+        section={section}
+        initialPaintings={paintings}
+        initialAddOpen={sp.add === "1"}
+      />
     </div>
   )
 }

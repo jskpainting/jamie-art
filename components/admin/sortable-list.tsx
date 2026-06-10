@@ -20,6 +20,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface SortableItemProps<T extends { id: string }> {
   item: T
@@ -51,13 +52,18 @@ function SortableItem<T extends { id: string }>({
       {...listeners}
       className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors p-1 touch-none"
       aria-label="Drag to reorder"
+      title="Drag to reorder"
     >
       <GripVertical className="h-4 w-4" />
     </button>
   )
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(isDragging && "ring-1 ring-border scale-[1.01]")}
+    >
       {renderItem(item, handle)}
     </div>
   )

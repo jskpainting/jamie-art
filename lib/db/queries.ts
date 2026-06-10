@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
+import { isAuthBypassed } from "@/lib/supabase/auth"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   Bio,
   Contact,
@@ -12,6 +14,11 @@ import type {
   Section,
   SectionWithCount,
 } from "@/lib/types"
+
+// Used only for contacts + inquiries (auth-only RLS policies)
+async function db() {
+  return isAuthBypassed() ? createAdminClient() : await createClient()
+}
 
 export async function getSections(): Promise<SectionWithCount[]> {
   try {
@@ -73,7 +80,6 @@ export async function getPaintingBySlug(
   try {
     const supabase = await createClient()
 
-    // First resolve the section id from slug
     const { data: sectionData, error: sectionError } = await supabase
       .from("sections")
       .select("id")
@@ -89,7 +95,6 @@ export async function getPaintingBySlug(
       .single()
     if (error) throw error
 
-    // Sort painting_images by sort_order client-side
     const result = data as unknown as PaintingWithImages
     result.painting_images = (result.painting_images ?? []).sort(
       (a, b) => a.sort_order - b.sort_order
@@ -211,9 +216,10 @@ export async function getEventsCount(): Promise<number> {
   }
 }
 
+// Uses db() — inquiries has auth-only RLS
 export async function getNewInquiriesCount(): Promise<number> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { count, error } = await supabase
       .from("inquiries")
       .select("*", { count: "exact", head: true })
@@ -249,9 +255,10 @@ export async function getPaintingsWithImagesForSection(
   }
 }
 
+// Uses db() — contacts has auth-only RLS
 export async function getAllContacts(): Promise<Contact[]> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("contacts")
       .select("*")
@@ -264,9 +271,10 @@ export async function getAllContacts(): Promise<Contact[]> {
   }
 }
 
+// Uses db() — contacts has auth-only RLS
 export async function getContactsStats(): Promise<ContactsStats> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { count: total } = await supabase
       .from("contacts")
       .select("*", { count: "exact", head: true })
@@ -285,9 +293,10 @@ export async function getContactsStats(): Promise<ContactsStats> {
   }
 }
 
+// Uses db() — inquiries has auth-only RLS
 export async function getInquiriesWithPainting(): Promise<InquiryWithPainting[]> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("inquiries")
       .select("*, paintings(title)")
@@ -305,9 +314,10 @@ export async function getInquiriesWithPainting(): Promise<InquiryWithPainting[]>
   }
 }
 
+// Uses db() — inquiries has auth-only RLS
 export async function getInquiriesStats(): Promise<InquiriesStats> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const [{ count: n }, { count: r }, { count: c }] = await Promise.all([
       supabase
         .from("inquiries")
@@ -333,9 +343,10 @@ export async function getInquiriesStats(): Promise<InquiriesStats> {
   }
 }
 
+// Uses db() — inquiries has auth-only RLS
 export async function getRecentInquiries(limit = 5): Promise<Inquiry[]> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("inquiries")
       .select("*")
@@ -349,9 +360,10 @@ export async function getRecentInquiries(limit = 5): Promise<Inquiry[]> {
   }
 }
 
+// Uses db() — contacts has auth-only RLS
 export async function getRecentContacts(limit = 5): Promise<Contact[]> {
   try {
-    const supabase = await createClient()
+    const supabase = await db()
     const { data, error } = await supabase
       .from("contacts")
       .select("*")
