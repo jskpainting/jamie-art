@@ -42,3 +42,7 @@ next-env.d.ts
 
 # nested scaffold (accidental create-next-app run inside project root)
 /jamie-art/
+
+# Phase 6A layout-preview sample images (temporary dev tool — ~13MB, keep out of history)
+/sample_images/
+/public/layout-samples/

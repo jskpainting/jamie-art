@@ -11,6 +11,7 @@ import {
   Users,
   Mail,
   Menu,
+  FlaskConical,
 } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -27,6 +28,46 @@ const navItems = [
   { href: "/admin/contacts", label: "Contacts", Icon: Users, exact: false },
   { href: "/admin/inquiries", label: "Inquiries", Icon: Mail, exact: false },
 ]
+
+// Temporary dev tools — removed once their purpose is served
+const devNavItems = [
+  {
+    href: "/admin/layout-preview",
+    label: "Layout Preview",
+    Icon: FlaskConical,
+    exact: false,
+  },
+]
+
+function NavLink({
+  href,
+  label,
+  Icon,
+  isActive,
+  onNavClick,
+}: {
+  href: string
+  label: string
+  Icon: React.ComponentType<{ className?: string }>
+  isActive: boolean
+  onNavClick?: () => void
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavClick}
+      className={cn(
+        "flex items-center gap-2.5 pr-3 py-2 rounded-lg text-sm transition-colors",
+        isActive
+          ? "bg-accent/10 text-foreground font-medium border-l-[3px] border-accent pl-[9px]"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground pl-3"
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {label}
+    </Link>
+  )
+}
 
 interface SidebarContentProps {
   user: SupabaseUser
@@ -50,26 +91,35 @@ function SidebarContent({ user, onNavClick }: SidebarContentProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, Icon, exact }) => {
-          const isActive = exact ? pathname === href : pathname.startsWith(href)
-          return (
-            <Link
+      <nav className="flex-1 px-2 py-4 overflow-y-auto">
+        <div className="space-y-0.5">
+          {navItems.map(({ href, label, Icon, exact }) => (
+            <NavLink
               key={href}
               href={href}
-              onClick={onNavClick}
-              className={cn(
-                "flex items-center gap-2.5 pr-3 py-2 rounded-lg text-sm transition-colors",
-                isActive
-                  ? "bg-accent/10 text-foreground font-medium border-l-[3px] border-accent pl-[9px]"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground pl-3"
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          )
-        })}
+              label={label}
+              Icon={Icon}
+              isActive={exact ? pathname === href : pathname.startsWith(href)}
+              onNavClick={onNavClick}
+            />
+          ))}
+        </div>
+
+        <p className="px-3 pt-6 pb-2 text-xs uppercase tracking-[0.1em] font-medium text-muted-foreground">
+          Dev
+        </p>
+        <div className="space-y-0.5">
+          {devNavItems.map(({ href, label, Icon, exact }) => (
+            <NavLink
+              key={href}
+              href={href}
+              label={label}
+              Icon={Icon}
+              isActive={exact ? pathname === href : pathname.startsWith(href)}
+              onNavClick={onNavClick}
+            />
+          ))}
+        </div>
       </nav>
 
       {/* Bottom: user + theme */}

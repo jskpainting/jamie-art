@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/sync-layout-samples.mjs",
     "dev": "next dev -p 7847",
+    "prebuild": "node scripts/sync-layout-samples.mjs",
     "build": "next build",
     "build:check": "next build",
     "start": "next start",
