@@ -1,53 +1,52 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import Image from "next/image"
-import type { SampleImage } from "@/lib/layout-samples"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 
-interface JustifiedRowsProps {
-  images: SampleImage[]
-  onImageClick: (index: number) => void
+const DEFAULT_GAP = 12
+const DEFAULT_ROW_HEIGHTS = { desktop: 280, tablet: 200, mobile: 160 }
+
+function targetRowHeight(
+  containerWidth: number,
+  heights: { desktop: number; tablet: number; mobile: number }
+): number {
+  if (containerWidth >= 1024) return heights.desktop
+  if (containerWidth >= 768) return heights.tablet
+  return heights.mobile
 }
 
-interface PlacedImage {
-  image: SampleImage
+interface PlacedItem<T> {
+  item: T
   index: number
   width: number
   height: number
 }
 
-const GAP = 12
-
-function targetRowHeight(containerWidth: number): number {
-  if (containerWidth >= 1024) return 280
-  if (containerWidth >= 768) return 200
-  return 160
-}
-
 /**
- * Flickr-style greedy row packing: accumulate images at the target row height
- * until they overflow the container, then scale that row's height down so the
- * widths fill the container exactly. The final row keeps the target height and
- * stays left-aligned rather than being stretched.
+ * Flickr-style greedy row packing: accumulate items at target row height
+ * until they overflow the container, then scale that row down so widths fill
+ * exactly. The final partial row keeps the target height and stays left-aligned.
  */
-function packRows(
-  images: SampleImage[],
-  containerWidth: number
-): PlacedImage[][] {
-  const rowHeight = targetRowHeight(containerWidth)
-  const rows: PlacedImage[][] = []
-  let current: { image: SampleImage; index: number; aspect: number }[] = []
+function packRows<T>(
+  items: T[],
+  getAspect: (item: T) => number,
+  containerWidth: number,
+  heights: { desktop: number; tablet: number; mobile: number },
+  gap: number
+): PlacedItem<T>[][] {
+  const rowHeight = targetRowHeight(containerWidth, heights)
+  const rows: PlacedItem<T>[][] = []
+  let current: { item: T; index: number; aspect: number }[] = []
   let currentAspectSum = 0
 
   const flush = (justify: boolean) => {
     if (current.length === 0) return
-    const gaps = GAP * (current.length - 1)
+    const gaps = gap * (current.length - 1)
     const height = justify
       ? (containerWidth - gaps) / currentAspectSum
       : Math.min(rowHeight, (containerWidth - gaps) / currentAspectSum)
     rows.push(
-      current.map(({ image, index, aspect }) => ({
-        image,
+      current.map(({ item, index, aspect }) => ({
+        item,
         index,
         width: aspect * height,
         height,
@@ -57,21 +56,45 @@ function packRows(
     currentAspectSum = 0
   }
 
-  for (const [index, image] of images.entries()) {
-    const aspect = image.width / image.height
-    current.push({ image, index, aspect })
+  for (const [index, item] of items.entries()) {
+    const aspect = getAspect(item)
+    current.push({ item, index, aspect })
     currentAspectSum += aspect
-    const gaps = GAP * (current.length - 1)
+    const gaps = gap * (current.length - 1)
     if (currentAspectSum * rowHeight + gaps >= containerWidth) {
       flush(true)
     }
   }
-  flush(false) // last partial row: target height, left-aligned
+  flush(false) // last partial row: left-aligned at target height
 
   return rows
 }
 
-export function JustifiedRows({ images, onImageClick }: JustifiedRowsProps) {
+interface JustifiedRowsProps<T> {
+  items: T[]
+  /** Returns the intrinsic aspect ratio (width/height) for an item. */
+  getAspect: (item: T) => number
+  /** Stable key for each item. */
+  getKey: (item: T) => string
+  /** Renders the tile content inside its sized container. */
+  renderItem: (
+    item: T,
+    index: number,
+    width: number,
+    height: number
+  ) => ReactNode
+  rowHeights?: { desktop: number; tablet: number; mobile: number }
+  gap?: number
+}
+
+export function JustifiedRows<T>({
+  items,
+  getAspect,
+  getKey,
+  renderItem,
+  rowHeights = DEFAULT_ROW_HEIGHTS,
+  gap = DEFAULT_GAP,
+}: JustifiedRowsProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
 
@@ -87,7 +110,7 @@ export function JustifiedRows({ images, onImageClick }: JustifiedRowsProps) {
 
   const rows =
     containerWidth !== null && containerWidth > 0
-      ? packRows(images, containerWidth)
+      ? packRows(items, getAspect, containerWidth, rowHeights, gap)
       : []
 
   return (
@@ -96,28 +119,12 @@ export function JustifiedRows({ images, onImageClick }: JustifiedRowsProps) {
         <div
           key={rowIndex}
           className="flex"
-          style={{ gap: GAP, marginBottom: GAP }}
+          style={{ gap, marginBottom: gap }}
         >
-          {row.map(({ image, index, width, height }) => (
-            <button
-              key={image.src}
-              type="button"
-              onClick={() => onImageClick(index)}
-              className="group block shrink-0 cursor-zoom-in rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              style={{ width, height }}
-              aria-label={`View ${image.alt}`}
-            >
-              <span className="block h-full w-full overflow-hidden rounded-2xl shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
-                <Image
-                  src={image.src}
-                  alt={image.alt}
-                  width={image.width}
-                  height={image.height}
-                  sizes="(min-width: 1024px) 33vw, 50vw"
-                  className="h-full w-full object-cover"
-                />
-              </span>
-            </button>
+          {row.map(({ item, index, width, height }) => (
+            <div key={getKey(item)} className="shrink-0" style={{ width, height }}>
+              {renderItem(item, index, width, height)}
+            </div>
           ))}
         </div>
       ))}

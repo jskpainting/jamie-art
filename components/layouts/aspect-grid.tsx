@@ -21,11 +21,11 @@ export function AspectGrid({ images, onImageClick }: AspectGridProps) {
           key={image.src}
           type="button"
           onClick={() => onImageClick(index)}
-          className="group block w-full cursor-zoom-in rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           style={{ aspectRatio: `${image.width} / ${image.height}` }}
           aria-label={`View ${image.alt}`}
         >
-          <span className="block h-full w-full overflow-hidden rounded-2xl shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
+          <span className="block h-full w-full overflow-hidden shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
             <Image
               src={image.src}
               alt={image.alt}

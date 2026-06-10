@@ -52,7 +52,7 @@ export default async function PaintingPage({ params }: Props) {
               <a
                 key={p.id}
                 href={`/portfolio/${sectionSlug}/${p.slug}`}
-                className="group block rounded-lg overflow-hidden bg-muted aspect-square relative"
+                className="group block overflow-hidden bg-muted aspect-square relative"
                 aria-label={p.title}
               >
                 {p.primary_image_url && (

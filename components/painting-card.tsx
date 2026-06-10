@@ -12,7 +12,7 @@ export function PaintingCard({ painting, onClick }: PaintingCardProps) {
   return (
     <button
       onClick={onClick}
-      className="group relative block aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-zoom-in"
+      className="group relative block aspect-square w-full overflow-hidden bg-muted cursor-zoom-in"
       aria-label={`View ${painting.title}`}
     >
       {painting.primary_image_url ? (

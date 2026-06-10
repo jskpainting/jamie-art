@@ -26,7 +26,7 @@ export default async function AboutPage() {
         {/* Headshot */}
         <div>
           {bio?.headshot_url ? (
-            <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl bg-muted">
+            <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden bg-muted">
               <Image
                 src={bio.headshot_url}
                 alt="Jamie Kendrioski"
@@ -37,7 +37,7 @@ export default async function AboutPage() {
               />
             </div>
           ) : (
-            <div className="aspect-[3/4] w-full max-w-sm rounded-2xl bg-muted" />
+            <div className="aspect-[3/4] w-full max-w-sm bg-muted" />
           )}
         </div>
 

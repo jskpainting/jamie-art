@@ -19,7 +19,7 @@ export function SectionCard({ section }: SectionCardProps) {
   return (
     <Link
       href={`/portfolio/${section.slug}`}
-      className="group block rounded-2xl overflow-hidden border border-border hover:border-muted-foreground/30 transition-colors"
+      className="group block overflow-hidden border border-border hover:border-muted-foreground/30 transition-colors"
     >
       <div className="aspect-[4/3] relative overflow-hidden">
         {section.cover_image_url ? (

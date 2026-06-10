@@ -63,7 +63,30 @@ export function LayoutPreviewClient({ images }: LayoutPreviewClientProps) {
             <MasonryGrid images={images} onImageClick={setLightboxIndex} />
           )}
           {tab === "justified" && (
-            <JustifiedRows images={images} onImageClick={setLightboxIndex} />
+            <JustifiedRows
+              items={images}
+              getAspect={(img) => img.width / img.height}
+              getKey={(img) => img.src}
+              renderItem={(image, index) => (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(index)}
+                  className="group block h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  aria-label={`View ${image.alt}`}
+                >
+                  <span className="block h-full w-full overflow-hidden shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
+                    <Image
+                      src={image.src}
+                      alt={image.alt}
+                      width={image.width}
+                      height={image.height}
+                      sizes="(min-width: 1024px) 33vw, 50vw"
+                      className="h-full w-full object-cover"
+                    />
+                  </span>
+                </button>
+              )}
+            />
           )}
           {tab === "aspect-grid" && (
             <AspectGrid images={images} onImageClick={setLightboxIndex} />
@@ -162,7 +185,7 @@ function SampleLightbox({ images, initialIndex, onClose }: SampleLightboxProps) 
           width={image.width}
           height={image.height}
           sizes="100vw"
-          className="max-h-full w-auto max-w-full object-contain rounded-lg shadow-2xl"
+          className="max-h-full w-auto max-w-full object-contain shadow-2xl"
           priority
         />
       </div>

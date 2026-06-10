@@ -61,7 +61,7 @@ export function ImageUpload({
     return (
       <div className={cn("relative", className)}>
         <div
-          className="relative rounded-lg overflow-hidden border border-border"
+          className="relative overflow-hidden border border-border"
           style={{ height: 160 }}
         >
           <Image

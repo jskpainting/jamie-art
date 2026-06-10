@@ -20,10 +20,10 @@ export function MasonryGrid({ images, onImageClick }: MasonryGridProps) {
           key={image.src}
           type="button"
           onClick={() => onImageClick(index)}
-          className="group block w-full mb-4 md:mb-5 break-inside-avoid cursor-zoom-in rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group block w-full mb-4 md:mb-5 break-inside-avoid cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={`View ${image.alt}`}
         >
-          <span className="block overflow-hidden rounded-2xl shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
+          <span className="block overflow-hidden shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
             <Image
               src={image.src}
               alt={image.alt}

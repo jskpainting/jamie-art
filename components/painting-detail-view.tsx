@@ -57,7 +57,7 @@ export function PaintingDetailView({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
         {/* Primary image */}
         <div className="space-y-4">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-muted">
+          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
             {painting.primary_image_url ? (
               <Image
                 src={painting.primary_image_url}
@@ -78,7 +78,7 @@ export function PaintingDetailView({
               {additionalImages.map((img) => (
                 <div
                   key={img.id}
-                  className="relative aspect-square overflow-hidden rounded-lg bg-muted"
+                  className="relative aspect-square overflow-hidden bg-muted"
                 >
                   <Image
                     src={img.url}

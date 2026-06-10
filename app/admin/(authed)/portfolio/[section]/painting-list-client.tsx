@@ -77,7 +77,7 @@ export function PaintingListClient({
               {handle}
 
               {/* Thumbnail */}
-              <div className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden bg-muted">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden bg-muted">
                 {painting.primary_image_url ? (
                   <Image
                     src={painting.primary_image_url}

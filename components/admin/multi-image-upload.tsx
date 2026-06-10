@@ -47,7 +47,7 @@ function SortableImage({ id, url, onRemove }: SortableImageProps) {
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
-      <div className="relative aspect-square rounded-md overflow-hidden border border-border">
+      <div className="relative aspect-square overflow-hidden border border-border">
         <Image src={url} alt="" fill className="object-cover" />
       </div>
       <button
