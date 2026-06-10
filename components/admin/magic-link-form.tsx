@@ -41,7 +41,7 @@ export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
 
   async function sendLink(email: string) {
     const supabase = createClient()
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=${encodeURIComponent(next ?? "/admin")}`
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next ?? "/admin")}`
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
