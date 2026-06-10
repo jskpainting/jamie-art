@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, cloneElement, isValidElement } from "react"
+import { Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ export function ConfirmDialog({
     <>
       {triggerWithClick}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm" showCloseButton={false}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
@@ -67,6 +68,7 @@ export function ConfirmDialog({
               onClick={handleConfirm}
               disabled={loading}
             >
+              {loading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               {loading ? "Working…" : "Confirm"}
             </Button>
           </DialogFooter>

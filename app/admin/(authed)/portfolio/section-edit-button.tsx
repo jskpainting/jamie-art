@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 import { updateSection } from "@/lib/actions/sections"
 import {
   Dialog,
@@ -56,7 +57,7 @@ export function SectionEditButton({ section }: SectionEditButtonProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit {section.title}</DialogTitle>
           </DialogHeader>
@@ -97,6 +98,7 @@ export function SectionEditButton({ section }: SectionEditButtonProps) {
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving || !title.trim()}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               {saving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>

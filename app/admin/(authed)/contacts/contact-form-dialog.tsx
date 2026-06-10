@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 import { createContact, updateContact } from "@/lib/actions/contacts"
 import {
   Dialog,
@@ -71,7 +72,7 @@ export function ContactFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit contact" : "Add contact"}</DialogTitle>
         </DialogHeader>
@@ -122,6 +123,7 @@ export function ContactFormDialog({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
             {saving ? "Saving…" : isEdit ? "Save" : "Add contact"}
           </Button>
         </DialogFooter>

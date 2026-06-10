@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 import { updateBio } from "@/lib/actions/bio"
 import { ImageUpload } from "@/components/admin/image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
@@ -58,6 +59,7 @@ export function BioForm({ bio }: BioFormProps) {
           onChange={(e) => setStatement(e.target.value)}
           placeholder="One or two sentences about your work…"
           rows={3}
+          className="font-sans"
         />
       </FormField>
 
@@ -71,6 +73,7 @@ export function BioForm({ bio }: BioFormProps) {
       </FormField>
 
       <Button onClick={handleSave} disabled={saving}>
+        {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
         {saving ? "Saving…" : "Save bio"}
       </Button>
     </div>

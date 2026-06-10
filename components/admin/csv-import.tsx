@@ -5,7 +5,7 @@ import Papa from "papaparse"
 import { toast } from "sonner"
 import { importContacts } from "@/lib/actions/contacts"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText } from "lucide-react"
+import { Upload, FileText, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ParsedRow {
@@ -170,6 +170,7 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
             disabled={importing || newRows.length === 0}
             size="sm"
           >
+            {importing && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
             {importing ? "Importing…" : `Import ${newRows.length} contact${newRows.length !== 1 ? "s" : ""}`}
           </Button>
         </div>

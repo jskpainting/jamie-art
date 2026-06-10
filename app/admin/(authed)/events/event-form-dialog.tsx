@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 import { createEvent, updateEvent } from "@/lib/actions/events"
 import {
   Dialog,
@@ -94,7 +95,7 @@ export function EventFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit event" : "Add event"}</DialogTitle>
         </DialogHeader>
@@ -183,6 +184,7 @@ export function EventFormDialog({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
             {saving ? "Saving…" : isEdit ? "Save changes" : "Create event"}
           </Button>
         </DialogFooter>

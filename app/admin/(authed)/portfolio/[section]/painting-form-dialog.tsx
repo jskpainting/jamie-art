@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 import {
   createPainting,
   updatePainting,
@@ -162,7 +163,7 @@ export function PaintingFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit painting" : "Add painting"}</DialogTitle>
         </DialogHeader>
@@ -275,6 +276,7 @@ export function PaintingFormDialog({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
             {saving ? "Saving…" : isEdit ? "Save changes" : "Create painting"}
           </Button>
         </DialogFooter>
