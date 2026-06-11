@@ -80,6 +80,9 @@ export async function Footer() {
             <Link href="/about" className="hover:text-foreground transition-colors">
               About
             </Link>
+            <Link href="/commission" className="hover:text-foreground transition-colors">
+              Commission
+            </Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">
               Contact
             </Link>
