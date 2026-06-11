@@ -1,14 +1,22 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { motion, useReducedMotion, type Transition } from "framer-motion"
+import { buttonVariants } from "@/components/ui/button"
+import type { Painting } from "@/lib/types"
+
+interface HeroSectionProps {
+  painting: Painting | null
+  bioTeaser: string | null
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 8 },
   visible: { opacity: 1, y: 0 },
 }
 
-export function HeroSection() {
+export function HeroSection({ painting, bioTeaser }: HeroSectionProps) {
   const shouldReduceMotion = useReducedMotion()
 
   const transition: Transition = shouldReduceMotion
@@ -16,7 +24,35 @@ export function HeroSection() {
     : { duration: 0.4, ease: "easeOut" }
 
   return (
-    <section className="relative flex flex-col justify-center min-h-[calc(100vh-4rem)] max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-32">
+    <section className="relative flex flex-col md:grid md:grid-cols-[60%_40%] min-h-[calc(100vh-4rem)]">
+      {/* Image column */}
+      <div className="relative h-[60vh] md:h-auto">
+        {painting?.primary_image_url ? (
+          <motion.div
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6 }}
+          >
+            <Image
+              src={painting.primary_image_url}
+              alt={painting.title}
+              fill
+              className="object-cover"
+              priority
+              sizes="(max-width: 768px) 100vw, 60vw"
+            />
+          </motion.div>
+        ) : (
+          <div className="absolute inset-0 bg-muted flex items-center justify-center">
+            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              Featured painting coming soon
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Text column */}
       <motion.div
         initial="hidden"
         animate="visible"
@@ -24,7 +60,7 @@ export function HeroSection() {
           hidden: {},
           visible: { transition: { staggerChildren: 0.1 } },
         }}
-        className="max-w-3xl"
+        className="flex flex-col justify-center px-8 md:px-12 py-16 md:py-20 min-h-[50vh] md:min-h-0"
       >
         <motion.p
           variants={fadeUp}
@@ -45,17 +81,21 @@ export function HeroSection() {
         <motion.p
           variants={fadeUp}
           transition={transition}
-          className="text-lg md:text-xl leading-relaxed text-muted-foreground mb-10 max-w-xl"
+          className="text-base md:text-lg leading-relaxed text-muted-foreground mb-10"
         >
-          Original paintings where light and texture tell the story.
+          {bioTeaser || "Original paintings where light and texture tell the story."}
         </motion.p>
 
-        <motion.div variants={fadeUp} transition={transition}>
-          <Link
-            href="/portfolio"
-            className="inline-flex items-center gap-2 text-sm font-medium text-foreground border border-border rounded-lg px-5 h-10 hover:bg-muted transition-colors"
-          >
-            View Portfolio →
+        <motion.div
+          variants={fadeUp}
+          transition={transition}
+          className="flex gap-3 flex-wrap"
+        >
+          <Link href="/portfolio" className={buttonVariants()}>
+            View Portfolio
+          </Link>
+          <Link href="/contact" className={buttonVariants({ variant: "outline" })}>
+            Get in touch
           </Link>
         </motion.div>
       </motion.div>

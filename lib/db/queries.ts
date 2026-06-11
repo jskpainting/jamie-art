@@ -167,6 +167,39 @@ export async function getPaintingBySlug(
   }
 }
 
+export async function getFeaturedPainting(): Promise<Painting | null> {
+  try {
+    const supabase = await createClient()
+    const { data: abs } = await supabase
+      .from("sections")
+      .select("id")
+      .eq("slug", "abstracts")
+      .maybeSingle()
+    if (abs) {
+      const { data } = await supabase
+        .from("paintings")
+        .select("*")
+        .eq("section_id", abs.id)
+        .eq("status", "available")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data) return data
+    }
+    const { data } = await supabase
+      .from("paintings")
+      .select("*")
+      .eq("status", "available")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return data ?? null
+  } catch (err) {
+    console.error("getFeaturedPainting error:", err)
+    return null
+  }
+}
+
 export async function getFeaturedPaintings(limit = 6): Promise<Painting[]> {
   try {
     const supabase = await createClient()
