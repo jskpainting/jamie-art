@@ -1,9 +1,9 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { JustifiedRows } from "@/components/layouts/justified-rows"
 import { EmptyState } from "@/components/empty-state"
+import { ImageWithSkeleton } from "@/components/image-with-skeleton"
 import type { Painting } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -46,7 +46,7 @@ export function SectionGallery({ paintings, sectionSlug }: SectionGalleryProps) 
           aria-label={painting.title}
         >
           {painting.primary_image_url ? (
-            <Image
+            <ImageWithSkeleton
               src={painting.primary_image_url}
               alt={painting.title}
               fill

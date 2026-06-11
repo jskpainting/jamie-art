@@ -13,7 +13,7 @@ export function EventCard({ event }: EventCardProps) {
   return (
     <div
       className={cn(
-        "rounded-2xl border p-6",
+        "border p-6",
         isUpcoming
           ? "border-border bg-card"
           : "border-border/50 bg-muted/30 opacity-80"

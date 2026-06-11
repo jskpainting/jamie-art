@@ -43,7 +43,7 @@ export function NewsletterForm({
       onSubmit={handleSubmit}
       className={
         layout === "inline"
-          ? "flex gap-2 max-w-xs"
+          ? "flex gap-2 w-full"
           : "flex flex-col gap-2 w-full max-w-xs"
       }
       aria-label="Newsletter signup"
@@ -60,7 +60,7 @@ export function NewsletterForm({
       <button
         type="submit"
         disabled={loading}
-        className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+        className="h-9 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
       >
         {loading ? "…" : "Subscribe"}
       </button>

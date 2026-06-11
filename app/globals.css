@@ -93,3 +93,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Sonner toast: top-right on desktop, top-center on mobile */
+@media (max-width: 639px) {
+  [data-sonner-toaster] {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+  }
+}

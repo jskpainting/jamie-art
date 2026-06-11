@@ -1,5 +1,5 @@
-import Image from "next/image"
 import Link from "next/link"
+import { ImageWithSkeleton } from "@/components/image-with-skeleton"
 import type { Section } from "@/lib/types"
 
 const sectionColors: Record<string, string> = {
@@ -23,7 +23,7 @@ export function SectionCard({ section }: SectionCardProps) {
     >
       <div className="aspect-[4/3] relative overflow-hidden">
         {section.cover_image_url ? (
-          <Image
+          <ImageWithSkeleton
             src={section.cover_image_url}
             alt={section.title}
             fill

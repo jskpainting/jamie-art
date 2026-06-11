@@ -47,13 +47,13 @@ export async function Footer() {
                   </svg>
                 </a>
               ) : null}
-              {/* TODO: render email link here once settings.email is displayed publicly */}
-              <span
-                aria-label="Contact (coming soon)"
-                className="text-muted-foreground opacity-40 cursor-not-allowed"
+              <Link
+                href="/contact"
+                aria-label="Contact"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Mail className="h-4 w-4" />
-              </span>
+              </Link>
             </div>
           </div>
 
@@ -73,12 +73,15 @@ export async function Footer() {
 
         <div className="flex flex-col sm:flex-row justify-between gap-4 text-xs text-muted-foreground">
           <p>© {new Date().getFullYear()} Jamie Kendrioski. All rights reserved.</p>
-          <nav className="flex gap-4">
+          <nav className="flex flex-wrap gap-x-4 gap-y-2">
             <Link href="/portfolio" className="hover:text-foreground transition-colors">
               Portfolio
             </Link>
             <Link href="/about" className="hover:text-foreground transition-colors">
               About
+            </Link>
+            <Link href="/events" className="hover:text-foreground transition-colors">
+              Events
             </Link>
             <Link href="/commission" className="hover:text-foreground transition-colors">
               Commission

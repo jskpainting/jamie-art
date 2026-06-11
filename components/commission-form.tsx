@@ -4,12 +4,25 @@
 // so window is guaranteed to be defined on first render — lazy initialisers are safe.
 
 import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { submitCommissionInquiry } from "@/lib/actions/commission"
 import { getPrefill, savePrefill } from "@/lib/form-prefill"
+
+const schema = z.object({
+  name:        z.string().min(1, "Name is required"),
+  email:       z.string().email("Valid email required"),
+  phone:       z.string().optional(),
+  paintingRef: z.string().optional(),
+  message:     z.string().min(10, "Message must be at least 10 characters"),
+})
+
+type FormValues = z.infer<typeof schema>
 
 interface CommissionFormProps {
   initialPainting?: string
@@ -20,33 +33,48 @@ export function CommissionForm({
   initialPainting,
   initialPaintingId,
 }: CommissionFormProps) {
-  const [name, setName] = useState<string>(() => getPrefill().name ?? "")
-  const [email, setEmail] = useState<string>(() => getPrefill().email ?? "")
-  const [phone, setPhone] = useState<string>(() => getPrefill().phone ?? "")
-  const [message, setMessage] = useState("")
-  const [paintingRef, setPaintingRef] = useState(initialPainting ?? "")
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
+  const {
+    register,
+    handleSubmit,
+    getValues,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name:        getPrefill().name  ?? "",
+      email:       getPrefill().email ?? "",
+      phone:       getPrefill().phone ?? "",
+      paintingRef: initialPainting   ?? "",
+      message:     "",
+    },
+  })
+
+  async function onSubmit(values: FormValues) {
+    setServerError(null)
     setSubmitting(true)
     try {
       const result = await submitCommissionInquiry({
-        from_name: name || null,
-        from_email: email,
-        from_phone: phone || null,
-        message,
-        reference_painting_title: paintingRef || null,
-        reference_painting_id: initialPaintingId || null,
+        from_name:                values.name  || null,
+        from_email:               values.email,
+        from_phone:               values.phone || null,
+        message:                  values.message,
+        reference_painting_title: values.paintingRef || null,
+        reference_painting_id:    initialPaintingId  || null,
       })
       if (!result.ok) {
-        setError(result.error ?? "Something went wrong.")
+        setServerError(result.error ?? "Something went wrong.")
         return
       }
-      savePrefill({ name: name || undefined, email: email || undefined, phone: phone || undefined })
+      const v = getValues()
+      savePrefill({
+        name:  v.name  || undefined,
+        email: v.email || undefined,
+        phone: v.phone || undefined,
+      })
       setSuccess(true)
     } finally {
       setSubmitting(false)
@@ -65,7 +93,7 @@ export function CommissionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">
@@ -73,11 +101,12 @@ export function CommissionForm({
           </Label>
           <Input
             id="name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
+            {...register("name")}
           />
+          {errors.name && (
+            <p className="text-xs text-destructive">{errors.name.message}</p>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">
@@ -86,11 +115,12 @@ export function CommissionForm({
           <Input
             id="email"
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            {...register("email")}
           />
+          {errors.email && (
+            <p className="text-xs text-destructive">{errors.email.message}</p>
+          )}
         </div>
       </div>
 
@@ -99,9 +129,8 @@ export function CommissionForm({
         <Input
           id="phone"
           type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
           placeholder="+1 555 000 0000"
+          {...register("phone")}
         />
       </div>
 
@@ -109,9 +138,8 @@ export function CommissionForm({
         <Label htmlFor="painting_ref">Painting reference (optional)</Label>
         <Input
           id="painting_ref"
-          value={paintingRef}
-          onChange={(e) => setPaintingRef(e.target.value)}
           placeholder="e.g. Coastal Morning, 2023"
+          {...register("paintingRef")}
         />
       </div>
 
@@ -121,16 +149,16 @@ export function CommissionForm({
         </Label>
         <Textarea
           id="message"
-          required
-          minLength={10}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
           placeholder="Tell Jamie what you have in mind — size, subject, palette, where it'll live…"
           className="min-h-[140px] resize-none"
+          {...register("message")}
         />
+        {errors.message && (
+          <p className="text-xs text-destructive">{errors.message.message}</p>
+        )}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {serverError && <p className="text-sm text-destructive">{serverError}</p>}
 
       <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
         {submitting ? "Sending…" : "Send message"}

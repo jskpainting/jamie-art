@@ -37,6 +37,7 @@ function NavLinks({
           key={link.href}
           href={link.href}
           onClick={onClick}
+          aria-current={pathname.startsWith(link.href) ? "page" : undefined}
           className={cn(
             "text-sm font-medium transition-colors hover:text-foreground",
             pathname.startsWith(link.href)
