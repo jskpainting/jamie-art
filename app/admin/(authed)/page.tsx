@@ -10,6 +10,7 @@ import {
   getRecentInquiries,
   getRecentContacts,
   getUpcomingEvents,
+  getUncategorizedPaintingCount,
 } from "@/lib/db/queries"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -24,7 +25,7 @@ const QUICK_LINKS = [
 ]
 
 export default async function DashboardPage() {
-  const [user, paintings, events, inquiries, recentInquiries, recentContacts, upcomingEvents] =
+  const [user, paintings, events, inquiries, recentInquiries, recentContacts, upcomingEvents, orphanCount] =
     await Promise.all([
       requireUser(),
       getPaintingsCount(),
@@ -33,6 +34,7 @@ export default async function DashboardPage() {
       getRecentInquiries(5),
       getRecentContacts(5),
       getUpcomingEvents(),
+      getUncategorizedPaintingCount(),
     ])
 
   const nextEvents = upcomingEvents.slice(0, 3)
@@ -45,6 +47,23 @@ export default async function DashboardPage() {
         Welcome back,{" "}
         <span className="text-foreground font-medium">{user.email}</span>
       </p>
+
+      {/* Orphan banner */}
+      {orphanCount > 0 && (
+        <Link
+          href="/admin/portfolio/uncategorized"
+          className="flex items-center gap-3 rounded-xl px-5 py-4 mb-6 border transition-opacity hover:opacity-90
+                     bg-amber-50 text-amber-900 border-amber-200
+                     dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900/50"
+        >
+          <span className="text-sm font-medium">
+            {orphanCount === 1
+              ? "1 painting needs a section — assign it"
+              : `${orphanCount} paintings need a section — assign them`}
+          </span>
+          <span className="ml-auto text-xs opacity-70">→</span>
+        </Link>
+      )}
 
       {/* Stat row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

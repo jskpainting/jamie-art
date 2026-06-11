@@ -20,6 +20,7 @@ export default function ContactPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24">
         {/* Contact form */}
+        {/* TODO: if phone/email are ever displayed here, read from getSettings() — see settings table */}
         <div>
           <p className="text-base text-muted-foreground mb-8 leading-relaxed">
             Have a question about a painting, want to discuss a commission, or

@@ -10,6 +10,7 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { section } = await params
+  if (section === "uncategorized") return { title: "Not Found" }
   const data = await getSectionBySlug(section)
   if (!data) return { title: "Not Found" }
   return {
@@ -20,6 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SectionPage({ params }: Props) {
   const { section: sectionSlug } = await params
+  if (sectionSlug === "uncategorized") notFound()
   const section = await getSectionBySlug(sectionSlug)
   if (!section) notFound()
 

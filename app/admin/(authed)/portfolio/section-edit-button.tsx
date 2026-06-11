@@ -36,6 +36,7 @@ export function SectionEditButton({ section }: SectionEditButtonProps) {
     try {
       const result = await updateSection(section.id, {
         title,
+        slug: section.slug,
         description: description || null,
         cover_image_url,
       })

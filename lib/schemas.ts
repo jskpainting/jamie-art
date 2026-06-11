@@ -16,6 +16,18 @@ export const SectionUpdateSchema = z.object({
 
 export type SectionUpdateInput = z.infer<typeof SectionUpdateSchema>
 
+export const SectionWriteSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  slug: z
+    .string()
+    .min(1, "Slug is required")
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens only"),
+  description: z.string().nullable().optional(),
+  cover_image_url: z.string().nullable().optional(),
+})
+
+export type SectionWriteInput = z.infer<typeof SectionWriteSchema>
+
 export const ReorderSchema = z.object({
   ids: z.array(z.string().uuid()),
 })
@@ -86,3 +98,18 @@ export type ContactImportRow = z.infer<typeof ContactImportRowSchema>
 export const InquiryStatusSchema = z.enum(["new", "replied", "closed"])
 
 export type InquiryStatusInput = z.infer<typeof InquiryStatusSchema>
+
+export const SettingsSchema = z.object({
+  phone: z
+    .string()
+    .min(1, "Phone is required")
+    .regex(/^\+\d{10,15}$/, "Must be E.164 format e.g. +15551234567"),
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Valid email required"),
+  instagram_handle: z.string().nullable().optional(),
+  newsletter_from_name: z.string().nullable().optional(),
+})
+
+export type SettingsInput = z.infer<typeof SettingsSchema>

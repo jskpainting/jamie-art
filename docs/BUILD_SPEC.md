@@ -50,6 +50,7 @@ Admin (auth-gated):
 /admin/events
 /admin/contacts                      List + CSV import
 /admin/inquiries
+/admin/settings                      Phone, email, Instagram handle, newsletter from-name
 ```
 
 In production, Vercel middleware rewrites `admin.jamiekendrioski.com/*` → `/admin/*`.
@@ -503,3 +504,7 @@ exactly. Use Plan Mode first — show me the file changes before executing.
 | 2026-06-10 | All image corner radius removed globally — full-image rule | No `rounded-*` on any `<img>`, `<Image>`, or direct image-clipping container anywhere in the app (public + admin). Image-only cards (painting-card, section-card) go fully square. Non-image UI (buttons, badges, dialogs, dropzone borders, admin list item cards) keeps its radius unchanged. |
 | 2026-06-10 | Justified Rows chosen for `/portfolio/[section]` | Decision from layout-preview comparison. `JustifiedRows` refactored to a generic render-prop component; row heights 320/240/180px (desktop/tablet/mobile). Paintings default to 4/3 aspect ratio (no intrinsic dimensions in DB); can be improved by adding `width_px`/`height_px` columns later. |
 | 2026-06-10 | Lightbox killed on real portfolio (Phase 6B item pulled forward) | `SectionGallery` no longer mounts `PaintingLightbox`. Painting tile click → `router.push` via `<Link>` to `/portfolio/[section]/[slug]`. The `PaintingLightbox` component is kept (used nowhere currently) and can be deleted in a future cleanup pass. |
+| 2026-06-10 | Phase 6B-C: settings table is single source of truth for phone, email, Instagram, newsletter from-name | `/admin/settings` page reads/writes the single-row `settings` table. `Footer` converted from `"use client"` to async server component so it can call `getSettings()` directly; inline newsletter form replaced with the existing `<NewsletterForm>` client component. Contact page and InquireDialog have no hardcoded contact info (audit clean). |
+| 2026-06-10 | Phase 6B-D: Uncategorized is a protected staging section | `deleteSection` action + `delete_section_safe` RPC prevent deletion. Delete button disabled in UI with tooltip. Slug field locked in edit dialog. Server rejects even if UI bypassed. |
+| 2026-06-10 | `delete_section_safe` Postgres RPC for atomic move + delete | Moves all paintings from the target section to Uncategorized, then deletes the section in one transaction. `security invoker` so it runs as the authenticated user (who holds RLS all-access). Returns moved count for toast message. |
+| 2026-06-10 | Uncategorized hidden from public; listing 404s, painting detail pages remain accessible | `getPublicSections()` filters `.neq('slug', 'uncategorized')`. `/portfolio/uncategorized` returns 404 via early `notFound()` in `[section]/page.tsx`. Individual painting detail pages at `/portfolio/uncategorized/[slug]` remain accessible — no guard in `[section]/[slug]/page.tsx`. |

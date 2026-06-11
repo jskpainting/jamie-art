@@ -5,7 +5,8 @@
       "name": "jamie-art-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 7847
+      "port": 7847,
+      "autoPort": false
     }
   ]
 }

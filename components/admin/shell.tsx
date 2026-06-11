@@ -12,6 +12,7 @@ import {
   Mail,
   Menu,
   FlaskConical,
+  Settings,
 } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/admin/events", label: "Events", Icon: Calendar, exact: false },
   { href: "/admin/contacts", label: "Contacts", Icon: Users, exact: false },
   { href: "/admin/inquiries", label: "Inquiries", Icon: Mail, exact: false },
+  { href: "/admin/settings", label: "Settings", Icon: Settings, exact: false },
 ]
 
 // Temporary dev tools — removed once their purpose is served

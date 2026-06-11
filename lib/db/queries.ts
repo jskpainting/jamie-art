@@ -42,6 +42,47 @@ export async function getSections(): Promise<SectionWithCount[]> {
   }
 }
 
+export async function getPublicSections(): Promise<SectionWithCount[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("sections")
+      .select("*, paintings(count)")
+      .neq("slug", "uncategorized")
+      .order("sort_order")
+    if (error) throw error
+    return (data ?? []).map((s) => ({
+      ...s,
+      painting_count:
+        (s.paintings as unknown as { count: number }[])[0]?.count ?? 0,
+    }))
+  } catch (err) {
+    console.error("getPublicSections error:", err)
+    return []
+  }
+}
+
+export async function getUncategorizedPaintingCount(): Promise<number> {
+  try {
+    const supabase = await createClient()
+    const { data: section } = await supabase
+      .from("sections")
+      .select("id")
+      .eq("slug", "uncategorized")
+      .single()
+    if (!section) return 0
+    const { count, error } = await supabase
+      .from("paintings")
+      .select("*", { count: "exact", head: true })
+      .eq("section_id", section.id)
+    if (error) throw error
+    return count ?? 0
+  } catch (err) {
+    console.error("getUncategorizedPaintingCount error:", err)
+    return 0
+  }
+}
+
 export async function getSectionBySlug(slug: string): Promise<Section | null> {
   try {
     const supabase = await createClient()
