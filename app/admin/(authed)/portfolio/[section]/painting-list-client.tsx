@@ -2,9 +2,10 @@
 
 import { useState, useOptimistic, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
 import Image from "next/image"
-import { Pencil, Trash2, Plus, ImageIcon, Tag, X } from "lucide-react"
+import { Pencil, Trash2, Plus, ImageIcon, Tag, X, Upload } from "lucide-react"
 import {
   reorderPaintings,
   deletePainting,
@@ -17,7 +18,7 @@ import {
 import { SortableList } from "@/components/admin/sortable-list"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -454,7 +455,14 @@ export function PaintingListClient({
             </span>
           </div>
         )}
-        <div className={cn("flex justify-end", isEmpty && "w-full")}>
+        <div className={cn("flex items-center gap-2 justify-end", isEmpty && "w-full")}>
+          <Link
+            href={`/admin/portfolio/bulk-upload?section=${section.slug}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Upload className="h-4 w-4 mr-1" />
+            Bulk upload
+          </Link>
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Add painting

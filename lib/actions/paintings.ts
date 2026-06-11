@@ -9,7 +9,23 @@ import {
   PaintingImageSchema,
   type PaintingImageInput,
 } from "@/lib/schemas"
+import { slugify } from "@/lib/utils"
 import type { PaintingStatus } from "@/lib/types"
+
+export interface BulkCreateItem {
+  title: string
+  section_id: string
+  primary_image_url: string | null
+  status: "available" | "sold" | "nfs" | "reserved"
+  year?: string
+  medium?: string
+  dimensions?: string
+  price_dollars?: string
+  story?: string
+  print_available: boolean
+  commission_available: boolean
+  tags: string[]
+}
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -341,5 +357,108 @@ export async function bulkDelete(
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to delete paintings" }
+  }
+}
+
+export async function bulkCreatePaintings(
+  items: BulkCreateItem[]
+): Promise<{ ok: boolean; error?: string; count?: number; sectionSlug?: string }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (items.length === 0) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    const sectionIds = [...new Set(items.map((i) => i.section_id))]
+
+    // Max sort_order + existing slugs per section
+    const sortOffsets = new Map<string, number>()
+    const existingSlugs = new Map<string, Set<string>>()
+
+    for (const sectionId of sectionIds) {
+      const { data: maxRow } = await supabase
+        .from("paintings")
+        .select("sort_order")
+        .eq("section_id", sectionId)
+        .order("sort_order", { ascending: false })
+        .limit(1)
+      sortOffsets.set(sectionId, (maxRow?.[0]?.sort_order ?? -1) + 1)
+
+      const { data: slugRows } = await supabase
+        .from("paintings")
+        .select("slug")
+        .eq("section_id", sectionId)
+      existingSlugs.set(sectionId, new Set((slugRows ?? []).map((r) => r.slug as string)))
+    }
+
+    // Track used slugs per section within this batch (seeded with DB slugs)
+    const usedSlugs = new Map<string, Set<string>>(
+      sectionIds.map((id) => [id, new Set(existingSlugs.get(id) ?? [])])
+    )
+    const sectionCounters = new Map<string, number>(sectionIds.map((id) => [id, 0]))
+
+    let savedCount = 0
+
+    for (const item of items) {
+      // Derive unique slug within section
+      const base = slugify(item.title) || "painting"
+      let slug = base
+      const used = usedSlugs.get(item.section_id)!
+      if (used.has(slug)) {
+        let n = 2
+        while (used.has(`${base}-${n}`)) n++
+        slug = `${base}-${n}`
+      }
+      used.add(slug)
+
+      const counter = sectionCounters.get(item.section_id) ?? 0
+      sectionCounters.set(item.section_id, counter + 1)
+      const sort_order = (sortOffsets.get(item.section_id) ?? 0) + counter
+
+      const parsed = PaintingWriteSchema.safeParse({ ...item, slug })
+      if (!parsed.success) continue
+
+      const { price_dollars: price_cents, ...rest } = parsed.data
+      const { data, error } = await supabase
+        .from("paintings")
+        .insert({ ...rest, price_cents, sort_order })
+        .select("id")
+        .single()
+
+      if (error || !data) continue
+      savedCount++
+
+      // Insert tags
+      for (const name of item.tags) {
+        const normalized = name.trim().toLowerCase()
+        if (!normalized) continue
+        const { data: tagRow } = await supabase
+          .from("tags")
+          .upsert({ name: normalized }, { onConflict: "name" })
+          .select("id")
+          .single()
+        if (tagRow) {
+          await supabase
+            .from("painting_tags")
+            .upsert(
+              { painting_id: data.id, tag_id: tagRow.id as string },
+              { onConflict: "painting_id,tag_id" }
+            )
+        }
+      }
+    }
+
+    for (const sectionId of sectionIds) {
+      const slug = await getSectionSlug(sectionId)
+      revalidateSectionPaths(slug)
+    }
+
+    const primarySlug = await getSectionSlug(items[0].section_id)
+    return { ok: true, count: savedCount, sectionSlug: primarySlug ?? undefined }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Failed to create paintings",
+    }
   }
 }
