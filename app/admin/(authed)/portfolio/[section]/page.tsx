@@ -1,15 +1,8 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
-import { getSectionBySlug, getPaintingsWithImagesForSection } from "@/lib/db/queries"
+import { getSectionBySlug, getPaintingsWithImagesForSection, getSections } from "@/lib/db/queries"
 import { PaintingListClient } from "./painting-list-client"
-
-const VALID_SLUGS = [
-  "abstracts",
-  "cityscapes-seascapes",
-  "florals",
-  "pixels-rainbows",
-]
 
 interface Props {
   params: Promise<{ section: string }>
@@ -24,12 +17,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SectionDetailPage({ params, searchParams }: Props) {
   const [{ section: slug }, sp] = await Promise.all([params, searchParams])
 
-  if (!VALID_SLUGS.includes(slug)) notFound()
-
   const section = await getSectionBySlug(slug)
   if (!section) notFound()
 
-  const paintings = await getPaintingsWithImagesForSection(section.id)
+  const [paintings, sections] = await Promise.all([
+    getPaintingsWithImagesForSection(section.id),
+    getSections(),
+  ])
 
   return (
     <div>
@@ -42,6 +36,7 @@ export default async function SectionDetailPage({ params, searchParams }: Props)
         section={section}
         initialPaintings={paintings}
         initialAddOpen={sp.add === "1"}
+        sections={sections}
       />
     </div>
   )

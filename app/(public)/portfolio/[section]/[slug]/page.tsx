@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { PaintingDetailView } from "@/components/painting-detail-view"
-import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings } from "@/lib/db/queries"
+import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings } from "@/lib/db/queries"
 
 type Props = {
   params: Promise<{ section: string; slug: string }>
@@ -25,14 +25,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PaintingPage({ params }: Props) {
   const { section: sectionSlug, slug } = await params
 
-  const [painting, section] = await Promise.all([
+  const [painting, section, settings] = await Promise.all([
     getPaintingBySlug(sectionSlug, slug),
     getSectionBySlug(sectionSlug),
+    getSettings(),
   ])
 
   if (!painting || !section) notFound()
 
-  const related = await getRelatedPaintings(painting.id, painting.section_id, 4)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jamiekendrioski.com"
+  const paintingUrl = `${siteUrl}/portfolio/${sectionSlug}/${slug}`
+
+  const { paintings: related, source: relatedSource } = await getRelatedPaintings(
+    painting.id,
+    painting.section_id,
+    4
+  )
+
+  const relatedHeading =
+    relatedSource === "tags" ? "Related work" : `More from ${section.title}`
 
   return (
     <>
@@ -40,12 +51,14 @@ export default async function PaintingPage({ params }: Props) {
         painting={painting}
         sectionSlug={sectionSlug}
         sectionTitle={section.title}
+        settings={settings}
+        paintingUrl={paintingUrl}
       />
 
       {related.length > 0 && (
         <section className="max-w-7xl mx-auto px-6 md:px-10 pb-20 md:pb-32">
           <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-6">
-            More from {section.title}
+            {relatedHeading}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {related.map((p) => (

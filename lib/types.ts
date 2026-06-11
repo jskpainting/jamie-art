@@ -95,6 +95,10 @@ export interface PaintingWithImages extends Painting {
   painting_images: PaintingImage[]
 }
 
+export interface PaintingWithImagesAndTags extends PaintingWithImages {
+  tags: string[]
+}
+
 export interface SectionWithCount extends Section {
   painting_count: number
 }

@@ -10,6 +10,7 @@ import {
   deletePaintingImage,
   reorderPaintingImages,
 } from "@/lib/actions/paintings"
+import { updatePaintingTags } from "@/lib/actions/tags"
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,8 @@ import { FormField } from "@/components/admin/form-field"
 import { ImageUpload } from "@/components/admin/image-upload"
 import { MultiImageUpload } from "@/components/admin/multi-image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
+import { TagInput } from "@/components/admin/tag-input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { slugify } from "@/lib/utils"
 import type { PaintingWithImages } from "@/lib/types"
 
@@ -36,6 +39,7 @@ interface PaintingFormDialogProps {
   onOpenChange: (open: boolean) => void
   sectionId: string
   painting?: PaintingWithImages
+  defaultTags?: string[]
 }
 
 export function PaintingFormDialog({
@@ -43,6 +47,7 @@ export function PaintingFormDialog({
   onOpenChange,
   sectionId,
   painting,
+  defaultTags = [],
 }: PaintingFormDialogProps) {
   const isEdit = !!painting
 
@@ -69,6 +74,9 @@ export function PaintingFormDialog({
       url: img.url,
     }))
   )
+  const [tags, setTags] = useState<string[]>(defaultTags)
+  const [printAvailable, setPrintAvailable] = useState(painting?.print_available ?? false)
+  const [commissionAvailable, setCommissionAvailable] = useState(painting?.commission_available ?? false)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -102,6 +110,8 @@ export function PaintingFormDialog({
         status: status as "available" | "sold" | "nfs" | "reserved",
         story: story || null,
         primary_image_url: primaryUrl,
+        print_available: printAvailable,
+        commission_available: commissionAvailable,
       }
 
       if (isEdit) {
@@ -139,6 +149,9 @@ export function PaintingFormDialog({
           await reorderPaintingImages(painting.id, existingInOrder)
         }
 
+        // Sync tags
+        await updatePaintingTags(painting.id, tags)
+
         toast.success("Painting saved")
         onOpenChange(false)
       } else {
@@ -148,9 +161,14 @@ export function PaintingFormDialog({
           return
         }
         const newId = result.data?.id
-        if (newId && additionalImages.length > 0) {
-          for (const img of additionalImages) {
-            await addPaintingImage(newId, { url: img.url })
+        if (newId) {
+          if (additionalImages.length > 0) {
+            for (const img of additionalImages) {
+              await addPaintingImage(newId, { url: img.url })
+            }
+          }
+          if (tags.length > 0) {
+            await updatePaintingTags(newId, tags)
           }
         }
         toast.success("Painting created")
@@ -203,7 +221,7 @@ export function PaintingFormDialog({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full h-8 rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full h-8 rounded-lg border border-input bg-background px-2.5 text-base md:text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="available">Available</option>
                 <option value="sold">Sold</option>
@@ -265,6 +283,27 @@ export function PaintingFormDialog({
               onChange={setAdditionalImages}
             />
           </FormField>
+
+          <FormField label="Tags">
+            <TagInput value={tags} onChange={setTags} />
+          </FormField>
+
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Checkbox
+                checked={printAvailable}
+                onCheckedChange={(v) => setPrintAvailable(!!v)}
+              />
+              <span className="text-sm">Print available</span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Checkbox
+                checked={commissionAvailable}
+                onCheckedChange={(v) => setCommissionAvailable(!!v)}
+              />
+              <span className="text-sm">Available on commission</span>
+            </label>
+          </div>
         </div>
 
         <DialogFooter>

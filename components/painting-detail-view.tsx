@@ -6,8 +6,9 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { ChevronLeft } from "lucide-react"
 import { InquireDialog } from "@/components/inquire-dialog"
+import { PrintRequestDialog } from "@/components/print-request-dialog"
 import { formatPrice, cn } from "@/lib/utils"
-import type { PaintingWithImages, PaintingStatus } from "@/lib/types"
+import type { PaintingWithImages, PaintingStatus, Settings } from "@/lib/types"
 
 const statusLabel: Record<PaintingStatus, string> = {
   available: "Available",
@@ -29,12 +30,16 @@ interface PaintingDetailViewProps {
   painting: PaintingWithImages
   sectionSlug: string
   sectionTitle: string
+  settings: Settings | null
+  paintingUrl: string
 }
 
 export function PaintingDetailView({
   painting,
   sectionSlug,
   sectionTitle,
+  settings,
+  paintingUrl,
 }: PaintingDetailViewProps) {
   const priceDisplay =
     painting.status === "available" && painting.price_cents
@@ -145,12 +150,29 @@ export function PaintingDetailView({
             </div>
           )}
 
-          {/* CTA */}
-          {painting.status === "available" && (
-            <div className="mt-auto">
+          {/* CTAs */}
+          <div className="mt-auto flex flex-col gap-4">
+            {painting.status === "available" && (
               <InquireDialog painting={painting} />
-            </div>
-          )}
+            )}
+
+            {painting.print_available && (
+              <PrintRequestDialog
+                painting={painting}
+                settings={settings}
+                paintingUrl={paintingUrl}
+              />
+            )}
+
+            {painting.commission_available && (
+              <Link
+                href={`/commission?painting=${encodeURIComponent(painting.title)}&painting_id=${painting.id}`}
+                className="inline-flex items-center justify-center h-9 px-4 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition-colors w-fit"
+              >
+                Available on Commission
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>

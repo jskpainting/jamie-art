@@ -13,9 +13,11 @@ import type {
   InquiryWithPainting,
   Painting,
   PaintingWithImages,
+  PaintingWithImagesAndTags,
   Section,
   Settings,
   SectionWithCount,
+  Tag,
 } from "@/lib/types"
 
 // Used only for contacts + inquiries (auth-only RLS policies)
@@ -99,6 +101,22 @@ export async function getSectionBySlug(slug: string): Promise<Section | null> {
   }
 }
 
+function twoTierSort<T extends { status: string; sort_order: number; sold_at: string | null }>(
+  rows: T[]
+): T[] {
+  const active = rows
+    .filter((p) => p.status !== "sold")
+    .sort((a, b) => a.sort_order - b.sort_order)
+  const sold = rows
+    .filter((p) => p.status === "sold")
+    .sort((a, b) => {
+      const aT = a.sold_at ? new Date(a.sold_at).getTime() : 0
+      const bT = b.sold_at ? new Date(b.sold_at).getTime() : 0
+      return bT - aT
+    })
+  return [...active, ...sold]
+}
+
 export async function getPaintingsBySection(
   sectionId: string
 ): Promise<Painting[]> {
@@ -108,9 +126,8 @@ export async function getPaintingsBySection(
       .from("paintings")
       .select("*")
       .eq("section_id", sectionId)
-      .order("sort_order")
     if (error) throw error
-    return data ?? []
+    return twoTierSort(data ?? [])
   } catch (err) {
     console.error("getPaintingsBySection error:", err)
     return []
@@ -166,25 +183,126 @@ export async function getFeaturedPaintings(limit = 6): Promise<Painting[]> {
   }
 }
 
-export async function getRelatedPaintings(
-  paintingId: string,
-  sectionId: string,
-  limit = 4
-): Promise<Painting[]> {
+export async function getTagsForPainting(paintingId: string): Promise<Tag[]> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
-      .from("paintings")
+      .from("painting_tags")
+      .select("tags(id, name, created_at)")
+      .eq("painting_id", paintingId)
+    if (error) throw error
+    return (data ?? [])
+      .map((row) => (row.tags as unknown as Tag | null))
+      .filter((t): t is Tag => t !== null)
+  } catch (err) {
+    console.error("getTagsForPainting error:", err)
+    return []
+  }
+}
+
+export async function searchTags(query: string, limit = 10): Promise<Tag[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("tags")
       .select("*")
-      .eq("section_id", sectionId)
-      .neq("id", paintingId)
-      .order("sort_order")
+      .ilike("name", `${query}%`)
+      .order("name")
       .limit(limit)
     if (error) throw error
     return data ?? []
   } catch (err) {
-    console.error("getRelatedPaintings error:", err)
+    console.error("searchTags error:", err)
     return []
+  }
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+export async function getRelatedPaintings(
+  paintingId: string,
+  sectionId: string,
+  limit = 4
+): Promise<{ paintings: Painting[]; source: "tags" | "section" }> {
+  try {
+    const supabase = await createClient()
+
+    // Step 1: Get tag IDs for the current painting
+    const { data: ptRows } = await supabase
+      .from("painting_tags")
+      .select("tag_id")
+      .eq("painting_id", paintingId)
+
+    const tagIds = (ptRows ?? []).map((r) => r.tag_id as string)
+
+    let tagPaintings: Painting[] = []
+
+    if (tagIds.length > 0) {
+      // Step 2: Find all paintings sharing those tags (excluding self)
+      const { data: candidateRows } = await supabase
+        .from("painting_tags")
+        .select("painting_id")
+        .in("tag_id", tagIds)
+        .neq("painting_id", paintingId)
+
+      // Count shared tags per candidate painting
+      const countMap = new Map<string, number>()
+      for (const row of candidateRows ?? []) {
+        const pid = row.painting_id as string
+        countMap.set(pid, (countMap.get(pid) ?? 0) + 1)
+      }
+
+      if (countMap.size > 0) {
+        // Group by count, shuffle within each group, flatten in descending order
+        const groups = new Map<number, string[]>()
+        for (const [pid, cnt] of countMap) {
+          if (!groups.has(cnt)) groups.set(cnt, [])
+          groups.get(cnt)!.push(pid)
+        }
+        const sortedCounts = [...groups.keys()].sort((a, b) => b - a)
+        const orderedIds: string[] = []
+        for (const cnt of sortedCounts) {
+          orderedIds.push(...shuffle(groups.get(cnt)!))
+        }
+        const topIds = orderedIds.slice(0, limit)
+
+        const { data: paintings } = await supabase
+          .from("paintings")
+          .select("*")
+          .in("id", topIds)
+        // Preserve the ranked order
+        const byId = new Map((paintings ?? []).map((p) => [p.id, p]))
+        tagPaintings = topIds.map((id) => byId.get(id)).filter((p): p is Painting => !!p)
+      }
+    }
+
+    // Step 3: Fill remainder from same section
+    const needed = limit - tagPaintings.length
+    let sectionFill: Painting[] = []
+    if (needed > 0) {
+      const excludeIds = [paintingId, ...tagPaintings.map((p) => p.id)]
+      const { data: sectionPaintings } = await supabase
+        .from("paintings")
+        .select("*")
+        .eq("section_id", sectionId)
+        .not("id", "in", `(${excludeIds.join(",")})`)
+        .limit(8)
+      sectionFill = shuffle(sectionPaintings ?? []).slice(0, needed)
+    }
+
+    const paintings = [...tagPaintings, ...sectionFill]
+    const source: "tags" | "section" = tagPaintings.length > 0 ? "tags" : "section"
+    return { paintings, source }
+  } catch (err) {
+    console.error("getRelatedPaintings error:", err)
+    return { paintings: [], source: "section" }
   }
 }
 
@@ -278,23 +396,46 @@ export async function getNewInquiriesCount(): Promise<number> {
 
 export async function getPaintingsWithImagesForSection(
   sectionId: string
-): Promise<PaintingWithImages[]> {
+): Promise<PaintingWithImagesAndTags[]> {
   try {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("paintings")
-      .select("*, painting_images(id, url, alt, sort_order)")
+      .select("*, painting_images(id, url, alt, sort_order), painting_tags(tags(name))")
       .eq("section_id", sectionId)
-      .order("sort_order")
     if (error) throw error
-    return (data ?? []).map((p) => ({
-      ...p,
-      painting_images: ((p.painting_images ?? []) as PaintingWithImages["painting_images"]).sort(
-        (a, b) => a.sort_order - b.sort_order
-      ),
-    }))
+    const mapped = (data ?? []).map((p) => {
+      type RawTag = { tags: { name: string } | null }
+      const raw = p as typeof p & { painting_tags: RawTag[] }
+      return {
+        ...p,
+        painting_images: ((p.painting_images ?? []) as PaintingWithImages["painting_images"]).sort(
+          (a, b) => a.sort_order - b.sort_order
+        ),
+        tags: (raw.painting_tags ?? [])
+          .map((pt: RawTag) => pt.tags?.name ?? null)
+          .filter((n: string | null): n is string => typeof n === "string"),
+      }
+    })
+    return twoTierSort(mapped)
   } catch (err) {
     console.error("getPaintingsWithImagesForSection error:", err)
+    return []
+  }
+}
+
+export async function getAllEvents(): Promise<Event[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .neq("status", "cancelled")
+      .order("starts_at")
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getAllEvents error:", err)
     return []
   }
 }

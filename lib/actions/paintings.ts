@@ -9,6 +9,7 @@ import {
   PaintingImageSchema,
   type PaintingImageInput,
 } from "@/lib/schemas"
+import type { PaintingStatus } from "@/lib/types"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -216,5 +217,129 @@ export async function reorderPaintingImages(
     const message =
       e instanceof Error ? e.message : "Failed to reorder images"
     return { ok: false, error: message }
+  }
+}
+
+export async function bulkUpdateStatus(
+  ids: string[],
+  status: PaintingStatus
+): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (ids.length === 0) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    await Promise.all(
+      ids.map((id) => supabase.from("paintings").update({ status }).eq("id", id).then())
+    )
+    revalidatePath("/portfolio")
+    revalidatePath("/admin/portfolio")
+    return { ok: true, count: ids.length }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update status" }
+  }
+}
+
+export async function bulkUpdateSection(
+  ids: string[],
+  sectionId: string
+): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (ids.length === 0) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    await Promise.all(
+      ids.map((id) =>
+        supabase.from("paintings").update({ section_id: sectionId }).eq("id", id).then()
+      )
+    )
+    revalidatePath("/portfolio")
+    revalidatePath("/admin/portfolio")
+    return { ok: true, count: ids.length }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update section" }
+  }
+}
+
+export async function bulkAddTag(
+  ids: string[],
+  tagName: string
+): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (ids.length === 0 || !tagName.trim()) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    const name = tagName.trim().toLowerCase()
+    // Upsert the tag
+    const { data: tagRow, error: tagErr } = await supabase
+      .from("tags")
+      .upsert({ name }, { onConflict: "name" })
+      .select("id")
+      .single()
+    if (tagErr) throw tagErr
+
+    // Link to each painting (ignore conflicts)
+    await supabase
+      .from("painting_tags")
+      .upsert(
+        ids.map((painting_id) => ({ painting_id, tag_id: tagRow.id })),
+        { onConflict: "painting_id,tag_id" }
+      )
+    return { ok: true, count: ids.length }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to add tag" }
+  }
+}
+
+export async function bulkRemoveTag(
+  ids: string[],
+  tagName: string
+): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (ids.length === 0 || !tagName.trim()) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    const name = tagName.trim().toLowerCase()
+    const { data: tagRow } = await supabase
+      .from("tags")
+      .select("id")
+      .eq("name", name)
+      .single()
+    if (!tagRow) return { ok: true, count: 0 }
+
+    await supabase
+      .from("painting_tags")
+      .delete()
+      .eq("tag_id", tagRow.id)
+      .in("painting_id", ids)
+    return { ok: true, count: ids.length }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to remove tag" }
+  }
+}
+
+export async function bulkDelete(
+  ids: string[]
+): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (ids.length === 0) return { ok: true, count: 0 }
+
+  try {
+    const supabase = await db()
+    const { error } = await supabase.from("paintings").delete().in("id", ids)
+    if (error) throw error
+    revalidatePath("/portfolio")
+    revalidatePath("/admin/portfolio")
+    return { ok: true, count: ids.length }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to delete paintings" }
   }
 }

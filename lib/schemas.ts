@@ -52,6 +52,8 @@ export const PaintingWriteSchema = z.object({
   status: z.enum(["available", "sold", "nfs", "reserved"]).default("available"),
   story: z.string().nullable().optional(),
   primary_image_url: z.string().nullable().optional(),
+  print_available: z.boolean().default(false),
+  commission_available: z.boolean().default(false),
 })
 
 export type PaintingWriteInput = z.infer<typeof PaintingWriteSchema>
@@ -94,6 +96,28 @@ export const ContactImportRowSchema = z.object({
 })
 
 export type ContactImportRow = z.infer<typeof ContactImportRowSchema>
+
+export const TagNameSchema = z
+  .string()
+  .min(1, "Tag must be at least 1 character")
+  .max(50, "Tag must be 50 characters or fewer")
+  .trim()
+  .toLowerCase()
+
+export type TagNameInput = z.infer<typeof TagNameSchema>
+
+export const TagNamesSchema = z.array(TagNameSchema)
+
+export const CommissionInquiryWriteSchema = z.object({
+  from_name: z.string().nullable().optional(),
+  from_email: z.string().email("Valid email required"),
+  from_phone: z.string().nullable().optional(),
+  message: z.string().min(10, "Please write at least 10 characters"),
+  reference_painting_title: z.string().nullable().optional(),
+  reference_painting_id: z.string().uuid().nullable().optional(),
+})
+
+export type CommissionInquiryWriteInput = z.infer<typeof CommissionInquiryWriteSchema>
 
 export const InquiryStatusSchema = z.enum(["new", "replied", "closed"])
 
