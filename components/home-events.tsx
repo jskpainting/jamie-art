@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { MapPin } from "lucide-react"
 import type { Event } from "@/lib/types"
 
 interface HomeEventsProps {
@@ -50,7 +51,15 @@ function EventCard({ event }: EventCardProps) {
         </p>
         <h3 className="text-xl font-medium leading-snug mb-0.5">{event.title}</h3>
         {event.location && (
-          <p className="text-sm text-muted-foreground">{event.location}</p>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline underline-offset-4 transition-colors"
+          >
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            {event.location}
+          </a>
         )}
       </div>
     </div>

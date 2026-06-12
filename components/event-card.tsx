@@ -1,6 +1,16 @@
 import { format, parseISO } from "date-fns"
+import { MapPin } from "lucide-react"
 import type { Event } from "@/lib/types"
 import { cn } from "@/lib/utils"
+
+function normalizeUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url
+  return `https://${url}`
+}
+
+function mapsUrl(location: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
+}
 
 interface EventCardProps {
   event: Event
@@ -29,7 +39,15 @@ export function EventCard({ event }: EventCardProps) {
       </h3>
 
       {event.location && (
-        <p className="text-sm text-muted-foreground mb-3">{event.location}</p>
+        <a
+          href={mapsUrl(event.location)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-3 hover:underline underline-offset-4 transition-colors"
+        >
+          <MapPin className="h-3.5 w-3.5 shrink-0" />
+          {event.location}
+        </a>
       )}
 
       {event.description && (
@@ -40,7 +58,7 @@ export function EventCard({ event }: EventCardProps) {
 
       {event.link && isUpcoming && (
         <a
-          href={event.link}
+          href={normalizeUrl(event.link)}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:underline underline-offset-4 transition-colors"

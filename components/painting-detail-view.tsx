@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
@@ -7,6 +8,7 @@ import remarkGfm from "remark-gfm"
 import { ChevronLeft } from "lucide-react"
 import { InquireDialog } from "@/components/inquire-dialog"
 import { PrintRequestDialog } from "@/components/print-request-dialog"
+import { ZoomOverlay } from "@/components/zoom-overlay"
 import { formatPrice, cn } from "@/lib/utils"
 import type { PaintingWithImages, PaintingStatus, Settings } from "@/lib/types"
 
@@ -41,6 +43,8 @@ export function PaintingDetailView({
   settings,
   paintingUrl,
 }: PaintingDetailViewProps) {
+  const [zoomOpen, setZoomOpen] = useState(false)
+
   const priceDisplay =
     painting.status === "available" && painting.price_cents
       ? formatPrice(painting.price_cents)
@@ -62,18 +66,29 @@ export function PaintingDetailView({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
         {/* Primary image */}
         <div className="space-y-4">
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+          <div className="flex items-start justify-center">
             {painting.primary_image_url ? (
-              <Image
-                src={painting.primary_image_url}
-                alt={painting.title}
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-contain"
-                priority
-              />
+              <>
+                <Image
+                  src={painting.primary_image_url}
+                  alt={painting.title}
+                  width={0}
+                  height={0}
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="max-h-[70vh] md:max-h-[80vh] max-w-full w-auto h-auto object-contain cursor-zoom-in"
+                  style={{ width: "auto", height: "auto" }}
+                  priority
+                  onClick={() => setZoomOpen(true)}
+                />
+                <ZoomOverlay
+                  src={painting.primary_image_url}
+                  alt={painting.title}
+                  open={zoomOpen}
+                  onClose={() => setZoomOpen(false)}
+                />
+              </>
             ) : (
-              <div className="w-full h-full bg-muted" />
+              <div className="w-full aspect-[4/3] bg-muted" />
             )}
           </div>
 

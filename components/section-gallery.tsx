@@ -42,7 +42,7 @@ export function SectionGallery({ paintings, sectionSlug }: SectionGalleryProps) 
       renderItem={(painting) => (
         <Link
           href={`/portfolio/${sectionSlug}/${painting.slug}`}
-          className="group relative block h-full w-full overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group relative block h-full w-full overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={painting.title}
         >
           {painting.primary_image_url ? (

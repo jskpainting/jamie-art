@@ -28,6 +28,12 @@ export const metadata: Metadata = {
   },
   description:
     "Original oil and acrylic paintings by Jamie Kendrioski. Abstracts, cityscapes, seascapes, florals, and more.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Jamie K",
+  },
   openGraph: {
     type: "website",
     siteName: "Jamie Kendrioski",

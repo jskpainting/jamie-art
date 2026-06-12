@@ -71,7 +71,16 @@ export const EventWriteSchema = z.object({
   ends_at: z.string().nullable().optional(),
   location: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  link: z.string().nullable().optional(),
+  link: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => {
+      if (!v || !v.trim()) return null
+      const trimmed = v.trim()
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+      return `https://${trimmed}`
+    }),
   image_url: z.string().nullable().optional(),
   status: z.enum(["upcoming", "past", "cancelled"]).default("upcoming"),
 })
