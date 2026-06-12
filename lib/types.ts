@@ -136,6 +136,9 @@ export interface Settings {
   email: string | null
   instagram_handle: string | null
   newsletter_from_name: string | null
+  home_hero_image_url: string | null
+  about_image_url: string | null
+  commission_image_url: string | null
   updated_at: string
 }
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { getBio } from "@/lib/db/queries"
+import { getBio, getSettings } from "@/lib/db/queries"
 
 export const metadata: Metadata = {
   title: "About",
@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 }
 
 export default async function AboutPage() {
-  const bio = await getBio()
+  const [bio, settings] = await Promise.all([getBio(), getSettings()])
+  const profileImageUrl = settings?.about_image_url ?? null
 
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-32">
@@ -23,12 +24,12 @@ export default async function AboutPage() {
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-12 lg:gap-16">
-        {/* Headshot */}
-        <div>
-          {bio?.headshot_url ? (
-            <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden bg-muted">
+        {/* Profile photo — hidden entirely when no image set */}
+        {profileImageUrl && (
+          <div>
+            <div className="relative aspect-square w-full max-w-sm overflow-hidden bg-muted">
               <Image
-                src={bio.headshot_url}
+                src={profileImageUrl}
                 alt="Jamie Kendrioski"
                 fill
                 sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
@@ -36,13 +37,11 @@ export default async function AboutPage() {
                 priority
               />
             </div>
-          ) : (
-            <div className="aspect-[3/4] w-full max-w-sm bg-muted" />
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Bio */}
-        <div className="max-w-2xl">
+        {/* Bio — spans full width if no profile image */}
+        <div className={profileImageUrl ? "max-w-2xl" : "max-w-2xl lg:col-span-2"}>
           {bio?.short_statement && (
             <p className="text-xl md:text-2xl font-serif font-light leading-relaxed text-foreground mb-8">
               {bio.short_statement}

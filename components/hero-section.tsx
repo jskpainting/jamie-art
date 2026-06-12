@@ -9,6 +9,7 @@ import type { Painting } from "@/lib/types"
 interface HeroSectionProps {
   painting: Painting | null
   bioTeaser: string | null
+  heroImageUrl: string | null
 }
 
 const fadeUp = {
@@ -16,7 +17,7 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 }
 
-export function HeroSection({ painting, bioTeaser }: HeroSectionProps) {
+export function HeroSection({ painting, bioTeaser, heroImageUrl }: HeroSectionProps) {
   const shouldReduceMotion = useReducedMotion()
 
   const transition: Transition = shouldReduceMotion
@@ -27,7 +28,7 @@ export function HeroSection({ painting, bioTeaser }: HeroSectionProps) {
     <section className="relative flex flex-col md:grid md:grid-cols-[60%_40%] min-h-[calc(100vh-4rem)]">
       {/* Image column */}
       <div className="relative h-[60vh] md:h-auto">
-        {painting?.primary_image_url ? (
+        {heroImageUrl || painting?.primary_image_url ? (
           <motion.div
             className="absolute inset-0"
             initial={{ opacity: 0 }}
@@ -35,8 +36,8 @@ export function HeroSection({ painting, bioTeaser }: HeroSectionProps) {
             transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6 }}
           >
             <Image
-              src={painting.primary_image_url}
-              alt={painting.title}
+              src={heroImageUrl ?? painting!.primary_image_url!}
+              alt={heroImageUrl ? "Jamie Kendrioski" : painting!.title}
               fill
               className="object-cover"
               priority

@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -41,5 +42,47 @@ export async function updateSettings(input: SettingsInput) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update settings"
     return { ok: false, error: message }
+  }
+}
+
+const IMAGE_FIELDS = [
+  "home_hero_image_url",
+  "about_image_url",
+  "commission_image_url",
+] as const
+export type ImageField = (typeof IMAGE_FIELDS)[number]
+
+const revalidateMap: Record<ImageField, string[]> = {
+  home_hero_image_url:  ["/", "/admin/settings"],
+  about_image_url:      ["/about", "/admin/settings"],
+  commission_image_url: ["/commission", "/admin/settings"],
+}
+
+const UrlOrNullSchema = z.string().url().nullable()
+
+export async function updateSettingImage(field: ImageField, url: string | null) {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  if (!(IMAGE_FIELDS as readonly string[]).includes(field))
+    return { ok: false, error: "Invalid field" }
+
+  const parsed = UrlOrNullSchema.safeParse(url === "" ? null : url)
+  if (!parsed.success) return { ok: false, error: "Invalid URL" }
+
+  try {
+    const supabase = await db()
+    const { data: existing } = await supabase.from("settings").select("id").single()
+    if (existing) {
+      const { error } = await supabase
+        .from("settings")
+        .update({ [field]: parsed.data, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+      if (error) throw error
+    }
+    revalidateMap[field].forEach((p) => revalidatePath(p))
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update image" }
   }
 }
