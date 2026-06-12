@@ -61,7 +61,8 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
           checked={contact.subscribed}
           onCheckedChange={async (checked) => {
             const result = await updateContact(contact.id, { subscribed: !!checked })
-            if (!result.ok) toast.error(result.error)
+            if (result.ok) toast.success("Contact updated")
+            else toast.error(result.error)
           }}
           aria-label="Subscribed"
         />

@@ -23,9 +23,9 @@ export function FeaturedPaintingPickerForm({
     startTransition(async () => {
       const result = await updateFeaturedPainting(id)
       if (result.ok) {
-        toast.success(id ? "Featured painting saved" : "Featured painting cleared")
+        toast.success(id ? "Featured painting saved" : "Featured painting cleared", { duration: 5000 })
       } else {
-        toast.error(result.error ?? "Failed to update")
+        toast.error(result.error ?? "Failed to update", { duration: 5000 })
         setSelectedId(selectedId)
       }
     })

@@ -26,7 +26,7 @@ export interface PaintingForPicker extends Painting {
   section_title: string
 }
 
-// Used only for contacts + inquiries (auth-only RLS policies)
+// Used for contacts, inquiries, and newsletters (auth-only RLS policies)
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createClient()
 }

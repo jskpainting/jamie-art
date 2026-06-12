@@ -30,6 +30,7 @@ export function MasonryGrid({ images, onImageClick }: MasonryGridProps) {
               width={image.width}
               height={image.height}
               sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
+              loading="eager"
               className="w-full h-auto"
             />
           </span>

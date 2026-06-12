@@ -32,9 +32,9 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
   async function onSubmit(values: SettingsInput) {
     const result = await updateSettings(values)
     if (result.ok) {
-      toast.success("Settings saved.")
+      toast.success("Settings saved.", { duration: 5000 })
     } else {
-      toast.error(result.error ?? "Failed to save settings.")
+      toast.error(result.error ?? "Failed to save settings.", { duration: 5000 })
     }
   }
 

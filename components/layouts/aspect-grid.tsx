@@ -10,8 +10,9 @@ interface AspectGridProps {
 
 /**
  * Structured grid: fixed column count per breakpoint, each cell sized to its
- * image's intrinsic aspect ratio via the CSS aspect-ratio property — images
- * are never cropped and rows align to the tallest cell.
+ * image's intrinsic aspect ratio — images are never cropped and rows align to
+ * the tallest cell. Each image controls its own height via w-full h-auto so
+ * Next.js Image's height:auto inline style works with us, not against us.
  */
 export function AspectGrid({ images, onImageClick }: AspectGridProps) {
   return (
@@ -22,17 +23,17 @@ export function AspectGrid({ images, onImageClick }: AspectGridProps) {
           type="button"
           onClick={() => onImageClick(index)}
           className="group block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          style={{ aspectRatio: `${image.width} / ${image.height}` }}
           aria-label={`View ${image.alt}`}
         >
-          <span className="block h-full w-full overflow-hidden shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
+          <span className="block shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
             <Image
               src={image.src}
               alt={image.alt}
               width={image.width}
               height={image.height}
               sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-              className="h-full w-full object-contain"
+              loading="eager"
+              className="w-full h-auto"
             />
           </span>
         </button>

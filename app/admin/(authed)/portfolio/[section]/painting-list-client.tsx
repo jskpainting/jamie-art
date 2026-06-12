@@ -532,6 +532,7 @@ export function PaintingListClient({
         open={addOpen}
         onOpenChange={setAddOpen}
         sectionId={section.id}
+        sections={sections}
       />
 
       {/* Edit dialog */}
@@ -542,6 +543,7 @@ export function PaintingListClient({
           sectionId={section.id}
           painting={editPainting}
           defaultTags={editPainting.tags}
+          sections={sections}
         />
       )}
     </div>

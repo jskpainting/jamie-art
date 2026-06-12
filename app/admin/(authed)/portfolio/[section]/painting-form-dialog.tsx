@@ -27,7 +27,7 @@ import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { TagInput } from "@/components/admin/tag-input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { slugify } from "@/lib/utils"
-import type { PaintingWithImages } from "@/lib/types"
+import type { PaintingWithImages, Section } from "@/lib/types"
 
 interface MultiImageItem {
   id: string
@@ -40,6 +40,7 @@ interface PaintingFormDialogProps {
   sectionId: string
   painting?: PaintingWithImages
   defaultTags?: string[]
+  sections?: Section[]
 }
 
 export function PaintingFormDialog({
@@ -48,9 +49,11 @@ export function PaintingFormDialog({
   sectionId,
   painting,
   defaultTags = [],
+  sections = [],
 }: PaintingFormDialogProps) {
   const isEdit = !!painting
 
+  const [activeSectionId, setActiveSectionId] = useState(painting?.section_id ?? sectionId)
   const [title, setTitle] = useState(painting?.title ?? "")
   const [slug, setSlug] = useState(painting?.slug ?? "")
   const [slugManual, setSlugManual] = useState(isEdit)
@@ -100,7 +103,7 @@ export function PaintingFormDialog({
     setSaving(true)
     try {
       const input = {
-        section_id: sectionId,
+        section_id: activeSectionId,
         title,
         slug,
         year: year ? year : undefined,
@@ -230,6 +233,20 @@ export function PaintingFormDialog({
               </select>
             </FormField>
           </div>
+
+          {sections.length > 0 && (
+            <FormField label="Section">
+              <select
+                value={activeSectionId}
+                onChange={(e) => setActiveSectionId(e.target.value)}
+                className="w-full h-8 rounded-lg border border-input bg-background px-2.5 text-base md:text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>{s.title}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Medium">
