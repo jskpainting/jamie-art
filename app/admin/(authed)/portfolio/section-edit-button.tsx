@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { FormField } from "@/components/admin/form-field"
-import { ImageUpload } from "@/components/admin/image-upload"
+import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import type { SectionWithCount } from "@/lib/types"
 
 interface SectionEditButtonProps {
@@ -82,10 +82,12 @@ export function SectionEditButton({ section }: SectionEditButtonProps) {
             </FormField>
 
             <FormField label="Cover image">
-              <ImageUpload
+              <ImageUploadCropper
                 bucket="paintings"
-                value={cover_image_url}
-                onChange={setCover}
+                currentImageUrl={cover_image_url}
+                aspectRatio="free"
+                label="Cover image"
+                onUploadComplete={(url) => setCover(url)}
               />
             </FormField>
           </div>

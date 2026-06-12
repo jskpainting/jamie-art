@@ -4,7 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { updateBio } from "@/lib/actions/bio"
-import { ImageUpload } from "@/components/admin/image-upload"
+import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { FormField } from "@/components/admin/form-field"
 import { Button } from "@/components/ui/button"
@@ -46,10 +46,12 @@ export function BioForm({ bio }: BioFormProps) {
   return (
     <div className="max-w-2xl space-y-6">
       <FormField label="Headshot">
-        <ImageUpload
+        <ImageUploadCropper
           bucket="headshots"
-          value={headshot_url}
-          onChange={setHeadshot}
+          currentImageUrl={headshot_url}
+          aspectRatio={1}
+          label="Headshot"
+          onUploadComplete={(url) => setHeadshot(url)}
         />
       </FormField>
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-const ALLOWED_BUCKETS = ["paintings", "headshots", "events"] as const
+const ALLOWED_BUCKETS = ["paintings", "headshots", "events", "site-images"] as const
 
 export async function POST(request: NextRequest) {
   const user = await getUser()

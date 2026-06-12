@@ -1,5 +1,6 @@
 import { format, parseISO } from "date-fns"
 import { MapPin } from "lucide-react"
+import Image from "next/image"
 import type { Event } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +30,18 @@ export function EventCard({ event }: EventCardProps) {
           : "border-border/50 bg-muted/30 opacity-80"
       )}
     >
+      {event.image_url && (
+        <div className="relative w-full aspect-video overflow-hidden bg-muted mb-4 -mx-6 -mt-6 w-[calc(100%+3rem)]">
+          <Image
+            src={event.image_url}
+            alt={event.title}
+            fill
+            className="object-cover"
+            sizes="(min-width: 768px) 50vw, 100vw"
+          />
+        </div>
+      )}
+
       <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
         {format(startDate, "MMMM d, yyyy")}
         {event.ends_at && ` — ${format(parseISO(event.ends_at), "MMMM d, yyyy")}`}

@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 
 export default async function AboutPage() {
   const [bio, settings] = await Promise.all([getBio(), getSettings()])
-  const profileImageUrl = settings?.about_image_url ?? null
+  // bio.headshot_url is the canonical source; settings.about_image_url kept as fallback for existing data
+  const profileImageUrl = bio?.headshot_url ?? settings?.about_image_url ?? null
 
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-32">

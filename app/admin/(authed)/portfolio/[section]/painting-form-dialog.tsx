@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
-import { ImageUpload } from "@/components/admin/image-upload"
+import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MultiImageUpload } from "@/components/admin/multi-image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { TagInput } from "@/components/admin/tag-input"
@@ -286,10 +286,12 @@ export function PaintingFormDialog({
           </FormField>
 
           <FormField label="Primary image">
-            <ImageUpload
+            <ImageUploadCropper
               bucket="paintings"
-              value={primaryUrl}
-              onChange={setPrimaryUrl}
+              currentImageUrl={primaryUrl}
+              aspectRatio="free"
+              label="Primary image"
+              onUploadComplete={(url) => setPrimaryUrl(url)}
             />
           </FormField>
 

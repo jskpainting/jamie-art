@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
-import { ImageUpload } from "@/components/admin/image-upload"
+import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import type { Event } from "@/lib/types"
 
@@ -167,10 +167,12 @@ export function EventFormDialog({
           </FormField>
 
           <FormField label="Image">
-            <ImageUpload
+            <ImageUploadCropper
               bucket="events"
-              value={image_url}
-              onChange={setImageUrl}
+              currentImageUrl={image_url}
+              aspectRatio={16 / 9}
+              label="Event image"
+              onUploadComplete={(url) => setImageUrl(url)}
             />
           </FormField>
         </div>
