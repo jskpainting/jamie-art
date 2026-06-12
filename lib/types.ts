@@ -105,6 +105,8 @@ export interface SectionWithCount extends Section {
 
 export interface InquiryWithPainting extends Inquiry {
   painting_title: string | null
+  painting_slug: string | null
+  painting_section_slug: string | null
 }
 
 export interface ContactsStats {

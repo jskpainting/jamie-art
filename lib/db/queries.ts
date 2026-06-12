@@ -517,15 +517,23 @@ export async function getInquiriesWithPainting(): Promise<InquiryWithPainting[]>
     const supabase = await db()
     const { data, error } = await supabase
       .from("inquiries")
-      .select("*, paintings(title)")
+      .select("*, paintings(title, slug, sections(slug))")
       .order("created_at", { ascending: false })
     if (error) throw error
-    return (data ?? []).map((inq) => ({
-      ...inq,
-      painting_title:
-        (inq.paintings as { title: string } | null)?.title ?? null,
-      paintings: undefined,
-    }))
+    return (data ?? []).map((inq) => {
+      const painting = inq.paintings as {
+        title: string
+        slug: string
+        sections: { slug: string } | null
+      } | null
+      return {
+        ...inq,
+        painting_title: painting?.title ?? null,
+        painting_slug: painting?.slug ?? null,
+        painting_section_slug: painting?.sections?.slug ?? null,
+        paintings: undefined,
+      }
+    })
   } catch (err) {
     console.error("getInquiriesWithPainting error:", err)
     return []
