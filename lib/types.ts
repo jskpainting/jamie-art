@@ -73,7 +73,22 @@ export interface Contact {
   source: string
   tags: string[]
   subscribed: boolean
+  unsubscribe_token: string
   created_at: string
+}
+
+export type NewsletterStatus = "sending" | "completed" | "failed"
+
+export interface Newsletter {
+  id: string
+  subject: string
+  body_markdown: string
+  body_html: string
+  sent_at: string
+  sent_by_user_email: string | null
+  recipient_count: number
+  status: NewsletterStatus
+  error_message: string | null
 }
 
 export interface Inquiry {
@@ -141,6 +156,7 @@ export interface Settings {
   home_hero_image_url: string | null
   about_image_url: string | null
   commission_image_url: string | null
+  featured_painting_id: string | null
   updated_at: string
 }
 

@@ -223,7 +223,23 @@ create table contacts (
   source text default 'manual',
   tags text[] default '{}',
   subscribed boolean default true,
-  created_at timestamptz default now()
+  unsubscribe_token uuid default gen_random_uuid() not null,
+  created_at timestamptz default now(),
+  constraint contacts_unsub_token_unique unique (unsubscribe_token)
+);
+
+-- Newsletter sends audit log (Phase 6D-1)
+create table newsletters (
+  id uuid primary key default gen_random_uuid(),
+  subject text not null,
+  body_markdown text not null,
+  body_html text not null,
+  sent_at timestamptz default now(),
+  sent_by_user_email text,
+  recipient_count int not null,
+  status text default 'completed'
+    check (status in ('sending','completed','failed')),
+  error_message text
 );
 
 -- Inquiries from "inquire about this piece"
@@ -276,6 +292,7 @@ create table settings (
   home_hero_image_url text,       -- overrides auto-pulled painting on home hero
   about_image_url text,           -- profile photo on About page
   commission_image_url text,      -- 16:9 hero on Commission page
+  featured_painting_id uuid references paintings(id) on delete set null, -- specific painting pinned to hero
   updated_at timestamptz default now()
 );
 
@@ -544,3 +561,11 @@ exactly. Use Plan Mode first — show me the file changes before executing.
 | 2026-06-11 | Phase 6C-6: `site-images` bucket for home hero + commission hero; `headshots` bucket reused for about profile photo | `headshots` was always intended for the About page photo. `site-images` is a new public-read / auth-write bucket for non-portrait images. |
 | 2026-06-11 | Phase 6C-6: About page hides headshot column entirely when `settings.about_image_url` is null | No broken placeholder. Bio text spans `lg:col-span-2` when no image is set so the layout doesn't leave an empty left column. |
 | 2026-06-11 | Phase 6C-6: Home hero fallback chain: settings image → latest available abstract → any available painting → muted placeholder | Settings image wins when set; painting fallback preserves existing Phase 6C-4 behaviour. Alt text is "Jamie Kendrioski" for settings image, painting title for painting fallback. |
+| 2026-06-11 | Phase 6D-2: `settings.featured_painting_id` adds a second tier to the hero fallback chain | Priority: custom upload (`home_hero_image_url`) > specific pinned painting (`featured_painting_id`) > latest available abstract. Resolution happens in `app/(public)/page.tsx` server component — if `featured_painting_id` is set, `getPaintingById` is called; otherwise `getFeaturedPainting()`. Admin picker is a custom inline combobox (no cmdk/Radix Popover dependency) in `components/admin/painting-picker.tsx`. |
+| 2026-06-11 | Phase 6D-2: Mobile nav redesigned as branded slide-out drawer with wordmark, eyebrow, theme toggle, and social icons | `SheetContent` width changed to `w-[80vw] max-w-[340px]`. Full-height flex column: header (wordmark + "PAINTER · BOSTON"), flex-1 nav links (text-2xl serif, generous py-3), sticky footer (ThemeToggle + social icons, bg-muted/30). ThemeToggle removed from the mobile header bar and moved into the drawer footer. `SheetOverlay` backdrop changed from `bg-black/10` to `bg-black/50` to fully dim the page. Settings (instagram_handle, email) fetched in `(public)/layout.tsx` and passed as `navSettings` prop to `<Nav>`. |
+| 2026-06-11 | Phase 6D-1: `resend` SDK added for newsletter sends | Official Resend Node.js SDK (MIT). Only supported, typed way to call the Resend email API. |
+| 2026-06-11 | Phase 6D-1: `marked` added for email HTML generation | `react-markdown` (already in deps) renders React nodes — unusable for generating HTML strings needed in email templates. `marked.parse()` is synchronous, works in both Node and browser (preview pane in admin UI). |
+| 2026-06-11 | Phase 6D-1: Sending domain is `onboarding@resend.dev` (Resend sandbox) until DNS cutover | **ACTION REQUIRED at DNS cutover:** update `RESEND_FROM_EMAIL` env var to `jamie@jamiekendrioski.com` in both `.env.local` and Vercel dashboard. |
+| 2026-06-11 | Phase 6D-1: 100-recipient free-tier guard fires before any sends | Resend free plan: 100 emails/day. Guard checks `count(subscribed=true)` before inserting the newsletter row or sending anything. Returns a clear error message with instructions to upgrade. |
+| 2026-06-11 | Phase 6D-1: Sequential sends, no artificial delay | Under 100 recipients, sequential `await resend.emails.send()` calls stay within Resend's 2/sec rate limit naturally. No `setTimeout` needed. |
+| 2026-06-11 | Phase 6D-1: `createAdminClient()` used for the public `/unsubscribe` page token lookup | The page is unauthenticated; using the admin client (secret key, bypasses RLS) for a single `SELECT … WHERE unsubscribe_token = ?` query. No broad public-read RLS change on the contacts table. |

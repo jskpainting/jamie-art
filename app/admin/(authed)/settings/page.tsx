@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
-import { getSettings } from "@/lib/db/queries"
+import { getSettings, getAllPaintingsForPicker } from "@/lib/db/queries"
 import { SettingsForm } from "./settings-form"
+import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
 import { ImageCropUploader } from "@/components/admin/image-crop-uploader"
 
 export const metadata: Metadata = {
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 }
 
 export default async function SettingsPage() {
-  const settings = await getSettings()
+  const [settings, paintings] = await Promise.all([
+    getSettings(),
+    getAllPaintingsForPicker(),
+  ])
 
   return (
     <div className="max-w-2xl">
@@ -27,6 +31,19 @@ export default async function SettingsPage() {
           Each image is saved independently — no need to click &ldquo;Save settings&rdquo;.
         </p>
         <div className="flex flex-col gap-10">
+          {/* Featured painting picker */}
+          <div>
+            <p className="text-sm font-medium mb-1">Featured painting</p>
+            <FeaturedPaintingPickerForm
+              paintings={paintings}
+              initialId={settings?.featured_painting_id ?? null}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              If a custom image is uploaded below, it takes priority. Otherwise this painting will
+              be featured on the home page. If neither is set, the latest available abstract is used.
+            </p>
+          </div>
+
           <ImageCropUploader
             label="Home hero image"
             aspectRatio={3 / 4}

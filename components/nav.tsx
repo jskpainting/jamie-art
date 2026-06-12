@@ -3,15 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Menu } from "lucide-react"
+import { Mail, Menu } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
@@ -23,13 +21,48 @@ const navLinks = [
   { href: "/contact", label: "Contact" },
 ]
 
+interface NavSettings {
+  instagram_handle: string | null
+  email: string | null
+}
+
+interface NavProps {
+  navSettings?: NavSettings
+}
+
 function NavLinks({
   pathname,
+  mobile,
   onClick,
 }: {
   pathname: string
+  mobile?: boolean
   onClick?: () => void
 }) {
+  if (mobile) {
+    return (
+      <div className="space-y-2">
+        {navLinks.map((link) => {
+          const active = pathname.startsWith(link.href)
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onClick}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "block py-3 text-2xl font-serif transition-colors hover:text-foreground",
+                active ? "text-foreground font-medium" : "text-muted-foreground"
+              )}
+            >
+              {link.label}
+            </Link>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <>
       {navLinks.map((link) => (
@@ -52,7 +85,7 @@ function NavLinks({
   )
 }
 
-export function Nav() {
+export function Nav({ navSettings }: NavProps) {
   const pathname = usePathname()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
@@ -88,24 +121,88 @@ export function Nav() {
           <ThemeToggle />
         </div>
 
-        {/* Mobile */}
-        <div className="flex md:hidden items-center gap-1">
-          <ThemeToggle />
+        {/* Mobile hamburger — no ThemeToggle here; it lives inside the menu */}
+        <div className="flex md:hidden items-center">
           <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger
+            <button
+              onClick={() => setOpen(true)}
               className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
-            </SheetTrigger>
-            <SheetContent side="right" className="w-72">
-              <SheetHeader>
-                <SheetTitle className="font-serif text-base tracking-tight text-left">
-                  JAMIEKENDRIOSKI
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col gap-6 mt-8 px-1">
-                <NavLinks pathname={pathname} onClick={() => setOpen(false)} />
+            </button>
+
+            <SheetContent
+              side="right"
+              showCloseButton={true}
+              className="w-[80vw] max-w-[340px] p-0 flex flex-col"
+            >
+              {/* Visually hidden title for screen readers */}
+              <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+
+              {/* Header — wordmark + eyebrow */}
+              <div className="px-6 py-8 shrink-0">
+                <Link
+                  href="/"
+                  onClick={() => setOpen(false)}
+                  className="block font-serif font-light text-2xl text-foreground hover:opacity-80 transition-opacity"
+                >
+                  Jamie Kendrioski
+                </Link>
+                <p className="mt-2 text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+                  Painter · Boston
+                </p>
+              </div>
+
+              {/* Nav links */}
+              <div className="flex-1 overflow-y-auto px-6">
+                <NavLinks
+                  pathname={pathname}
+                  mobile
+                  onClick={() => setOpen(false)}
+                />
+              </div>
+
+              {/* Footer — theme toggle + social icons */}
+              <div className="px-6 py-6 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
+                <ThemeToggle />
+                <div className="flex items-center gap-3">
+                  {navSettings?.instagram_handle && (
+                    <a
+                      href={`https://instagram.com/${navSettings.instagram_handle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Instagram"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+                      </svg>
+                    </a>
+                  )}
+                  {navSettings?.email && (
+                    <a
+                      href={`mailto:${navSettings.email}`}
+                      aria-label="Email"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Mail className="h-[18px] w-[18px]" />
+                    </a>
+                  )}
+                </div>
               </div>
             </SheetContent>
           </Sheet>

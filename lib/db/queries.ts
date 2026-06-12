@@ -11,6 +11,7 @@ import type {
   Inquiry,
   InquiriesStats,
   InquiryWithPainting,
+  Newsletter,
   Painting,
   PaintingWithImages,
   PaintingWithImagesAndTags,
@@ -19,6 +20,11 @@ import type {
   SectionWithCount,
   Tag,
 } from "@/lib/types"
+
+export interface PaintingForPicker extends Painting {
+  section_slug: string
+  section_title: string
+}
 
 // Used only for contacts + inquiries (auth-only RLS policies)
 async function db() {
@@ -164,6 +170,54 @@ export async function getPaintingBySlug(
   } catch (err) {
     console.error("getPaintingBySlug error:", err)
     return null
+  }
+}
+
+export async function getPaintingById(id: string): Promise<Painting | null> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("*")
+      .eq("id", id)
+      .single()
+    if (error) throw error
+    return data
+  } catch (err) {
+    console.error("getPaintingById error:", err)
+    return null
+  }
+}
+
+export async function getAllPaintingsForPicker(): Promise<PaintingForPicker[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("*, sections(slug, title, sort_order)")
+      .neq("status", "sold")
+      .order("sort_order")
+    if (error) throw error
+    return (data ?? [])
+      .map((p) => {
+        const sec = p.sections as { slug: string; title: string; sort_order: number } | null
+        return {
+          ...p,
+          sections: undefined,
+          section_slug: sec?.slug ?? "",
+          section_title: sec?.title ?? "",
+          _section_sort: sec?.sort_order ?? 0,
+        }
+      })
+      .sort((a, b) => a._section_sort - b._section_sort || a.sort_order - b.sort_order)
+      .map((p) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _section_sort, ...rest } = p
+        return rest as PaintingForPicker
+      })
+  } catch (err) {
+    console.error("getAllPaintingsForPicker error:", err)
+    return []
   }
 }
 
@@ -680,5 +734,36 @@ export async function getRecentCommissionInquiries(
   } catch (err) {
     console.error("getRecentCommissionInquiries error:", err)
     return []
+  }
+}
+
+// Uses db() — newsletters has auth-only RLS
+export async function getNewsletters(): Promise<Newsletter[]> {
+  try {
+    const supabase = await db()
+    const { data, error } = await supabase
+      .from("newsletters")
+      .select("*")
+      .order("sent_at", { ascending: false })
+    if (error) throw error
+    return (data ?? []) as Newsletter[]
+  } catch (err) {
+    console.error("getNewsletters error:", err)
+    return []
+  }
+}
+
+export async function getSubscriberCount(): Promise<number> {
+  try {
+    const supabase = await db()
+    const { count, error } = await supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("subscribed", true)
+    if (error) throw error
+    return count ?? 0
+  } catch (err) {
+    console.error("getSubscriberCount error:", err)
+    return 0
   }
 }

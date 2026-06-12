@@ -60,6 +60,39 @@ const revalidateMap: Record<ImageField, string[]> = {
 
 const UrlOrNullSchema = z.string().url().nullable()
 
+export async function updateFeaturedPainting(paintingId: string | null) {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  try {
+    const supabase = await db()
+
+    if (paintingId !== null) {
+      const { data: painting } = await supabase
+        .from("paintings")
+        .select("id")
+        .eq("id", paintingId)
+        .single()
+      if (!painting) return { ok: false, error: "Painting not found" }
+    }
+
+    const { data: existing } = await supabase.from("settings").select("id").single()
+    if (existing) {
+      const { error } = await supabase
+        .from("settings")
+        .update({ featured_painting_id: paintingId, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+      if (error) throw error
+    }
+
+    revalidatePath("/")
+    revalidatePath("/admin/settings")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update featured painting" }
+  }
+}
+
 export async function updateSettingImage(field: ImageField, url: string | null) {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
