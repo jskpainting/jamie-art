@@ -164,10 +164,10 @@ export function ImageUploadCropper({
       const blob = await compress(imageSrc, croppedAreaPixels)
       const url = await uploadBlob(blob)
       setLocalUrl(url)
-      onUploadComplete(url)
       setDialogOpen(false)
       setImageSrc(null)
       toast.success("Image uploaded", { duration: 5000 })
+      onUploadComplete(url)
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Upload failed")
     } finally {

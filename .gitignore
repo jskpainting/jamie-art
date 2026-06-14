@@ -46,3 +46,5 @@ next-env.d.ts
 # Phase 6A layout-preview sample images (temporary dev tool — ~13MB, keep out of history)
 /sample_images/
 /public/layout-samples/
+jamie-test.png
+jamie.jpg
