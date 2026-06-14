@@ -42,6 +42,7 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl }: HeroSectionPr
               className="object-cover"
               priority
               sizes="(max-width: 768px) 100vw, 60vw"
+              quality={90}
             />
           </motion.div>
         ) : (

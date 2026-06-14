@@ -33,8 +33,9 @@ export default async function AboutPage() {
                 src={profileImageUrl}
                 alt="Jamie Kendrioski"
                 fill
-                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                sizes="(max-width: 768px) 60vw, 400px"
                 className="object-cover"
+                quality={90}
                 priority
               />
             </div>

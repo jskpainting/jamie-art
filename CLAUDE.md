@@ -1,13 +1,55 @@
-# Jamie Kendrioski Art Portfolio
+# CLAUDE.md
 
-ALWAYS read docs/BUILD_SPEC.md before making changes — it is the single
-source of truth (design tokens, schema, file structure, conventions).
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Stack: Next.js 15 App Router + TypeScript + Tailwind v4 + shadcn/ui +
-Supabase + Framer Motion + next-themes. Local port: 7847.
+ALWAYS read `docs/BUILD_SPEC.md` before making changes — it is the single source of truth for design tokens, DB schema, file structure, and conventions.
 
-Workflow: Plan Mode first → show plan → execute → run build + lint
-after each phase → commit per phase.
+## Commands
+
+```bash
+npm run dev          # starts Next.js on port 7847 (runs sync-layout-samples.mjs first)
+npm run build        # production build (also runs prebuild script)
+npm run lint         # ESLint check
+```
+
+After every phase: `npm run build && npm run lint` must both pass before committing.
+
+## Stack
+
+Next.js 15 App Router · TypeScript · Tailwind v4 · shadcn/ui · Supabase (Postgres + Storage) · Framer Motion · next-themes · Sonner (toasts) · Resend (email) · Zod (validation)
+
+## Architecture
+
+### Route groups
+- `app/(public)/` — public site (home, portfolio, about, events, commission, contact)
+- `app/admin/(authed)/` — admin panel, gated by `requireUser()` in layout
+- `app/admin/auth/` and `app/admin/login/` — magic-link auth flow
+- `app/api/admin/` — two upload endpoints: `upload/` and `delete-upload/`
+
+### Auth
+`lib/supabase/auth.ts` exports `getUser()` and `requireUser()`. In development, set `ADMIN_AUTH_BYPASS=true` in `.env.local` to skip auth entirely (a fake dev user is substituted). Server actions must call `getUser()` first and return `{ ok: false, error: "Unauthorized" }` if null.
+
+### Data layer
+All DB reads/writes go through `lib/actions/*.ts` (Next.js server actions, each file `"use server"`). Pattern: `db()` helper returns an admin client in bypass mode or a cookie-based server client in prod. Actions validate with Zod schemas from `lib/schemas.ts`, mutate, then call `revalidatePath()` on affected routes. Types in `lib/types.ts` mirror the DB schema exactly — do not drift from them.
+
+### Image uploads
+`components/admin/image-upload-cropper.tsx` is the single unified upload component used across all admin image fields.
+- `aspectRatio="free"` → skips crop dialog, compresses and uploads immediately
+- `aspectRatio={number}` → opens react-easy-crop dialog with pan/zoom, then compresses and uploads on save
+- Uploads POST to `/api/admin/upload` with `{ file, bucket }` multipart form
+- Buckets: `headshots`, `paintings`, `events`, `site-images`
+- Deletions POST to `/api/admin/delete-upload` with `{ path, bucket }`
+- Client-side compression via Canvas API before upload
+
+### Admin UI conventions
+- Every admin page is a Server Component that fetches data and passes it to a `*-form` or client component
+- Mutations use server actions (not API routes), called from `"use client"` form components
+- `AdminShell` (`components/admin/shell.tsx`) wraps all authed pages; `Toaster` is mounted in the authed layout
+- Toast pattern: `toast.success(...)` / `toast.error(...)` from `sonner` — always set `duration: 5000`
+- Dialog-close-before-callback rule: in `handleSave`, close dialog and clear state BEFORE calling `onUploadComplete` (server action fires last to avoid RSC refresh interfering with React state)
+
+### Workflow
+Plan Mode first → show plan → execute → `npm run build && npm run lint` → commit per phase.
 
 ## Recent shipped phases
 

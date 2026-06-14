@@ -30,6 +30,7 @@ export default async function CommissionPage({ searchParams }: Props) {
             className="object-cover"
             priority
             sizes="100vw"
+            quality={90}
           />
         </div>
       ) : (

@@ -50,7 +50,8 @@ export function SectionGallery({ paintings, sectionSlug }: SectionGalleryProps) 
               src={painting.primary_image_url}
               alt={painting.title}
               fill
-              sizes="(min-width: 1024px) 33vw, 50vw"
+              sizes="(max-width: 768px) 50vw, 33vw"
+              quality={90}
               className={cn(
                 "object-cover transition-transform duration-300",
                 "motion-safe:group-hover:scale-[1.01]"

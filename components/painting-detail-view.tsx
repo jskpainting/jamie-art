@@ -74,9 +74,10 @@ export function PaintingDetailView({
                   alt={painting.title}
                   width={0}
                   height={0}
-                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  sizes="(max-width: 768px) 100vw, 80vw"
                   className="max-h-[70vh] md:max-h-[80vh] max-w-full w-auto h-auto object-contain cursor-zoom-in"
                   style={{ width: "auto", height: "auto" }}
+                  quality={90}
                   priority
                   onClick={() => setZoomOpen(true)}
                 />
@@ -105,6 +106,7 @@ export function PaintingDetailView({
                     alt={img.alt ?? painting.title}
                     fill
                     sizes="25vw"
+                    quality={90}
                     className="object-cover"
                   />
                 </div>

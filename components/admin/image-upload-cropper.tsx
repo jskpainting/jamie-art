@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
-const MAX_OUTPUT_PX = 2400
+const MAX_OUTPUT_PX = 4000
 
 type Bucket = "headshots" | "paintings" | "events" | "site-images"
 
@@ -60,6 +60,8 @@ async function compress(imageSrc: string, cropPixels?: Area): Promise<Blob> {
   const ctx = canvas.getContext("2d")
   if (!ctx) throw new Error("Could not get canvas context")
 
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = "high"
   ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH)
 
   return new Promise<Blob>((resolve, reject) =>
@@ -69,7 +71,7 @@ async function compress(imageSrc: string, cropPixels?: Area): Promise<Blob> {
           ? resolve(b)
           : reject(new Error("Image conversion failed — try a different file")),
       "image/jpeg",
-      0.9
+      0.95
     )
   )
 }
