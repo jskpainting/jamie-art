@@ -7,10 +7,19 @@ import { ImageWithSkeleton } from "@/components/image-with-skeleton"
 import type { Painting } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-// Paintings don't store intrinsic pixel dimensions — default to a near-square
-// ratio that works well for oils/acrylics. Replace with per-painting values
-// when/if width_px + height_px columns are added to the paintings table.
-const DEFAULT_ASPECT = 4 / 3
+// Each painting stores its true pixel dimensions (width/height), so the gallery
+// packs every piece at its real aspect ratio — nothing is cropped. Fall back to
+// a gentle 4:3 only if a painting is somehow missing dimensions, and clamp the
+// extremes so one very tall/wide canvas can't distort a whole row.
+const FALLBACK_ASPECT = 4 / 3
+const MIN_ASPECT = 0.45 // tallest portrait we allow before clamping
+const MAX_ASPECT = 3.2 // widest panorama we allow before clamping
+
+function aspectOf(p: Painting): number {
+  const raw =
+    p.width && p.height && p.height > 0 ? p.width / p.height : FALLBACK_ASPECT
+  return Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, raw))
+}
 
 const SOLD_LABELS: Partial<Record<string, string>> = {
   sold: "Sold",
@@ -36,9 +45,9 @@ export function SectionGallery({ paintings, sectionSlug }: SectionGalleryProps) 
   return (
     <JustifiedRows
       items={paintings}
-      getAspect={() => DEFAULT_ASPECT}
+      getAspect={aspectOf}
       getKey={(p) => p.id}
-      rowHeights={{ desktop: 320, tablet: 240, mobile: 180 }}
+      rowHeights={{ desktop: 340, tablet: 260, mobile: 200 }}
       renderItem={(painting) => (
         <Link
           href={`/portfolio/${sectionSlug}/${painting.slug}`}
@@ -53,7 +62,7 @@ export function SectionGallery({ paintings, sectionSlug }: SectionGalleryProps) 
               sizes="(max-width: 768px) 50vw, 33vw"
               quality={90}
               className={cn(
-                "object-cover transition-transform duration-300",
+                "object-contain transition-transform duration-300",
                 "motion-safe:group-hover:scale-[1.01]"
               )}
             />

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { SectionGallery } from "@/components/section-gallery"
+import { PairsGallery } from "@/components/pairs-gallery"
 import { getSectionBySlug, getPaintingsBySection } from "@/lib/db/queries"
 
 type Props = {
@@ -48,7 +48,7 @@ export default async function SectionPage({ params }: Props) {
         )}
       </div>
 
-      <SectionGallery paintings={paintings} sectionSlug={sectionSlug} />
+      <PairsGallery paintings={paintings} sectionSlug={sectionSlug} />
     </div>
   )
 }

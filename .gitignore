@@ -48,3 +48,11 @@ next-env.d.ts
 /public/layout-samples/
 jamie-test.png
 jamie.jpg
+
+# Local migration artifacts (images live in Supabase Storage)
+migration-data/images/
+
+# Ad-hoc screenshots
+SS1.png
+SS2.png
+jamie-test.png

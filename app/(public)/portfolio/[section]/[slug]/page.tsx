@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import Link from "next/link"
+import Image from "next/image"
 import { PaintingDetailView } from "@/components/painting-detail-view"
 import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings } from "@/lib/db/queries"
 
@@ -57,26 +59,44 @@ export default async function PaintingPage({ params }: Props) {
 
       {related.length > 0 && (
         <section className="max-w-7xl mx-auto px-6 md:px-10 pb-20 md:pb-32">
-          <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-6">
-            {relatedHeading}
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="flex items-baseline justify-between gap-4 border-t border-border pt-10 mb-6">
+            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              {relatedHeading}
+            </p>
+            <Link
+              href={`/portfolio/${sectionSlug}`}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              View all →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6">
             {related.map((p) => (
-              <a
+              <Link
                 key={p.id}
                 href={`/portfolio/${sectionSlug}/${p.slug}`}
-                className="group block overflow-hidden bg-muted aspect-square relative"
+                className="group block"
                 aria-label={p.title}
               >
-                {p.primary_image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.primary_image_url}
-                    alt={p.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                  />
+                <div className="relative aspect-square overflow-hidden bg-muted">
+                  {p.primary_image_url && (
+                    <Image
+                      src={p.primary_image_url}
+                      alt={p.title}
+                      fill
+                      sizes="(max-width: 640px) 50vw, 25vw"
+                      quality={85}
+                      className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    />
+                  )}
+                </div>
+                <p className="mt-2.5 text-sm font-medium leading-tight truncate">
+                  {p.title}
+                </p>
+                {p.year && (
+                  <p className="text-xs text-muted-foreground">{p.year}</p>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         </section>

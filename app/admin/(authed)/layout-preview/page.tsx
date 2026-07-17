@@ -1,5 +1,5 @@
-import { getSampleImages } from "@/lib/layout-samples"
 import { PageHeader } from "@/components/admin/page-header"
+import { getSectionBySlug, getPaintingsBySection } from "@/lib/db/queries"
 import { LayoutPreviewClient } from "./layout-preview-client"
 
 export const metadata = {
@@ -7,23 +7,22 @@ export const metadata = {
 }
 
 export default async function LayoutPreviewPage() {
-  const images = await getSampleImages()
+  const section = await getSectionBySlug("abstracts")
+  const paintings = section ? await getPaintingsBySection(section.id) : []
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Dev"
         title="Layout Preview"
-        description="Compare gallery layouts using the sample image set. Temporary dev tool."
+        description="Compare gallery layouts using your real Abstracts paintings. Pick one to ship across the site."
       />
-      {images.length === 0 ? (
+      {paintings.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No sample images found. Drop image files into{" "}
-          <code className="font-mono">sample_images/</code> at the repo root and
-          restart the dev server.
+          No paintings found in the Abstracts section.
         </p>
       ) : (
-        <LayoutPreviewClient images={images} />
+        <LayoutPreviewClient paintings={paintings} />
       )}
     </div>
   )

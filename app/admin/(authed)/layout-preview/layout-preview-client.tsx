@@ -1,232 +1,263 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import Image from "next/image"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MasonryGrid } from "@/components/layouts/masonry-grid"
-import { JustifiedRows } from "@/components/layouts/justified-rows"
-import { AspectGrid } from "@/components/layouts/aspect-grid"
-import type { SampleImage } from "@/lib/layout-samples"
+import { layoutMosaic, parsePhysical } from "@/lib/mosaic-layout"
+import { layoutPairs, PAIRS } from "@/lib/pairs-layout"
+import { formatPrice } from "@/lib/utils"
+import type { Painting, PaintingStatus } from "@/lib/types"
 
-type LayoutKey = "masonry" | "justified" | "aspect-grid"
+type LayoutKey = "pairs" | "mosaic" | "columns"
 
 const layoutNotes: Record<LayoutKey, { title: string; body: string }> = {
-  masonry: {
-    title: "Masonry",
-    body: "Editorial. Reads like Pinterest. Every image gets its natural proportions and nothing is cropped. Trade-off: column heights can desync and the eye flow is non-linear — viewers scan down columns rather than across rows, so ordering is only loosely preserved.",
+  pairs: {
+    title: "A · Two per row",
+    body: "Max two paintings per row, each sized to its real dimensions so bigger canvases read bigger and nothing is cropped. Spacious and gallery-like; rows vary in height. Best when you want each piece to breathe.",
   },
-  justified: {
-    title: "Justified Rows",
-    body: "Magazine-grade. Every row aligns to a clean baseline and the container edge is always flush, which reads as the most deliberate and gallery-like. Trade-off: images are scaled up or down to fit each row's height — small images get blown up past their comfortable size, and an extreme aspect ratio can dominate or shrink its whole row.",
+  mosaic: {
+    title: "B · Column mosaic (current)",
+    body: "A fixed 4-column grid; large canvases span two columns. Densest and most structured — everything aligns to columns, no gaps. Best for browsing a lot of work at once.",
   },
-  "aspect-grid": {
-    title: "Aspect Ratio Grid",
-    body: "Most structured. Predictable left-to-right scan path with a fixed column rhythm, and every image keeps its intrinsic aspect ratio uncropped. Trade-off: big aspect mismatches leave visual weight inconsistent row-to-row — a tall portrait next to a wide landscape creates uneven whitespace.",
+  columns: {
+    title: "C · Uniform columns",
+    body: "A clean 3-column masonry, every painting the same width, height by true shape. The most orderly and predictable; size relevance comes only from height + the labels.",
   },
+}
+
+const TILE =
+  "relative overflow-hidden bg-muted/40 ring-1 ring-foreground/[0.06] shadow-[0_2px_7px_rgba(20,18,14,0.16),0_14px_30px_-8px_rgba(20,18,14,0.26)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_4px_10px_rgba(20,18,14,0.20),0_20px_40px_-10px_rgba(20,18,14,0.32)] group-hover:brightness-[1.02]"
+
+const statusWord: Record<PaintingStatus, string> = {
+  available: "Available",
+  sold: "Sold",
+  nfs: "Not for sale",
+  reserved: "Reserved",
+}
+
+function priceOrStatus(p: Painting): string {
+  if (p.status === "available")
+    return p.price_cents ? formatPrice(p.price_cents) : "Available"
+  return statusWord[p.status]
+}
+
+function dimsLabel(dimensions: string | null): string | null {
+  const d = parsePhysical(dimensions)
+  return d ? `${d[0]} × ${d[1]} in` : null
+}
+
+function Caption({ p, w }: { p: Painting; w?: number }) {
+  const meta = [dimsLabel(p.dimensions), priceOrStatus(p)]
+    .filter(Boolean)
+    .join(" · ")
+  return (
+    <div className="mt-3" style={w ? { maxWidth: Math.round(w) } : undefined}>
+      <p className="font-serif font-semibold text-[15px] leading-tight text-foreground truncate">
+        {p.title}
+        {p.year ? `, ${p.year}` : ""}
+      </p>
+      <p className="mt-1 text-xs tracking-[0.01em] text-muted-foreground truncate">
+        {meta}
+      </p>
+    </div>
+  )
+}
+
+function aspectOf(p: Painting): number {
+  if (p.width && p.height && p.height > 0) return p.width / p.height
+  const d = parsePhysical(p.dimensions)
+  return d ? d[0] / d[1] : 4 / 3
+}
+
+function Tile({ p, w, h }: { p: Painting; w: number; h: number }) {
+  return (
+    <Link href={`/portfolio/abstracts/${p.slug}`} className="group block">
+      <div className={TILE} style={{ width: w, height: h }}>
+        {p.primary_image_url ? (
+          <Image
+            src={p.primary_image_url}
+            alt={p.title}
+            fill
+            sizes="50vw"
+            quality={90}
+            className="object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
+      </div>
+      <Caption p={p} w={w} />
+    </Link>
+  )
+}
+
+// --- Layout A: max two per row, sized by real dimensions (shared framework) ---
+function PairsLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
+  const layout = layoutPairs(
+    paintings.map((p) => {
+      const d = parsePhysical(p.dimensions)
+      return {
+        longSideInches: d ? Math.max(d[0], d[1]) : null,
+        aspect: aspectOf(p),
+      }
+    }),
+    W
+  )
+  const gap = PAIRS.gap[layout.bp]
+  return (
+    <div>
+      {layout.rows.map((row, ri) => (
+        <div
+          key={ri}
+          className="flex items-end justify-center"
+          style={{
+            columnGap: gap,
+            marginBottom: row.solo ? PAIRS.soloRowGap : PAIRS.rowGap,
+          }}
+        >
+          {row.tiles.map((t) => (
+            <div key={paintings[t.index].id} className="shrink-0">
+              <Tile
+                p={paintings[t.index]}
+                w={Math.round(t.w)}
+                h={Math.round(t.h)}
+              />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// --- Layout B: column mosaic (the current live layout) -----------------------
+function MosaicLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
+  const layout = useMemo(
+    () =>
+      layoutMosaic(
+        paintings.map((p) => ({
+          physical: parsePhysical(p.dimensions),
+          aspect: aspectOf(p),
+        })),
+        W
+      ),
+    [paintings, W]
+  )
+  return (
+    <div className="relative" style={{ height: layout.height }}>
+      {layout.tiles.map((tile) => {
+        const p = paintings[tile.index]
+        return (
+          <div
+            key={p.id}
+            className="absolute"
+            style={{ left: Math.round(tile.x), top: Math.round(tile.y), width: Math.round(tile.w) }}
+          >
+            <Tile p={p} w={Math.round(tile.w)} h={Math.round(tile.h)} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// --- Layout C: uniform 3-column masonry --------------------------------------
+function ColumnsLayout({ paintings }: { paintings: Painting[] }) {
+  return (
+    <div className="columns-2 md:columns-3 gap-8">
+      {paintings.map((p) => (
+        <Link
+          key={p.id}
+          href={`/portfolio/abstracts/${p.slug}`}
+          className="group mb-8 block break-inside-avoid"
+        >
+          <div className={TILE} style={{ aspectRatio: String(aspectOf(p)) }}>
+            {p.primary_image_url && (
+              <Image
+                src={p.primary_image_url}
+                alt={p.title}
+                fill
+                sizes="(min-width: 768px) 33vw, 50vw"
+                quality={90}
+                className="object-cover"
+              />
+            )}
+          </div>
+          <Caption p={p} />
+        </Link>
+      ))}
+    </div>
+  )
 }
 
 interface LayoutPreviewClientProps {
-  images: SampleImage[]
+  paintings: Painting[]
 }
 
-export function LayoutPreviewClient({ images }: LayoutPreviewClientProps) {
-  const [tab, setTab] = useState<LayoutKey>("masonry")
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const reducedMotion = useReducedMotion()
+export function LayoutPreviewClient({ paintings }: LayoutPreviewClientProps) {
+  const [tab, setTab] = useState<LayoutKey>("pairs")
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState<number | null>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let raf = 0
+    const apply = () => {
+      const w = el.getBoundingClientRect().width
+      if (w > 0) {
+        setWidth(w)
+        return true
+      }
+      return false
+    }
+    const pump = () => {
+      if (!apply()) raf = requestAnimationFrame(pump)
+    }
+    pump()
+    const observer = new ResizeObserver(apply)
+    observer.observe(el)
+    window.addEventListener("resize", apply)
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+      window.removeEventListener("resize", apply)
+    }
+  }, [])
 
   const notes = layoutNotes[tab]
 
   return (
     <div className="space-y-6">
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as LayoutKey)}
-      >
+      <Tabs value={tab} onValueChange={(v) => setTab(v as LayoutKey)}>
         <TabsList>
-          <TabsTrigger value="masonry">Masonry</TabsTrigger>
-          <TabsTrigger value="justified">Justified</TabsTrigger>
-          <TabsTrigger value="aspect-grid">Aspect Grid</TabsTrigger>
+          <TabsTrigger value="pairs">A · Two per row</TabsTrigger>
+          <TabsTrigger value="mosaic">B · Mosaic</TabsTrigger>
+          <TabsTrigger value="columns">C · Columns</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={tab}
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -8 }}
-          transition={{ duration: reducedMotion ? 0 : 0.25, ease: "easeOut" }}
-        >
-          {tab === "masonry" && (
-            <MasonryGrid images={images} onImageClick={setLightboxIndex} />
-          )}
-          {tab === "justified" && (
-            <JustifiedRows
-              items={images}
-              getAspect={(img) => img.width / img.height}
-              getKey={(img) => img.src}
-              renderItem={(image, index) => (
-                <button
-                  type="button"
-                  onClick={() => setLightboxIndex(index)}
-                  className="group block h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  aria-label={`View ${image.alt}`}
-                >
-                  <span className="block h-full w-full overflow-hidden shadow-sm transition-[transform,box-shadow] duration-200 motion-safe:group-hover:scale-[1.02] group-hover:shadow-lg">
-                    <Image
-                      src={image.src}
-                      alt={image.alt}
-                      width={image.width}
-                      height={image.height}
-                      sizes="(min-width: 1024px) 33vw, 50vw"
-                      className="h-full w-full object-cover"
-                    />
-                  </span>
-                </button>
-              )}
-            />
-          )}
-          {tab === "aspect-grid" && (
-            <AspectGrid images={images} onImageClick={setLightboxIndex} />
-          )}
-
-          <div className="mt-8 rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
-              Notes — {notes.title}
-            </p>
-            <p className="text-sm leading-relaxed text-card-foreground">
-              {notes.body}
-            </p>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {lightboxIndex !== null && (
-        <SampleLightbox
-          images={images}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-interface SampleLightboxProps {
-  images: SampleImage[]
-  initialIndex: number
-  onClose: () => void
-}
-
-// Minimal lightbox for raw image URLs. components/painting-lightbox.tsx is
-// hard-wired to Painting records (status, price, detail links), so this dev
-// tool inlines its own — same interaction model: esc / arrows / backdrop.
-function SampleLightbox({ images, initialIndex, onClose }: SampleLightboxProps) {
-  const [index, setIndex] = useState(initialIndex)
-  const image = images[index]
-
-  const prev = useCallback(() => {
-    setIndex((i) => (i === 0 ? images.length - 1 : i - 1))
-  }, [images.length])
-
-  const next = useCallback(() => {
-    setIndex((i) => (i === images.length - 1 ? 0 : i + 1))
-  }, [images.length])
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-      if (e.key === "ArrowLeft") prev()
-      if (e.key === "ArrowRight") next()
-    }
-    window.addEventListener("keydown", handleKey)
-    return () => window.removeEventListener("keydown", handleKey)
-  }, [onClose, prev, next])
-
-  // Prevent body scroll while lightbox is open
-  useEffect(() => {
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = ""
-    }
-  }, [])
-
-  if (!image) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Lightbox: ${image.alt}`}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 rounded-full bg-background/80 backdrop-blur-sm p-2 text-foreground hover:bg-muted transition-colors"
-        aria-label="Close"
-      >
-        <X className="h-4 w-4" />
-      </button>
-
-      {/* Image area — full bleed, never cropped */}
-      <div
-        className="flex-1 flex items-center justify-center p-4 md:p-10 min-h-0"
-        onClick={(e) => {
-          // Only close when the backdrop itself is clicked, not the image
-          if (e.target === e.currentTarget) onClose()
-        }}
-      >
-        <Image
-          src={image.src}
-          alt={image.alt}
-          width={image.width}
-          height={image.height}
-          sizes="100vw"
-          className="max-h-full w-auto max-w-full object-contain shadow-2xl"
-          priority
-        />
-      </div>
-
-      {/* Caption bar */}
-      <div
-        className="shrink-0 px-6 pb-5 flex items-center justify-center gap-3 text-white/90"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="font-serif text-sm font-light tracking-tight">
-          {image.alt}
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
+          Notes — {notes.title}
         </p>
-        <span className="text-xs text-white/50 tabular-nums">
-          {index + 1} / {images.length}
-        </span>
+        <p className="text-sm leading-relaxed text-card-foreground">{notes.body}</p>
       </div>
 
-      {images.length > 1 && (
-        <>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              prev()
-            }}
-            className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 rounded-full bg-background/80 backdrop-blur-sm p-2 text-foreground hover:bg-muted transition-colors shadow"
-            aria-label="Previous image"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              next()
-            }}
-            className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 rounded-full bg-background/80 backdrop-blur-sm p-2 text-foreground hover:bg-muted transition-colors shadow"
-            aria-label="Next image"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </>
-      )}
+      <div ref={containerRef} className="w-full">
+        {tab === "columns" ? (
+          <ColumnsLayout paintings={paintings} />
+        ) : width && width > 0 ? (
+          tab === "pairs" ? (
+            <PairsLayout paintings={paintings} W={width} />
+          ) : (
+            <MosaicLayout paintings={paintings} W={width} />
+          )
+        ) : (
+          <ColumnsLayout paintings={paintings} />
+        )}
+      </div>
     </div>
   )
 }

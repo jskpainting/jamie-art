@@ -101,33 +101,61 @@ export function JustifiedRows<T>({
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const observer = new ResizeObserver(([entry]) => {
-      setContainerWidth(entry.contentRect.width)
-    })
+    // Measure immediately on mount so the justified layout activates right away,
+    // then keep it in sync. ResizeObserver alone can be flaky in some engines, so
+    // we also measure synchronously here and listen for window resizes.
+    const measure = () => setContainerWidth(el.getBoundingClientRect().width)
+    measure()
+    const observer = new ResizeObserver(measure)
     observer.observe(el)
-    return () => observer.disconnect()
+    window.addEventListener("resize", measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", measure)
+    }
   }, [])
 
-  const rows =
-    containerWidth !== null && containerWidth > 0
-      ? packRows(items, getAspect, containerWidth, rowHeights, gap)
-      : []
+  const hasWidth = containerWidth !== null && containerWidth > 0
+  const rows = hasWidth
+    ? packRows(items, getAspect, containerWidth, rowHeights, gap)
+    : []
 
   return (
     <div ref={containerRef} className="w-full">
-      {rows.map((row, rowIndex) => (
+      {hasWidth ? (
+        rows.map((row, rowIndex) => (
+          <div
+            key={rowIndex}
+            className="flex"
+            style={{ gap, marginBottom: gap }}
+          >
+            {row.map(({ item, index, width, height }) => (
+              <div key={getKey(item)} className="shrink-0" style={{ width, height }}>
+                {renderItem(item, index, width, height)}
+              </div>
+            ))}
+          </div>
+        ))
+      ) : (
+        // Fallback for SSR / first paint / before the ResizeObserver reports a
+        // width: a responsive grid so every item is always rendered (visible to
+        // users and crawlers) instead of an empty container. Upgrades to
+        // justified rows once the container width is measured.
         <div
-          key={rowIndex}
-          className="flex"
-          style={{ gap, marginBottom: gap }}
+          className="grid grid-cols-2 sm:grid-cols-3"
+          style={{ gap }}
         >
-          {row.map(({ item, index, width, height }) => (
-            <div key={getKey(item)} className="shrink-0" style={{ width, height }}>
-              {renderItem(item, index, width, height)}
+          {items.map((item, index) => (
+            <div
+              key={getKey(item)}
+              className="relative"
+              style={{ aspectRatio: String(getAspect(item)) }}
+            >
+              {renderItem(item, index, 0, 0)}
             </div>
           ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }

@@ -71,8 +71,8 @@ export function InquireDialog({ painting, className }: InquireDialogProps) {
           <DialogHeader>
             <DialogTitle>Inquire about this painting</DialogTitle>
             <DialogDescription>
-              Send Jamie a message about &ldquo;{painting.title}&rdquo;. She will
-              reply within a few days.
+              Send Jamie a message about &ldquo;{painting.title}&rdquo;. You&rsquo;ll
+              hear back within a few days.
             </DialogDescription>
           </DialogHeader>
 

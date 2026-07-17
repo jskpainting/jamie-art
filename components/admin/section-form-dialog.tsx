@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { FormField } from "@/components/admin/form-field"
-import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
+import { CoverImagePicker } from "@/components/admin/cover-image-picker"
 import { slugify } from "@/lib/utils"
 import type { SectionWithCount } from "@/lib/types"
 
@@ -143,7 +143,11 @@ function SectionFormInner({ section, onOpenChange }: SectionFormInnerProps) {
         </FormField>
 
         <FormField label="Cover image">
-          <ImageUploadCropper bucket="paintings" currentImageUrl={coverUrl} aspectRatio="free" label="Cover image" onUploadComplete={(url) => setCoverUrl(url)} />
+          <CoverImagePicker
+            sectionId={section?.id}
+            currentImageUrl={coverUrl}
+            onChange={setCoverUrl}
+          />
         </FormField>
       </div>
 
