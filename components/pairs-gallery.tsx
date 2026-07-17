@@ -76,7 +76,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
       paintings.map((p) => {
         const d = parsePhysical(p.dimensions)
         return {
-          longSideInches: d ? Math.max(d[0], d[1]) : null,
+          physHeightInches: d ? d[1] : null,
           aspect: aspectOf(p),
         }
       }),
@@ -154,10 +154,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
             <div
               key={ri}
               className="flex items-end justify-center"
-              style={{
-                columnGap: gapPx,
-                marginBottom: row.solo ? PAIRS.soloRowGap : PAIRS.rowGap,
-              }}
+              style={{ columnGap: gapPx, marginBottom: PAIRS.rowGap }}
             >
               {row.tiles.map((t) => (
                 <div key={paintings[t.index].id} className="shrink-0">

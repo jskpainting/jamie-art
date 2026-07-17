@@ -98,7 +98,7 @@ function PairsLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
     paintings.map((p) => {
       const d = parsePhysical(p.dimensions)
       return {
-        longSideInches: d ? Math.max(d[0], d[1]) : null,
+        physHeightInches: d ? d[1] : null,
         aspect: aspectOf(p),
       }
     }),
@@ -111,10 +111,7 @@ function PairsLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
         <div
           key={ri}
           className="flex items-end justify-center"
-          style={{
-            columnGap: gap,
-            marginBottom: row.solo ? PAIRS.soloRowGap : PAIRS.rowGap,
-          }}
+          style={{ columnGap: gap, marginBottom: PAIRS.rowGap }}
         >
           {row.tiles.map((t) => (
             <div key={paintings[t.index].id} className="shrink-0">
