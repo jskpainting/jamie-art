@@ -59,7 +59,7 @@ export function renderNewsletterHtml({
           <tr>
             <td style="padding:24px 40px 32px 40px;border-top:1px solid #E8E5DD">
               <p style="margin:0 0 8px 0;font-family:Inter,-apple-system,sans-serif;font-size:12px;color:#6B6B66;line-height:1.6">
-                You&rsquo;re receiving this because you signed up at jamie-art.vercel.app
+                You&rsquo;re receiving this because you signed up at jamiekendrioski.com
               </p>
               <p style="margin:0;font-family:Inter,-apple-system,sans-serif;font-size:12px;color:#6B6B66">
                 <a href="${unsubscribeUrl}" style="color:#6B6B66;text-decoration:underline">Unsubscribe</a>
@@ -83,7 +83,7 @@ export function renderNewsletterPlainText({
   return `${plain}
 
 ---
-You're receiving this because you signed up at jamie-art.vercel.app
+You're receiving this because you signed up at jamiekendrioski.com
 Unsubscribe: ${unsubscribeUrl}`
 }
 
