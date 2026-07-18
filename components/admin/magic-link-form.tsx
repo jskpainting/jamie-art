@@ -44,7 +44,9 @@ export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next ?? "/admin")}`
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      // Never auto-create accounts. Only admins pre-created in Supabase can
+      // sign in — this is what keeps the `authenticated` RLS role = admin-only.
+      options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
     })
     if (otpError) {
       toast.error("Failed to send link. Please try again.")

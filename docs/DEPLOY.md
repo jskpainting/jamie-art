@@ -31,9 +31,14 @@ There are **no passwords**. To get into `/admin`:
 2. Type your email → click "Send magic link".
 3. Supabase emails you a link → click it → you land in the admin panel.
 
-**Who is allowed in is controlled by ONE list: the `ADMIN_EMAILS` setting.**
-Only emails on that list can access admin — anyone else is blocked even if they
-somehow get a link. To have exactly two admins, put two emails there.
+**Who gets in is controlled in two matching places** (both one-time setup):
+1. The `ADMIN_EMAILS` setting — the app's allowlist (blocks everyone else from
+   the admin screens).
+2. The **Users list in Supabase** — because signups are turned off, only
+   accounts you create by hand can log in at all (this protects the database
+   itself, not just the screens).
+
+Put the **same two emails** in both. That's your two admins.
 
 ---
 
@@ -57,10 +62,18 @@ Log in at supabase.com, open this project.
    ```
    Save.
 
-3. *(Optional extra hardening)* **Authentication → Providers / Sign In**
-   Turn **OFF** "Allow new users to sign up". With the allowlist this isn't
-   required for security, but it stops strangers from making the system email
-   them a (useless) login link.
+3. **Authentication → Sign In / Providers → turn OFF "Allow new users to sign
+   up". THIS IS REQUIRED, not optional.** ⚠️
+   Here's why it matters: the database trusts *any* logged-in Supabase user.
+   If signups are ON, a stranger could create their own account and then read
+   your data (subscriber emails, inquiries) or damage it — going around the
+   website entirely. With signups OFF, the only accounts that can ever exist
+   are the ones you create by hand in the next step, so "logged in" = "you".
+
+4. **Authentication → Users → "Add user" → create ONE user for each admin
+   email** (use "Auto Confirm User"). Because signups are off, an admin can only
+   log in if their account already exists here. Create exactly the same two
+   emails you'll put in `ADMIN_EMAILS`.
 
 ---
 
@@ -113,14 +126,47 @@ When you're ready to switch:
    → You should land in the admin panel. ✅
 3. Try an email **NOT** on the list → you'll see "This email isn't authorized".
    ✅ That's the security working.
+4. Try a **brand-new email that has no Supabase user** → no link should arrive
+   (signups are off). ✅ Strangers can't self-register.
 
 ---
 
 ## Managing admins later
 
-To add or remove an admin: edit the `ADMIN_EMAILS` value in
-**Vercel → Settings → Environment Variables**, then **redeploy** (Vercel →
-Deployments → ⋯ → Redeploy). That's the only place that matters for who can log in.
+To **add** an admin: (1) create their user in **Supabase → Authentication →
+Users → Add user**, and (2) add their email to `ADMIN_EMAILS` in **Vercel →
+Settings → Environment Variables**, then **redeploy** (Vercel → Deployments →
+⋯ → Redeploy). Both steps are needed.
+
+To **remove** an admin: delete them from the Supabase Users list AND remove them
+from `ADMIN_EMAILS`, then redeploy.
+
+---
+
+## Optional: maximum database hardening (advanced)
+
+The steps above are secure. If you want belt-and-suspenders — so the database is
+locked to specific emails even if signups ever got turned back on by accident —
+paste this into **Supabase → SQL Editor → New query**, replacing the two emails,
+and click **Run**. (Safe to skip; the setup above already protects you.)
+
+```sql
+-- Restrict all admin data access to specific emails, not just "any logged-in user".
+create or replace function public.is_admin() returns boolean
+  language sql stable as $$
+    select lower(coalesce(auth.jwt() ->> 'email','')) in (
+      'you@email.com', 'second@email.com'   -- <-- your two admin emails, lowercase
+    );
+  $$;
+
+-- Repeat for each sensitive table you want locked down:
+drop policy if exists "auth all contacts"   on contacts;
+create policy "admin all contacts"   on contacts   for all using (public.is_admin());
+drop policy if exists "auth read commission_inquiries" on commission_inquiries;
+create policy "admin read commission_inquiries" on commission_inquiries for select using (public.is_admin());
+drop policy if exists "auth all inquiries"  on inquiries;
+create policy "admin all inquiries"  on inquiries  for all using (public.is_admin());
+```
 
 ---
 

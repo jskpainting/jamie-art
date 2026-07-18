@@ -9,8 +9,15 @@ export async function GET(request: Request) {
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type") as EmailOtpType | null
   const rawNext = searchParams.get("next") ?? "/admin"
-  // Open-redirect guard: only allow relative paths.
-  const next = rawNext.startsWith("/") ? rawNext : "/admin"
+  // Open-redirect guard: allow only same-site absolute paths. Reject
+  // protocol-relative ("//evil.com") and backslash ("/\evil.com") tricks
+  // that browsers resolve to an external origin.
+  const next =
+    rawNext.startsWith("/") &&
+    !rawNext.startsWith("//") &&
+    !rawNext.startsWith("/\\")
+      ? rawNext
+      : "/admin"
 
   const supabase = await createClient()
 
