@@ -118,11 +118,14 @@ export type TagNameInput = z.infer<typeof TagNameSchema>
 export const TagNamesSchema = z.array(TagNameSchema)
 
 export const CommissionInquiryWriteSchema = z.object({
-  from_name: z.string().nullable().optional(),
-  from_email: z.string().email("Valid email required"),
-  from_phone: z.string().nullable().optional(),
-  message: z.string().min(10, "Please write at least 10 characters"),
-  reference_painting_title: z.string().nullable().optional(),
+  from_name: z.string().max(200).nullable().optional(),
+  from_email: z.string().email("Valid email required").max(320),
+  from_phone: z.string().max(50).nullable().optional(),
+  message: z
+    .string()
+    .min(10, "Please write at least 10 characters")
+    .max(5000, "Message is too long"),
+  reference_painting_title: z.string().max(300).nullable().optional(),
   reference_painting_id: z.string().uuid().nullable().optional(),
 })
 

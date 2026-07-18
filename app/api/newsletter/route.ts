@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { rateLimit, clientIp } from "@/lib/rate-limit"
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(320),
 })
 
 export async function POST(request: Request) {
+  if (!rateLimit(`newsletter:${clientIp(request)}`, { limit: 5, windowMs: 60_000 })) {
+    // Silent 200 to avoid revealing the limiter / enumeration.
+    return NextResponse.json({ ok: true })
+  }
   try {
     const body = await request.json()
     const parsed = schema.safeParse(body)
