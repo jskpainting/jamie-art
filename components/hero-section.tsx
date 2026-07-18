@@ -75,7 +75,7 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl }: HeroSectionPr
         <motion.h1
           variants={fadeUp}
           transition={transition}
-          className="text-5xl md:text-7xl tracking-tight font-light font-serif mb-6 text-foreground"
+          className="text-5xl lg:text-7xl tracking-tight font-light font-serif mb-6 text-foreground"
         >
           Jamie Kendrioski
         </motion.h1>
