@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
+import { isAllowedAdmin } from "@/lib/supabase/auth"
 
 export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request)
+  // Only allowlisted admin emails count as authenticated for admin routes.
+  const isAdmin = isAllowedAdmin(user?.email)
 
   const { pathname } = request.nextUrl
   const isAdminPath = pathname.startsWith("/admin")
@@ -17,7 +20,7 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  if (isAdminPath && !isPublicAdminPath && !user) {
+  if (isAdminPath && !isPublicAdminPath && !isAdmin) {
     const url = new URL("/admin/login", request.url)
     url.searchParams.set("next", pathname)
     return NextResponse.redirect(url)

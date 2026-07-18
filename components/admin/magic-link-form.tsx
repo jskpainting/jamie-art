@@ -76,8 +76,10 @@ export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
       {error && (
         <p className="text-sm text-destructive text-center">
           {error === "callback_failed"
-            ? "The link has expired or is invalid. Please try again."
-            : error}
+            ? "The link has expired or is invalid. Please request a new one."
+            : error === "not_allowed"
+              ? "This email isn't authorized for admin access."
+              : error}
         </p>
       )}
 
