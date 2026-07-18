@@ -49,7 +49,25 @@ export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
       options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
     })
     if (otpError) {
-      toast.error("Failed to send link. Please try again.")
+      const status = (otpError as { status?: number }).status
+      const msg = (otpError.message || "").toLowerCase()
+      if (status === 429 || msg.includes("rate") || msg.includes("too many")) {
+        toast.error(
+          "Too many requests right now — please wait about a minute, then try again."
+        )
+        setCooldown(60)
+      } else if (
+        status === 422 ||
+        msg.includes("not allowed") ||
+        msg.includes("signups not allowed") ||
+        msg.includes("user not found")
+      ) {
+        toast.error(
+          "This email isn't set up for admin access. Ask the site owner to add it."
+        )
+      } else {
+        toast.error(otpError.message || "Couldn't send the link. Please try again.")
+      }
       return false
     }
     return true

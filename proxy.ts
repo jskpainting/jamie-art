@@ -13,6 +13,20 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/admin/login") ||
     pathname.startsWith("/admin/auth/")
 
+  // Safety net for magic-link sign-in: if the link lands on ANY page carrying
+  // auth params (e.g. Supabase redirected to the site root instead of
+  // /auth/callback because of a redirect-URL mismatch), route it through the
+  // callback handler so the login still completes and ends up at /admin.
+  const sp = request.nextUrl.searchParams
+  const hasAuthParams =
+    sp.has("code") || (sp.has("token_hash") && sp.has("type"))
+  if (hasAuthParams && !pathname.startsWith("/auth/callback")) {
+    const dest = new URL("/auth/callback", request.url)
+    sp.forEach((v, k) => dest.searchParams.set(k, v))
+    if (!dest.searchParams.get("next")) dest.searchParams.set("next", "/admin")
+    return NextResponse.redirect(dest)
+  }
+
   if (
     process.env.NODE_ENV !== "production" &&
     process.env.ADMIN_AUTH_BYPASS === "true"
