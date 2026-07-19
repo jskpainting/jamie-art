@@ -123,17 +123,49 @@ function twoTierSort<T extends { status: string; sort_order: number; sold_at: st
   return [...active, ...sold]
 }
 
+/** A painting plus the slug of its HOME gallery (for building its canonical URL). */
+export type PaintingInGallery = Painting & { home_section_slug: string }
+
+function attachHomeSlug(row: unknown): PaintingInGallery {
+  const p = row as Painting & { sections?: { slug: string } | null }
+  const home_section_slug = p.sections?.slug ?? ""
+  const { sections: _drop, ...rest } = p
+  void _drop
+  return { ...(rest as Painting), home_section_slug }
+}
+
 export async function getPaintingsBySection(
   sectionId: string
-): Promise<Painting[]> {
+): Promise<PaintingInGallery[]> {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
+
+    // Home paintings — those whose primary section is this one.
+    const { data: homeData, error } = await supabase
       .from("paintings")
-      .select("*")
+      .select("*, sections(slug)")
       .eq("section_id", sectionId)
     if (error) throw error
-    return twoTierSort(data ?? [])
+    const home = (homeData ?? []).map(attachHomeSlug)
+
+    // Paintings ALSO shown in this gallery via the join table.
+    // Fail-safe: if the painting_sections table doesn't exist yet (migration not
+    // applied), this simply yields nothing and the gallery still renders.
+    let linked: PaintingInGallery[] = []
+    const { data: linkData } = await supabase
+      .from("painting_sections")
+      .select("paintings(*, sections(slug))")
+      .eq("section_id", sectionId)
+    if (linkData) {
+      linked = linkData
+        .map((l) => (l as { paintings: unknown }).paintings)
+        .filter(Boolean)
+        .map(attachHomeSlug)
+    }
+
+    const homeIds = new Set(home.map((p) => p.id))
+    const merged = [...home, ...linked.filter((p) => !homeIds.has(p.id))]
+    return twoTierSort(merged)
   } catch (err) {
     console.error("getPaintingsBySection error:", err)
     return []
@@ -520,6 +552,30 @@ export async function getPaintingsWithImagesForSection(
           .filter((n: string | null): n is string => typeof n === "string"),
       }
     })
+
+    // Attach extra-gallery memberships. Fail-safe: if the painting_sections
+    // table doesn't exist yet, memberships stay empty and the admin list still
+    // renders normally.
+    const ids = mapped.map((p) => p.id)
+    if (ids.length > 0) {
+      const { data: mem } = await supabase
+        .from("painting_sections")
+        .select("painting_id, section_id")
+        .in("painting_id", ids)
+      if (mem) {
+        const byId = new Map<string, string[]>()
+        for (const m of mem as { painting_id: string; section_id: string }[]) {
+          const arr = byId.get(m.painting_id) ?? []
+          arr.push(m.section_id)
+          byId.set(m.painting_id, arr)
+        }
+        for (const p of mapped) {
+          ;(p as PaintingWithImagesAndTags).extra_section_ids =
+            byId.get(p.id) ?? []
+        }
+      }
+    }
+
     return twoTierSort(mapped)
   } catch (err) {
     console.error("getPaintingsWithImagesForSection error:", err)

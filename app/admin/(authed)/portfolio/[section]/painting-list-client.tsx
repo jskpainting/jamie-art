@@ -14,6 +14,7 @@ import {
   bulkAddTag,
   bulkRemoveTag,
   bulkDelete,
+  setPaintingSectionMembership,
 } from "@/lib/actions/paintings"
 import { SortableList } from "@/components/admin/sortable-list"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
@@ -41,6 +42,7 @@ import {
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { PaintingFormDialog } from "./painting-form-dialog"
@@ -302,10 +304,12 @@ interface PaintingRowProps {
   sections: Section[]
   currentSectionId: string
   onMove: (targetSectionId: string) => void
+  onToggleSection: (targetSectionId: string, on: boolean) => void
 }
 
-function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove }: PaintingRowProps) {
+function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection }: PaintingRowProps) {
   const otherSections = sections.filter((s) => s.id !== currentSectionId)
+  const extra = new Set(painting.extra_section_ids ?? [])
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
       {/* Checkbox */}
@@ -380,6 +384,21 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
                     >
                       {s.title}
                     </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">
+                    Also show in
+                  </DropdownMenuLabel>
+                  {otherSections.map((s) => (
+                    <DropdownMenuCheckboxItem
+                      key={`extra-${s.id}`}
+                      className="text-sm"
+                      checked={extra.has(s.id)}
+                      closeOnClick={false}
+                      onCheckedChange={(v) => onToggleSection(s.id, v === true)}
+                    >
+                      {s.title}
+                    </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -489,6 +508,22 @@ export function PaintingListClient({
     })
   }
 
+  function handleToggleSection(id: string, targetSectionId: string, on: boolean) {
+    const target = sections.find((s) => s.id === targetSectionId)
+    void setPaintingSectionMembership(id, targetSectionId, on).then((result) => {
+      if (!result.ok) {
+        toast.error(result.error)
+      } else {
+        toast.success(
+          on
+            ? `Now also showing in ${target?.title ?? "gallery"}`
+            : `Removed from ${target?.title ?? "gallery"}`
+        )
+        router.refresh()
+      }
+    })
+  }
+
   const isEmpty = paintings.length === 0
 
   return (
@@ -547,6 +582,9 @@ export function PaintingListClient({
                   sections={sections}
                   currentSectionId={section.id}
                   onMove={(target) => handleMoveOne(painting.id, target)}
+                  onToggleSection={(target, on) =>
+                    handleToggleSection(painting.id, target, on)
+                  }
                 />
               )}
             />
@@ -569,6 +607,9 @@ export function PaintingListClient({
                   sections={sections}
                   currentSectionId={section.id}
                   onMove={(target) => handleMoveOne(painting.id, target)}
+                  onToggleSection={(target, on) =>
+                    handleToggleSection(painting.id, target, on)
+                  }
                 />
               ))}
             </div>

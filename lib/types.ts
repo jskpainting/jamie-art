@@ -112,6 +112,8 @@ export interface PaintingWithImages extends Painting {
 
 export interface PaintingWithImagesAndTags extends PaintingWithImages {
   tags: string[]
+  /** Additional galleries (beyond the home section_id) this painting is shown in. */
+  extra_section_ids?: string[]
 }
 
 export interface SectionWithCount extends Section {

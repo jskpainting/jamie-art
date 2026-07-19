@@ -280,6 +280,49 @@ export async function bulkUpdateSection(
   }
 }
 
+/**
+ * Toggle whether a painting is ALSO shown in another gallery (beyond its home
+ * section). Adds/removes a row in the painting_sections join table.
+ */
+export async function setPaintingSectionMembership(
+  paintingId: string,
+  sectionId: string,
+  on: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  if (!paintingId || !sectionId) return { ok: false, error: "Missing ids" }
+
+  try {
+    const supabase = await db()
+    if (on) {
+      const { error } = await supabase
+        .from("painting_sections")
+        .upsert(
+          { painting_id: paintingId, section_id: sectionId },
+          { onConflict: "painting_id,section_id" }
+        )
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from("painting_sections")
+        .delete()
+        .eq("painting_id", paintingId)
+        .eq("section_id", sectionId)
+      if (error) throw error
+    }
+    revalidatePath("/portfolio")
+    revalidatePath("/admin/portfolio")
+    return { ok: true }
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error ? e.message : "Failed to update gallery membership",
+    }
+  }
+}
+
 export async function bulkAddTag(
   ids: string[],
   tagName: string

@@ -37,13 +37,18 @@ const TILE =
   "relative overflow-hidden bg-muted/40 ring-1 ring-foreground/[0.06] shadow-[0_2px_7px_rgba(20,18,14,0.16),0_14px_30px_-8px_rgba(20,18,14,0.26)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_4px_10px_rgba(20,18,14,0.20),0_20px_40px_-10px_rgba(20,18,14,0.32)] group-hover:brightness-[1.02] group-focus-visible:ring-ring"
 
 interface PairsGalleryProps {
-  paintings: Painting[]
+  paintings: (Painting & { home_section_slug?: string })[]
   sectionSlug: string
 }
 
 export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState<number | null>(null)
+
+  // A painting shown in a gallery that isn't its home links to its canonical
+  // home-section URL (the detail page resolves by home section + slug).
+  const hrefFor = (p: Painting & { home_section_slug?: string }) =>
+    `/portfolio/${p.home_section_slug || sectionSlug}/${p.slug}`
 
   useEffect(() => {
     const el = containerRef.current
@@ -114,10 +119,10 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
     )
   }
 
-  function Tile({ p, w, h }: { p: Painting; w: number; h: number }) {
+  function Tile({ p, w, h }: { p: Painting & { home_section_slug?: string }; w: number; h: number }) {
     return (
       <Link
-        href={`/portfolio/${sectionSlug}/${p.slug}`}
+        href={hrefFor(p)}
         className="group block focus-visible:outline-none"
         aria-label={p.title}
       >
@@ -174,7 +179,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
             {paintings.map((p) => (
               <Link
                 key={p.id}
-                href={`/portfolio/${sectionSlug}/${p.slug}`}
+                href={hrefFor(p)}
                 className="group mb-10 block break-inside-avoid"
                 aria-label={p.title}
               >
