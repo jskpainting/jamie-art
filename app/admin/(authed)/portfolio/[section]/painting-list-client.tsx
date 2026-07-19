@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import Image from "next/image"
-import { Pencil, Trash2, Plus, ImageIcon, Tag, X, Upload } from "lucide-react"
+import { Pencil, Trash2, Plus, ImageIcon, Tag, X, Upload, FolderInput } from "lucide-react"
 import {
   reorderPaintings,
   deletePainting,
@@ -35,6 +35,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { PaintingFormDialog } from "./painting-form-dialog"
 import type { PaintingWithImagesAndTags, Section } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -291,9 +299,13 @@ interface PaintingRowProps {
   onCheckedChange: (checked: boolean) => void
   onEdit: () => void
   onDeleted: () => void
+  sections: Section[]
+  currentSectionId: string
+  onMove: (targetSectionId: string) => void
 }
 
-function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted }: PaintingRowProps) {
+function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove }: PaintingRowProps) {
+  const otherSections = sections.filter((s) => s.id !== currentSectionId)
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
       {/* Checkbox */}
@@ -343,6 +355,35 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
           </span>
 
           <div className="flex items-center gap-1 shrink-0">
+            {/* Quick move to another gallery */}
+            {otherSections.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="Move to another gallery"
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                    "text-foreground/60 hover:text-foreground"
+                  )}
+                >
+                  <FolderInput className="h-3.5 w-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-xs">
+                    Move to gallery
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {otherSections.map((s) => (
+                    <DropdownMenuItem
+                      key={s.id}
+                      className="text-sm"
+                      onSelect={() => onMove(s.id)}
+                    >
+                      {s.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -436,6 +477,18 @@ export function PaintingListClient({
     setSelectedIds(new Set())
   }
 
+  function handleMoveOne(id: string, targetSectionId: string) {
+    const target = sections.find((s) => s.id === targetSectionId)
+    void bulkUpdateSection([id], targetSectionId).then((result) => {
+      if (!result.ok) {
+        toast.error(result.error)
+      } else {
+        toast.success(`Moved to ${target?.title ?? "gallery"}`)
+        router.refresh()
+      }
+    })
+  }
+
   const isEmpty = paintings.length === 0
 
   return (
@@ -491,6 +544,9 @@ export function PaintingListClient({
                   onCheckedChange={(v) => toggleOne(painting.id, v)}
                   onEdit={() => setEditPainting(painting)}
                   onDeleted={clearSelection}
+                  sections={sections}
+                  currentSectionId={section.id}
+                  onMove={(target) => handleMoveOne(painting.id, target)}
                 />
               )}
             />
@@ -510,6 +566,9 @@ export function PaintingListClient({
                   onCheckedChange={(v) => toggleOne(painting.id, v)}
                   onEdit={() => setEditPainting(painting)}
                   onDeleted={clearSelection}
+                  sections={sections}
+                  currentSectionId={section.id}
+                  onMove={(target) => handleMoveOne(painting.id, target)}
                 />
               ))}
             </div>
