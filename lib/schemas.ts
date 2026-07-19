@@ -153,8 +153,8 @@ export const SettingsSchema = z.object({
       // Accept anything the user pastes: @handle, full profile URL, or bare username.
       let h = v.trim()
       if (h === "") return null
-      // Strip a leading protocol + instagram host if a full URL was pasted.
-      h = h.replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      // Strip an instagram host if a URL was pasted, with or without protocol.
+      h = h.replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "")
       // Strip any leading @ and surrounding slashes / query strings.
       h = h.replace(/^@+/, "").replace(/[/?#].*$/, "").replace(/\/+$/, "").trim()
       return h === "" ? null : h
