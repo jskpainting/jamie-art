@@ -380,7 +380,7 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
                     <DropdownMenuItem
                       key={s.id}
                       className="text-sm"
-                      onSelect={() => onMove(s.id)}
+                      onClick={() => onMove(s.id)}
                     >
                       {s.title}
                     </DropdownMenuItem>
