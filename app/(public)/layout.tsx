@@ -16,6 +16,7 @@ export default async function PublicLayout({
         navSettings={{
           instagram_handle: settings?.instagram_handle ?? null,
           email: settings?.email ?? null,
+          tagline: settings?.tagline ?? null,
         }}
       />
       <main className="flex-1">{children}</main>

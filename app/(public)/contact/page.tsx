@@ -40,10 +40,9 @@ export default async function ContactPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24">
         {/* Contact form */}
         <div>
-          <p className="text-base text-muted-foreground mb-8 leading-relaxed">
-            Have a question about a painting, want to discuss a commission, or
-            just want to say hello? Send a note and Jamie will reply within a
-            few days.
+          <p className="text-base text-muted-foreground mb-8 leading-relaxed whitespace-pre-line">
+            {settings?.contact_intro?.trim() ||
+              "Have a question about a painting, want to discuss a commission, or just want to say hello? Send a note and Jamie will reply within a few days."}
           </p>
           <ContactForm />
         </div>

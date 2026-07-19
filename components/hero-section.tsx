@@ -10,6 +10,7 @@ interface HeroSectionProps {
   painting: Painting | null
   bioTeaser: string | null
   heroImageUrl: string | null
+  tagline?: string | null
 }
 
 const fadeUp = {
@@ -17,7 +18,7 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 }
 
-export function HeroSection({ painting, bioTeaser, heroImageUrl }: HeroSectionProps) {
+export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: HeroSectionProps) {
   const shouldReduceMotion = useReducedMotion()
 
   const transition: Transition = shouldReduceMotion
@@ -69,7 +70,7 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl }: HeroSectionPr
           transition={transition}
           className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-6"
         >
-          Painter · Boston · Oils &amp; Acrylics
+          {tagline || "Painter · Boston · Oils & Acrylics"}
         </motion.p>
 
         <motion.h1

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { getSettings, getAllPaintingsForPicker } from "@/lib/db/queries"
 import { SettingsForm } from "./settings-form"
+import { SiteCopyForm } from "./site-copy-form"
 import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
 import { SettingsImageField } from "./settings-image-field"
 
@@ -24,6 +25,15 @@ export default async function SettingsPage() {
         Site Settings
       </h1>
       <SettingsForm initialValues={settings} />
+
+      <div className="mt-12 pt-10 border-t border-border">
+        <h2 className="text-lg font-medium mb-1">Site copy</h2>
+        <p className="text-sm text-muted-foreground mb-8">
+          Editable text shown on the public site. Leave any field blank to use
+          the built-in default.
+        </p>
+        <SiteCopyForm initialValues={settings} />
+      </div>
 
       <div className="mt-12 pt-10 border-t border-border">
         <h2 className="text-lg font-medium mb-1">Images</h2>

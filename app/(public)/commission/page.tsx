@@ -45,11 +45,9 @@ export default async function CommissionPage({ searchParams }: Props) {
         <h1 className="font-serif text-4xl md:text-5xl font-light tracking-tight mb-6">
           Commissions
         </h1>
-        {/* TODO: Basu — refine this intro copy */}
-        <p className="text-base md:text-lg leading-relaxed text-muted-foreground mb-12">
-          Jamie takes a limited number of commissions each year. Tell her what
-          you have in mind — size, subject, palette, where it&rsquo;ll live —
-          and she&rsquo;ll be in touch.
+        <p className="text-base md:text-lg leading-relaxed text-muted-foreground mb-12 whitespace-pre-line">
+          {settings?.commission_intro?.trim() ||
+            "Jamie takes a limited number of commissions each year. Tell her what you have in mind — size, subject, palette, where it’ll live — and she’ll be in touch."}
         </p>
 
         <CommissionFormLoader

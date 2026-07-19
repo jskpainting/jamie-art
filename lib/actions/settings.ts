@@ -45,6 +45,53 @@ export async function updateSettings(input: SettingsInput) {
   }
 }
 
+const SiteCopySchema = z.object({
+  tagline: z.string().max(120).nullable().optional(),
+  commission_intro: z.string().max(2000).nullable().optional(),
+  contact_intro: z.string().max(2000).nullable().optional(),
+})
+export type SiteCopyInput = z.infer<typeof SiteCopySchema>
+
+export async function updateSiteCopy(input: SiteCopyInput) {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  const parsed = SiteCopySchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message }
+  }
+
+  // Normalise empty strings to null so fallbacks kick in.
+  const clean = Object.fromEntries(
+    Object.entries(parsed.data).map(([k, v]) => [
+      k,
+      typeof v === "string" && v.trim() === "" ? null : v,
+    ])
+  )
+
+  try {
+    const supabase = await db()
+    const { data: existing } = await supabase.from("settings").select("id").single()
+    if (existing) {
+      const { error } = await supabase
+        .from("settings")
+        .update({ ...clean, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from("settings").insert(clean)
+      if (error) throw error
+    }
+    revalidatePath("/")
+    revalidatePath("/commission")
+    revalidatePath("/contact")
+    revalidatePath("/admin/settings")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update site copy" }
+  }
+}
+
 const IMAGE_FIELDS = [
   "home_hero_image_url",
   "about_image_url",

@@ -159,6 +159,10 @@ export interface Settings {
   about_image_url: string | null
   commission_image_url: string | null
   featured_painting_id: string | null
+  // Optional editable site copy (fall back to built-in defaults when null).
+  tagline?: string | null
+  commission_intro?: string | null
+  contact_intro?: string | null
   updated_at: string
 }
 

@@ -24,6 +24,7 @@ const navLinks = [
 interface NavSettings {
   instagram_handle: string | null
   email: string | null
+  tagline?: string | null
 }
 
 interface NavProps {
@@ -150,7 +151,7 @@ export function Nav({ navSettings }: NavProps) {
                   Jamie Kendrioski
                 </Link>
                 <p className="mt-2 text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-                  Painter · Boston
+                  {navSettings?.tagline || "Painter · Boston"}
                 </p>
               </div>
 

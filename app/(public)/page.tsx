@@ -33,6 +33,7 @@ export default async function HomePage() {
         painting={featuredPainting}
         bioTeaser={bio?.short_statement ?? null}
         heroImageUrl={settings?.home_hero_image_url ?? null}
+        tagline={settings?.tagline ?? null}
       />
       <HomeEvents events={events} />
     </>
