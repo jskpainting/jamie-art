@@ -405,6 +405,22 @@ export async function getBio(): Promise<Bio | null> {
   }
 }
 
+export async function getCurrentEvents(): Promise<Event[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("status", "current")
+      .order("starts_at")
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getCurrentEvents error:", err)
+    return []
+  }
+}
+
 export async function getUpcomingEvents(): Promise<Event[]> {
   try {
     const supabase = await createClient()

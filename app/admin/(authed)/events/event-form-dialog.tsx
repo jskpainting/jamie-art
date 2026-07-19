@@ -49,9 +49,9 @@ export function EventFormDialog({
   const [image_url, setImageUrl] = useState<string | null>(
     event?.image_url ?? null
   )
-  const [status, setStatus] = useState<"upcoming" | "past" | "cancelled">(
-    event?.status ?? "upcoming"
-  )
+  const [status, setStatus] = useState<
+    "upcoming" | "current" | "past" | "cancelled"
+  >(event?.status ?? "upcoming")
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -75,7 +75,7 @@ export function EventFormDialog({
         description: description || null,
         link: link || null,
         image_url,
-        status: status as "upcoming" | "past" | "cancelled",
+        status: status as "upcoming" | "current" | "past" | "cancelled",
       }
 
       const result = isEdit
@@ -147,11 +147,14 @@ export function EventFormDialog({
             <select
               value={status}
               onChange={(e) =>
-                setStatus(e.target.value as "upcoming" | "past" | "cancelled")
+                setStatus(
+                  e.target.value as "upcoming" | "current" | "past" | "cancelled"
+                )
               }
               className="w-full h-8 rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="upcoming">Upcoming</option>
+              <option value="current">Current — on view now</option>
               <option value="past">Past</option>
               <option value="cancelled">Cancelled</option>
             </select>

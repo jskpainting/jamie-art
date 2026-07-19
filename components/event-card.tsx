@@ -2,6 +2,7 @@ import { format, parseISO } from "date-fns"
 import { MapPin } from "lucide-react"
 import Image from "next/image"
 import type { Event } from "@/lib/types"
+import type { EventBucket } from "@/lib/event-bucket"
 import { cn } from "@/lib/utils"
 
 function normalizeUrl(url: string): string {
@@ -15,21 +16,44 @@ function mapsUrl(location: string): string {
 
 interface EventCardProps {
   event: Event
+  /** Which bucket this card is rendered in. Falls back to the event's status. */
+  variant?: EventBucket
 }
 
-export function EventCard({ event }: EventCardProps) {
-  const isUpcoming = event.status === "upcoming"
+export function EventCard({ event, variant }: EventCardProps) {
+  const resolved: EventBucket =
+    variant ??
+    (event.status === "current"
+      ? "current"
+      : event.status === "past"
+        ? "past"
+        : "upcoming")
+  const isPast = resolved === "past"
+  const isCurrent = resolved === "current"
+  const showLink = !isPast
   const startDate = parseISO(event.starts_at)
 
   return (
     <div
       className={cn(
         "border p-6",
-        isUpcoming
-          ? "border-border bg-card"
-          : "border-border/50 bg-muted/30 opacity-80"
+        isCurrent
+          ? "border-accent bg-card ring-1 ring-accent/40"
+          : isPast
+            ? "border-border/50 bg-muted/30 opacity-80"
+            : "border-border bg-card"
       )}
     >
+      {isCurrent && (
+        <p className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.2em] font-medium text-accent mb-3">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+          </span>
+          On View Now
+        </p>
+      )}
+
       {event.image_url && (
         <div className="relative w-full aspect-video overflow-hidden bg-muted mb-4 -mx-6 -mt-6 w-[calc(100%+3rem)]">
           <Image
@@ -70,7 +94,7 @@ export function EventCard({ event }: EventCardProps) {
         </p>
       )}
 
-      {event.link && isUpcoming && (
+      {event.link && showLink && (
         <a
           href={normalizeUrl(event.link)}
           target="_blank"

@@ -6,7 +6,11 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SettingsSchema, type SettingsInput } from "@/lib/schemas"
+import {
+  SettingsSchema,
+  type SettingsInput,
+  type SettingsFormValues,
+} from "@/lib/schemas"
 import { updateSettings } from "@/lib/actions/settings"
 import type { Settings } from "@/lib/types"
 
@@ -19,7 +23,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
     register,
     handleSubmit,
     formState: { errors, isSubmitting, isDirty },
-  } = useForm<SettingsInput>({
+  } = useForm<SettingsFormValues, unknown, SettingsInput>({
     resolver: zodResolver(SettingsSchema),
     defaultValues: {
       phone: initialValues?.phone ?? "",

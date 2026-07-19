@@ -1,7 +1,7 @@
 // Hand-written types matching BUILD_SPEC.md §5 schema exactly
 
 export type PaintingStatus = "available" | "sold" | "nfs" | "reserved"
-export type EventStatus = "upcoming" | "past" | "cancelled"
+export type EventStatus = "upcoming" | "current" | "past" | "cancelled"
 export type InquiryStatus = "new" | "replied" | "closed"
 export type CommissionInquiryStatus = "new" | "replied" | "closed"
 

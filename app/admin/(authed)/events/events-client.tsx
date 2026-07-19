@@ -14,9 +14,17 @@ import type { Event } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const STATUS_COLORS: Record<string, string> = {
+  current: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
   upcoming: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   past: "bg-muted text-muted-foreground",
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  current: "on view now",
+  upcoming: "upcoming",
+  past: "past",
+  cancelled: "cancelled",
 }
 
 function EventRow({
@@ -37,7 +45,7 @@ function EventRow({
               STATUS_COLORS[event.status] ?? ""
             )}
           >
-            {event.status}
+            {STATUS_LABELS[event.status] ?? event.status}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -90,12 +98,13 @@ function EventRow({
 }
 
 interface EventsClientProps {
+  current?: Event[]
   upcoming: Event[]
   past: Event[]
   initialAddOpen?: boolean
 }
 
-export function EventsClient({ upcoming, past, initialAddOpen = false }: EventsClientProps) {
+export function EventsClient({ current = [], upcoming, past, initialAddOpen = false }: EventsClientProps) {
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const router = useRouter()
@@ -112,6 +121,20 @@ export function EventsClient({ upcoming, past, initialAddOpen = false }: EventsC
           Add event
         </Button>
       </div>
+
+      {/* On view now */}
+      {current.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-amber-700 dark:text-amber-400">
+            On View Now
+          </h2>
+          <div className="space-y-2">
+            {current.map((e) => (
+              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Upcoming */}
       <section className="space-y-3">

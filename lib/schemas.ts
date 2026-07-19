@@ -82,7 +82,7 @@ export const EventWriteSchema = z.object({
       return `https://${trimmed}`
     }),
   image_url: z.string().nullable().optional(),
-  status: z.enum(["upcoming", "past", "cancelled"]).default("upcoming"),
+  status: z.enum(["upcoming", "current", "past", "cancelled"]).default("upcoming"),
 })
 
 export type EventWriteInput = z.infer<typeof EventWriteSchema>
@@ -144,8 +144,24 @@ export const SettingsSchema = z.object({
     .string()
     .min(1, "Email is required")
     .email("Valid email required"),
-  instagram_handle: z.string().nullable().optional(),
+  instagram_handle: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => {
+      if (!v) return null
+      // Accept anything the user pastes: @handle, full profile URL, or bare username.
+      let h = v.trim()
+      if (h === "") return null
+      // Strip a leading protocol + instagram host if a full URL was pasted.
+      h = h.replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      // Strip any leading @ and surrounding slashes / query strings.
+      h = h.replace(/^@+/, "").replace(/[/?#].*$/, "").replace(/\/+$/, "").trim()
+      return h === "" ? null : h
+    }),
   newsletter_from_name: z.string().nullable().optional(),
 })
 
 export type SettingsInput = z.infer<typeof SettingsSchema>
+// Raw form-field shape (before the instagram_handle transform runs).
+export type SettingsFormValues = z.input<typeof SettingsSchema>

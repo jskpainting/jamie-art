@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { MapPin } from "lucide-react"
 import type { Event } from "@/lib/types"
+import { bucketOf } from "@/lib/event-bucket"
 
 interface HomeEventsProps {
   events: Event[]
@@ -70,22 +71,11 @@ export function HomeEvents({ events }: HomeEventsProps) {
   // Pass Date.now as a lazy initializer (not called in render body) — client-side time only
   const [now] = useState<number>(Date.now)
 
-  const active = events.filter((e) => {
-    const start = new Date(e.starts_at).getTime()
-    const end = e.ends_at ? new Date(e.ends_at).getTime() : start + 86_400_000
-    return start <= now && now <= end
-  })
-
-  const upcoming = events.filter((e) => new Date(e.starts_at).getTime() > now)
-
-  const past = events
-    .filter((e) => {
-      const end = e.ends_at
-        ? new Date(e.ends_at).getTime()
-        : new Date(e.starts_at).getTime() + 86_400_000
-      return end < now
-    })
-    .reverse()
+  // Bucket with the shared helper so a manually-marked "current" show is
+  // treated as active even when its dates don't span today.
+  const active = events.filter((e) => bucketOf(e, now) === "current")
+  const upcoming = events.filter((e) => bucketOf(e, now) === "upcoming")
+  const past = events.filter((e) => bucketOf(e, now) === "past").reverse()
 
   if (active.length === 0 && upcoming.length === 0 && past.length === 0) return null
 
