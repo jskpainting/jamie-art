@@ -205,6 +205,26 @@ export async function getPaintingBySlug(
   }
 }
 
+/**
+ * Public URL of a painting's AR model (.glb) if one has been generated, else null.
+ * No DB column needed — models live in the public `ar-models` storage bucket keyed
+ * by painting id. Fail-safe: any error (incl. bucket missing) → no AR button.
+ */
+export async function getArModelUrl(paintingId: string): Promise<string | null> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) return null
+  const url = `${base}/storage/v1/object/public/ar-models/${paintingId}.glb`
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      next: { revalidate: 3600 },
+    })
+    return res.ok ? url : null
+  } catch {
+    return null
+  }
+}
+
 export async function getPaintingById(id: string): Promise<Painting | null> {
   try {
     const supabase = await createClient()

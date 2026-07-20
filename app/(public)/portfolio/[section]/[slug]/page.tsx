@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { PaintingDetailView } from "@/components/painting-detail-view"
 import { JsonLd } from "@/components/json-ld"
-import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings } from "@/lib/db/queries"
+import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings, getArModelUrl } from "@/lib/db/queries"
 import { SITE_URL, ARTIST_NAME, paintingAlt } from "@/lib/site"
 import { parsePhysical } from "@/lib/mosaic-layout"
 import type { PaintingWithImages } from "@/lib/types"
@@ -66,6 +66,8 @@ export default async function PaintingPage({ params }: Props) {
   ])
 
   if (!painting || !section) notFound()
+
+  const arModelUrl = await getArModelUrl(painting.id)
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jamiekendrioski.com"
   const paintingUrl = `${siteUrl}/portfolio/${sectionSlug}/${slug}`
@@ -143,6 +145,7 @@ export default async function PaintingPage({ params }: Props) {
         sectionTitle={section.title}
         settings={settings}
         paintingUrl={paintingUrl}
+        arModelUrl={arModelUrl}
       />
 
       {related.length > 0 && (

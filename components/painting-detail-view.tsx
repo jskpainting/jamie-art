@@ -9,6 +9,7 @@ import { ChevronLeft, Maximize2, Palette } from "lucide-react"
 import { InquireDialog } from "@/components/inquire-dialog"
 import { PrintRequestDialog } from "@/components/print-request-dialog"
 import { ZoomOverlay } from "@/components/zoom-overlay"
+import { ArViewer } from "@/components/ar-viewer"
 import { formatPrice, cn } from "@/lib/utils"
 import { paintingAlt } from "@/lib/site"
 import type { PaintingWithImages, PaintingStatus, Settings } from "@/lib/types"
@@ -35,6 +36,8 @@ interface PaintingDetailViewProps {
   sectionTitle: string
   settings: Settings | null
   paintingUrl: string
+  /** Public .glb URL if this painting has an AR model (enables "View on my wall"). */
+  arModelUrl?: string | null
 }
 
 export function PaintingDetailView({
@@ -43,6 +46,7 @@ export function PaintingDetailView({
   sectionTitle,
   settings,
   paintingUrl,
+  arModelUrl,
 }: PaintingDetailViewProps) {
   const [zoomOpen, setZoomOpen] = useState(false)
 
@@ -231,6 +235,15 @@ export function PaintingDetailView({
                     </Link>
                   </div>
                 )}
+              </div>
+            )}
+
+            {arModelUrl && (
+              <div className="mt-1 flex flex-col gap-3 border-t border-border pt-5">
+                <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+                  See it in your space
+                </span>
+                <ArViewer src={arModelUrl} alt={paintingAlt(painting.title)} />
               </div>
             )}
           </div>
