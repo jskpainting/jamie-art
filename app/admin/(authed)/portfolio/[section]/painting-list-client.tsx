@@ -303,6 +303,8 @@ interface PaintingRowProps {
 
 function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection, showAlsoShowIn }: PaintingRowProps) {
   const otherSections = sections.filter((s) => s.id !== currentSectionId)
+  const currentSectionTitle =
+    sections.find((s) => s.id === currentSectionId)?.title ?? "this gallery"
   const extra = new Set(painting.extra_section_ids ?? [])
   // Move uses a Dialog, NOT a Base UI dropdown menu: a portal MENU opened from
   // inside the dnd-kit sortable row crashes the page (renderer loop). Dialogs
@@ -402,12 +404,16 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="truncate">Move “{painting.title}”</DialogTitle>
+            <DialogTitle className="truncate">“{painting.title}”</DialogTitle>
           </DialogHeader>
 
+          {/* Move — removes it from the current gallery */}
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-2">
-              Move to gallery
+            <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              Move to another gallery
+            </p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Moves it out of {currentSectionTitle} and into the one you pick.
             </p>
             {otherSections.map((s) => (
               <button
@@ -423,25 +429,38 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
             ))}
           </div>
 
-          {showAlsoShowIn && (
-            <div className="space-y-2 border-t border-border pt-3">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
-                Also show in
+          {/* Also show in — keeps it here AND adds it to others (multi-gallery) */}
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              Also show in
+            </p>
+            {showAlsoShowIn ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Keeps it in {currentSectionTitle} and also shows it in the
+                  galleries you tick.
+                </p>
+                {otherSections.map((s) => (
+                  <label
+                    key={`extra-${s.id}`}
+                    className="flex items-center gap-2 text-sm px-1 py-1 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={extra.has(s.id)}
+                      onCheckedChange={(v) => onToggleSection(s.id, v === true)}
+                    />
+                    {s.title}
+                  </label>
+                ))}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Showing one painting in several galleries at once needs a quick
+                one-time setup (in the email sent to you). Once that’s done,
+                you’ll be able to tick galleries here.
               </p>
-              {otherSections.map((s) => (
-                <label
-                  key={`extra-${s.id}`}
-                  className="flex items-center gap-2 text-sm px-1 py-1 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={extra.has(s.id)}
-                    onCheckedChange={(v) => onToggleSection(s.id, v === true)}
-                  />
-                  {s.title}
-                </label>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)}>
