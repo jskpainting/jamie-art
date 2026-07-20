@@ -37,3 +37,37 @@ export function cleanFilename(filename: string): string {
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(" ")
 }
+
+/**
+ * Human-friendly event date range, condensing same-month/same-year cases:
+ *   same month → "September 24 – 27, 2026"
+ *   same year  → "September 30 – October 3, 2026"
+ *   otherwise  → "December 30, 2025 – January 2, 2026"
+ * Accepts ISO strings; returns just the start date when there's no end.
+ */
+export function formatEventDateRange(
+  startsAt: string,
+  endsAt: string | null
+): string {
+  const start = new Date(startsAt)
+  const full = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+  if (!endsAt) return full.format(start)
+  const end = new Date(endsAt)
+  const monthDay = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+  })
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+  if (sameMonth) {
+    return `${monthDay.format(start)} – ${end.getDate()}, ${end.getFullYear()}`
+  }
+  if (sameYear) {
+    return `${monthDay.format(start)} – ${full.format(end)}`
+  }
+  return `${full.format(start)} – ${full.format(end)}`
+}

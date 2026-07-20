@@ -36,15 +36,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuItem,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 import { PaintingFormDialog } from "./painting-form-dialog"
 import type { PaintingWithImagesAndTags, Section } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -313,6 +304,10 @@ interface PaintingRowProps {
 function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection, showAlsoShowIn }: PaintingRowProps) {
   const otherSections = sections.filter((s) => s.id !== currentSectionId)
   const extra = new Set(painting.extra_section_ids ?? [])
+  // Move uses a Dialog, NOT a Base UI dropdown menu: a portal MENU opened from
+  // inside the dnd-kit sortable row crashes the page (renderer loop). Dialogs
+  // (like the delete ConfirmDialog in this same row) are safe here.
+  const [moveOpen, setMoveOpen] = useState(false)
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
       {/* Checkbox */}
@@ -362,53 +357,17 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
           </span>
 
           <div className="flex items-center gap-1 shrink-0">
-            {/* Quick move to another gallery */}
+            {/* Quick move to another gallery (Dialog — see note above) */}
             {otherSections.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  aria-label="Move to another gallery"
-                  className={cn(
-                    buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                    "text-foreground/60 hover:text-foreground"
-                  )}
-                >
-                  <FolderInput className="h-3.5 w-3.5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel className="text-xs">
-                    Move to gallery
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {otherSections.map((s) => (
-                    <DropdownMenuItem
-                      key={s.id}
-                      className="text-sm"
-                      onClick={() => onMove(s.id)}
-                    >
-                      {s.title}
-                    </DropdownMenuItem>
-                  ))}
-                  {showAlsoShowIn && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs">
-                        Also show in
-                      </DropdownMenuLabel>
-                      {otherSections.map((s) => (
-                        <DropdownMenuCheckboxItem
-                          key={`extra-${s.id}`}
-                          className="text-sm"
-                          checked={extra.has(s.id)}
-                          closeOnClick={false}
-                          onCheckedChange={(v) => onToggleSection(s.id, v === true)}
-                        >
-                          {s.title}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-foreground/60 hover:text-foreground"
+                aria-label="Move to another gallery"
+                onClick={() => setMoveOpen(true)}
+              >
+                <FolderInput className="h-3.5 w-3.5" />
+              </Button>
             )}
             <Button
               variant="ghost"
@@ -438,6 +397,59 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
           </div>
         </div>
       </div>
+
+      {/* Move dialog */}
+      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="truncate">Move “{painting.title}”</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-2">
+              Move to gallery
+            </p>
+            {otherSections.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setMoveOpen(false)
+                  onMove(s.id)
+                }}
+                className="w-full text-left text-sm px-3 py-2 rounded-md border border-transparent hover:bg-muted hover:border-border transition-colors"
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
+
+          {showAlsoShowIn && (
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                Also show in
+              </p>
+              {otherSections.map((s) => (
+                <label
+                  key={`extra-${s.id}`}
+                  className="flex items-center gap-2 text-sm px-1 py-1 cursor-pointer"
+                >
+                  <Checkbox
+                    checked={extra.has(s.id)}
+                    onCheckedChange={(v) => onToggleSection(s.id, v === true)}
+                  />
+                  {s.title}
+                </label>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

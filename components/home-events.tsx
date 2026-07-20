@@ -6,32 +6,10 @@ import Image from "next/image"
 import { MapPin } from "lucide-react"
 import type { Event } from "@/lib/types"
 import { bucketOf } from "@/lib/event-bucket"
+import { formatEventDateRange } from "@/lib/utils"
 
 interface HomeEventsProps {
   events: Event[]
-}
-
-function formatDateRange(startsAt: string, endsAt: string | null): string {
-  const start = new Date(startsAt)
-  const full = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })
-  if (!endsAt) return full.format(start)
-  const end = new Date(endsAt)
-  const monthDay = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" })
-  const sameYear = start.getFullYear() === end.getFullYear()
-  const sameMonth = sameYear && start.getMonth() === end.getMonth()
-  // Same month: "September 24 – 27, 2026"
-  if (sameMonth) {
-    return `${monthDay.format(start)} – ${end.getDate()}, ${end.getFullYear()}`
-  }
-  // Same year, different month: "September 30 – October 3, 2026"
-  if (sameYear) {
-    return `${monthDay.format(start)} – ${full.format(end)}`
-  }
-  return `${full.format(start)} – ${full.format(end)}`
 }
 
 interface EventCardProps {
@@ -54,7 +32,7 @@ function EventCard({ event }: EventCardProps) {
       )}
       <div className="min-w-0">
         <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-1">
-          {formatDateRange(event.starts_at, event.ends_at)}
+          {formatEventDateRange(event.starts_at, event.ends_at)}
         </p>
         <h3 className="text-xl font-medium leading-snug mb-0.5">{event.title}</h3>
         {event.location && (

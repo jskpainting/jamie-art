@@ -39,17 +39,21 @@ export function rateLimit(
  * value); use those. For non-Vercel/local fallback, take the RIGHTMOST XFF hop
  * (closest trusted proxy) rather than the leftmost.
  */
-export function clientIp(request: Request): string {
-  const vercel = request.headers.get("x-vercel-forwarded-for")
+export function clientIpFromHeaders(h: Headers): string {
+  const vercel = h.get("x-vercel-forwarded-for")
   if (vercel) return vercel.split(",")[0].trim()
 
-  const real = request.headers.get("x-real-ip")
+  const real = h.get("x-real-ip")
   if (real) return real.trim()
 
-  const fwd = request.headers.get("x-forwarded-for")
+  const fwd = h.get("x-forwarded-for")
   if (fwd) {
     const hops = fwd.split(",").map((s) => s.trim()).filter(Boolean)
     if (hops.length) return hops[hops.length - 1]
   }
   return "unknown"
+}
+
+export function clientIp(request: Request): string {
+  return clientIpFromHeaders(request.headers)
 }

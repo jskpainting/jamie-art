@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { CommissionInquiryWriteSchema } from "@/lib/schemas"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimit, clientIpFromHeaders } from "@/lib/rate-limit"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -16,7 +16,8 @@ async function db() {
 // Public form — no auth check. Uses admin client to bypass RLS.
 export async function submitCommissionInquiry(data: unknown) {
   const hdrs = await headers()
-  const ip = hdrs.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown"
+  // Use the spoof-resistant IP source (not the client-controlled leftmost XFF).
+  const ip = clientIpFromHeaders(hdrs)
   if (!rateLimit(`commission:${ip}`, { limit: 5, windowMs: 60_000 })) {
     return { ok: false, error: "Too many requests. Please try again shortly." }
   }

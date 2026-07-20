@@ -1,9 +1,8 @@
-import { format, parseISO } from "date-fns"
 import { MapPin } from "lucide-react"
 import Image from "next/image"
 import type { Event } from "@/lib/types"
 import type { EventBucket } from "@/lib/event-bucket"
-import { cn } from "@/lib/utils"
+import { cn, formatEventDateRange } from "@/lib/utils"
 
 function normalizeUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url
@@ -31,7 +30,6 @@ export function EventCard({ event, variant }: EventCardProps) {
   const isPast = resolved === "past"
   const isCurrent = resolved === "current"
   const showLink = !isPast
-  const startDate = parseISO(event.starts_at)
 
   return (
     <div
@@ -68,8 +66,7 @@ export function EventCard({ event, variant }: EventCardProps) {
       )}
 
       <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
-        {format(startDate, "MMMM d, yyyy")}
-        {event.ends_at && ` — ${format(parseISO(event.ends_at), "MMMM d, yyyy")}`}
+        {formatEventDateRange(event.starts_at, event.ends_at)}
       </p>
 
       <h3 className="text-xl md:text-2xl font-serif font-light tracking-tight mb-2">
