@@ -7,6 +7,7 @@ import { layoutPairs, PAIRS } from "@/lib/pairs-layout"
 import { parsePhysical } from "@/lib/mosaic-layout"
 import { EmptyState } from "@/components/empty-state"
 import { formatPrice } from "@/lib/utils"
+import { paintingAlt } from "@/lib/site"
 import type { Painting, PaintingStatus } from "@/lib/types"
 
 const statusWord: Record<PaintingStatus, string> = {
@@ -130,7 +131,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
           {p.primary_image_url ? (
             <Image
               src={p.primary_image_url}
-              alt={p.title}
+              alt={paintingAlt(p.title)}
               fill
               sizes={`${Math.max(20, Math.round((w / (width ?? 1200)) * 100))}vw`}
               quality={90}
@@ -187,7 +188,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
                   {p.primary_image_url && (
                     <Image
                       src={p.primary_image_url}
-                      alt={p.title}
+                      alt={paintingAlt(p.title)}
                       fill
                       sizes="(max-width: 640px) 90vw, 45vw"
                       quality={90}

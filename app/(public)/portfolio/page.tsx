@@ -4,9 +4,16 @@ import { EmptyState } from "@/components/empty-state"
 import { getPublicSections } from "@/lib/db/queries"
 
 export const metadata: Metadata = {
-  title: "Portfolio",
+  title: "Portfolio — Original Paintings",
   description:
-    "Browse original paintings by Jamie Kendrioski — abstracts, cityscapes, seascapes, florals, and more.",
+    "Browse original oil and acrylic paintings by Boston artist Jamie Kendrioski — abstracts, cityscapes, seascapes, florals, and Pixels & Rainbows. Available works and commissions.",
+  alternates: { canonical: "/portfolio" },
+  openGraph: {
+    title: "Portfolio — Jamie Kendrioski",
+    description:
+      "Original oil and acrylic paintings by Boston artist Jamie Kendrioski.",
+    url: "/portfolio",
+  },
 }
 
 export default async function PortfolioPage() {

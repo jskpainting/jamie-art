@@ -10,6 +10,7 @@ import {
   type PaintingImageInput,
 } from "@/lib/schemas"
 import { slugify } from "@/lib/utils"
+import { isSchemaSetupError, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
 import type { PaintingStatus } from "@/lib/types"
 
 export interface BulkCreateItem {
@@ -29,6 +30,22 @@ export interface BulkCreateItem {
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
+}
+
+/**
+ * Run many Supabase writes concurrently and fail if ANY of them errored.
+ * The query builder resolves with `{ error }` instead of throwing, so a naive
+ * Promise.all would report success even when some rows failed to update.
+ */
+async function runAllOrThrow(
+  ops: PromiseLike<{ error: unknown }>[],
+  label: string
+): Promise<void> {
+  const results = await Promise.all(ops)
+  const failed = results.filter((r) => r.error)
+  if (failed.length > 0) {
+    throw new Error(`${failed.length} of ${results.length} ${label} failed`)
+  }
 }
 
 async function getSectionSlug(sectionId: string): Promise<string | null> {
@@ -90,6 +107,14 @@ export async function updatePainting(id: string, input: unknown) {
   try {
     const supabase = await db()
     const { price_dollars: price_cents, ...rest } = parsed.data
+
+    // Capture the previous section so we can also refresh it if the painting moved.
+    const { data: prev } = await supabase
+      .from("paintings")
+      .select("section_id")
+      .eq("id", id)
+      .single()
+
     const { error } = await supabase
       .from("paintings")
       .update({ ...rest, price_cents })
@@ -98,6 +123,10 @@ export async function updatePainting(id: string, input: unknown) {
 
     const slug = await getSectionSlug(parsed.data.section_id)
     revalidateSectionPaths(slug)
+    // Painting moved sections → the old section's pages are now stale too.
+    if (prev?.section_id && prev.section_id !== parsed.data.section_id) {
+      revalidateSectionPaths(await getSectionSlug(prev.section_id))
+    }
     const { data: painting } = await supabase
       .from("paintings")
       .select("slug")
@@ -146,10 +175,11 @@ export async function reorderPaintings(sectionId: string, ids: string[]) {
 
   try {
     const supabase = await db()
-    await Promise.all(
+    await runAllOrThrow(
       ids.map((id, i) =>
         supabase.from("paintings").update({ sort_order: i }).eq("id", id)
-      )
+      ),
+      "reorder updates"
     )
     const slug = await getSectionSlug(sectionId)
     revalidateSectionPaths(slug)
@@ -219,14 +249,15 @@ export async function reorderPaintingImages(
 
   try {
     const supabase = await db()
-    await Promise.all(
+    await runAllOrThrow(
       ids.map((id, i) =>
         supabase
           .from("painting_images")
           .update({ sort_order: i })
           .eq("id", id)
           .eq("painting_id", paintingId)
-      )
+      ),
+      "image reorder updates"
     )
     return { ok: true }
   } catch (e) {
@@ -246,8 +277,9 @@ export async function bulkUpdateStatus(
 
   try {
     const supabase = await db()
-    await Promise.all(
-      ids.map((id) => supabase.from("paintings").update({ status }).eq("id", id).then())
+    await runAllOrThrow(
+      ids.map((id) => supabase.from("paintings").update({ status }).eq("id", id)),
+      "status updates"
     )
     revalidatePath("/portfolio")
     revalidatePath("/admin/portfolio")
@@ -267,10 +299,11 @@ export async function bulkUpdateSection(
 
   try {
     const supabase = await db()
-    await Promise.all(
+    await runAllOrThrow(
       ids.map((id) =>
-        supabase.from("paintings").update({ section_id: sectionId }).eq("id", id).then()
-      )
+        supabase.from("paintings").update({ section_id: sectionId }).eq("id", id)
+      ),
+      "section updates"
     )
     revalidatePath("/portfolio")
     revalidatePath("/admin/portfolio")
@@ -315,6 +348,7 @@ export async function setPaintingSectionMembership(
     revalidatePath("/admin/portfolio")
     return { ok: true }
   } catch (e) {
+    if (isSchemaSetupError(e)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
     return {
       ok: false,
       error:

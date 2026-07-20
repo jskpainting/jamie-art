@@ -101,10 +101,11 @@ interface EventsClientProps {
   current?: Event[]
   upcoming: Event[]
   past: Event[]
+  allowCurrent?: boolean
   initialAddOpen?: boolean
 }
 
-export function EventsClient({ current = [], upcoming, past, initialAddOpen = false }: EventsClientProps) {
+export function EventsClient({ current = [], upcoming, past, allowCurrent = false, initialAddOpen = false }: EventsClientProps) {
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const router = useRouter()
@@ -170,12 +171,13 @@ export function EventsClient({ current = [], upcoming, past, initialAddOpen = fa
         </section>
       )}
 
-      <EventFormDialog open={addOpen} onOpenChange={setAddOpen} />
+      <EventFormDialog open={addOpen} onOpenChange={setAddOpen} allowCurrent={allowCurrent} />
       {editEvent && (
         <EventFormDialog
           open={!!editEvent}
           onOpenChange={(o) => !o && setEditEvent(null)}
           event={editEvent}
+          allowCurrent={allowCurrent}
         />
       )}
     </div>

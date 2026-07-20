@@ -63,6 +63,8 @@ interface PaintingListClientProps {
   initialPaintings: PaintingWithImagesAndTags[]
   initialAddOpen?: boolean
   sections: Section[]
+  /** Whether the painting_sections migration is applied (enables "Also show in"). */
+  showAlsoShowIn?: boolean
 }
 
 // ─── Bulk action bar ─────────────────────────────────────────────────────────
@@ -305,9 +307,10 @@ interface PaintingRowProps {
   currentSectionId: string
   onMove: (targetSectionId: string) => void
   onToggleSection: (targetSectionId: string, on: boolean) => void
+  showAlsoShowIn?: boolean
 }
 
-function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection }: PaintingRowProps) {
+function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection, showAlsoShowIn }: PaintingRowProps) {
   const otherSections = sections.filter((s) => s.id !== currentSectionId)
   const extra = new Set(painting.extra_section_ids ?? [])
   return (
@@ -385,21 +388,25 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
                       {s.title}
                     </DropdownMenuItem>
                   ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs">
-                    Also show in
-                  </DropdownMenuLabel>
-                  {otherSections.map((s) => (
-                    <DropdownMenuCheckboxItem
-                      key={`extra-${s.id}`}
-                      className="text-sm"
-                      checked={extra.has(s.id)}
-                      closeOnClick={false}
-                      onCheckedChange={(v) => onToggleSection(s.id, v === true)}
-                    >
-                      {s.title}
-                    </DropdownMenuCheckboxItem>
-                  ))}
+                  {showAlsoShowIn && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs">
+                        Also show in
+                      </DropdownMenuLabel>
+                      {otherSections.map((s) => (
+                        <DropdownMenuCheckboxItem
+                          key={`extra-${s.id}`}
+                          className="text-sm"
+                          checked={extra.has(s.id)}
+                          closeOnClick={false}
+                          onCheckedChange={(v) => onToggleSection(s.id, v === true)}
+                        >
+                          {s.title}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -442,9 +449,10 @@ export function PaintingListClient({
   initialPaintings,
   initialAddOpen = false,
   sections,
+  showAlsoShowIn = false,
 }: PaintingListClientProps) {
   const [paintings, setOptimistic] = useOptimistic(initialPaintings)
-  useTransition()
+  const [, startTransition] = useTransition()
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editPainting, setEditPainting] = useState<PaintingWithImagesAndTags | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -485,8 +493,11 @@ export function PaintingListClient({
     const reordered = newIds
       .map((id) => activePaintings.find((p) => p.id === id))
       .filter((p): p is PaintingWithImagesAndTags => !!p)
-    setOptimistic([...reordered, ...soldPaintings])
-    void reorderPaintings(section.id, newIds).then((result) => {
+    // Optimistic dispatch must run inside a transition (React 19), otherwise the
+    // reorder visually snaps back until the server round-trip lands.
+    startTransition(async () => {
+      setOptimistic([...reordered, ...soldPaintings])
+      const result = await reorderPaintings(section.id, newIds)
       if (!result.ok) toast.error(result.error)
       else toast.success("Order saved", { duration: 1500 })
     })
@@ -585,6 +596,7 @@ export function PaintingListClient({
                   onToggleSection={(target, on) =>
                     handleToggleSection(painting.id, target, on)
                   }
+                  showAlsoShowIn={showAlsoShowIn}
                 />
               )}
             />
@@ -610,6 +622,7 @@ export function PaintingListClient({
                   onToggleSection={(target, on) =>
                     handleToggleSection(painting.id, target, on)
                   }
+                  showAlsoShowIn={showAlsoShowIn}
                 />
               ))}
             </div>

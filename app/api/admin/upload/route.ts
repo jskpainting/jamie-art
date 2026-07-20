@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin"
 
 const ALLOWED_BUCKETS = ["paintings", "headshots", "events", "site-images"] as const
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
-const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
+// 15 MB — comfortably above the cropper's compressed JPEG output (4000px / q0.95)
+// so a valid crop never fails the upload after the user has already cropped it.
+const MAX_SIZE = 15 * 1024 * 1024
 
 type AllowedType = (typeof ALLOWED_TYPES)[number]
 
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid bucket" }, { status: 400 })
   }
   if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: "File must be under 10 MB" }, { status: 400 })
+    return NextResponse.json({ error: "File must be under 15 MB" }, { status: 400 })
   }
   if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
     return NextResponse.json(

@@ -349,7 +349,7 @@ export async function getRelatedPaintings(
   paintingId: string,
   sectionId: string,
   limit = 4
-): Promise<{ paintings: Painting[]; source: "tags" | "section" }> {
+): Promise<{ paintings: PaintingInGallery[]; source: "tags" | "section" }> {
   try {
     const supabase = await createClient()
 
@@ -361,7 +361,7 @@ export async function getRelatedPaintings(
 
     const tagIds = (ptRows ?? []).map((r) => r.tag_id as string)
 
-    let tagPaintings: Painting[] = []
+    let tagPaintings: PaintingInGallery[] = []
 
     if (tagIds.length > 0) {
       // Step 2: Find all paintings sharing those tags (excluding self)
@@ -394,26 +394,34 @@ export async function getRelatedPaintings(
 
         const { data: paintings } = await supabase
           .from("paintings")
-          .select("*")
+          .select("*, sections(slug)")
           .in("id", topIds)
-        // Preserve the ranked order
-        const byId = new Map((paintings ?? []).map((p) => [p.id, p]))
-        tagPaintings = topIds.map((id) => byId.get(id)).filter((p): p is Painting => !!p)
+        // Preserve the ranked order; attach each painting's home-section slug so
+        // cross-section related links resolve to the correct canonical URL.
+        const byId = new Map(
+          (paintings ?? []).map((p) => [p.id, attachHomeSlug(p)])
+        )
+        tagPaintings = topIds
+          .map((id) => byId.get(id))
+          .filter((p): p is PaintingInGallery => !!p)
       }
     }
 
     // Step 3: Fill remainder from same section
     const needed = limit - tagPaintings.length
-    let sectionFill: Painting[] = []
+    let sectionFill: PaintingInGallery[] = []
     if (needed > 0) {
       const excludeIds = [paintingId, ...tagPaintings.map((p) => p.id)]
       const { data: sectionPaintings } = await supabase
         .from("paintings")
-        .select("*")
+        .select("*, sections(slug)")
         .eq("section_id", sectionId)
         .not("id", "in", `(${excludeIds.join(",")})`)
         .limit(8)
-      sectionFill = shuffle(sectionPaintings ?? []).slice(0, needed)
+      sectionFill = shuffle((sectionPaintings ?? []).map(attachHomeSlug)).slice(
+        0,
+        needed
+      )
     }
 
     const paintings = [...tagPaintings, ...sectionFill]
@@ -422,6 +430,41 @@ export async function getRelatedPaintings(
   } catch (err) {
     console.error("getRelatedPaintings error:", err)
     return { paintings: [], source: "section" }
+  }
+}
+
+/** Slug + home-section slug + freshness for building sitemap entries. */
+export interface PaintingSitemapEntry {
+  slug: string
+  section_slug: string
+  updated_at: string
+}
+
+export async function getPaintingsForSitemap(): Promise<PaintingSitemapEntry[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("slug, created_at, sections(slug)")
+      .order("created_at", { ascending: false })
+    if (error) throw error
+    return (data ?? [])
+      .map((p) => {
+        const section_slug =
+          (p.sections as unknown as { slug: string } | null)?.slug ?? ""
+        return {
+          slug: p.slug as string,
+          section_slug,
+          updated_at: (p.created_at as string) ?? new Date().toISOString(),
+        }
+      })
+      .filter(
+        (p) =>
+          p.slug && p.section_slug && p.section_slug !== "uncategorized"
+      )
+  } catch (err) {
+    console.error("getPaintingsForSitemap error:", err)
+    return []
   }
 }
 

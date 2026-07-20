@@ -22,7 +22,7 @@ interface SectionsClientProps {
 
 export function SectionsClient({ initialSections }: SectionsClientProps) {
   const [sections, setOptimistic] = useOptimistic(initialSections)
-  useTransition()
+  const [, startTransition] = useTransition()
   const router = useRouter()
   const [addOpen, setAddOpen] = useState(false)
   const [editSection, setEditSection] = useState<SectionWithCount | null>(null)
@@ -31,8 +31,9 @@ export function SectionsClient({ initialSections }: SectionsClientProps) {
     const reordered = newIds
       .map((id) => sections.find((s) => s.id === id))
       .filter((s): s is SectionWithCount => !!s)
-    setOptimistic(reordered)
-    void reorderSections(newIds).then((result) => {
+    startTransition(async () => {
+      setOptimistic(reordered)
+      const result = await reorderSections(newIds)
       if (!result.ok) toast.error(result.error)
       else toast.success("Order saved", { duration: 1500 })
     })

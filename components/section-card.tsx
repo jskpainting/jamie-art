@@ -25,7 +25,7 @@ export function SectionCard({ section }: SectionCardProps) {
         {section.cover_image_url ? (
           <ImageWithSkeleton
             src={section.cover_image_url}
-            alt={section.title}
+            alt={`${section.title} paintings by Jamie Kendrioski`}
             fill
             sizes="(min-width: 640px) 50vw, 100vw"
             className="object-cover transition-all duration-500 group-hover:scale-[1.03] group-hover:brightness-95"

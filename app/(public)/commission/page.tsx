@@ -4,8 +4,16 @@ import { CommissionFormLoader } from "@/components/commission-form-loader"
 import { getSettings } from "@/lib/db/queries"
 
 export const metadata: Metadata = {
-  title: "Commissions",
-  description: "Commission an original painting by Jamie Kendrioski.",
+  title: "Commissions — Custom Paintings",
+  description:
+    "Commission an original oil or acrylic painting by Boston artist Jamie Kendrioski. Share your size, subject, and palette to begin a custom piece.",
+  alternates: { canonical: "/commission" },
+  openGraph: {
+    title: "Commission a Painting — Jamie Kendrioski",
+    description:
+      "Commission a custom original painting by Boston artist Jamie Kendrioski.",
+    url: "/commission",
+  },
 }
 
 type Props = {

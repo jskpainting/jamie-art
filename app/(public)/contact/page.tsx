@@ -6,7 +6,14 @@ import { getSettings } from "@/lib/db/queries"
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Get in touch with Jamie Kendrioski — inquiries, commissions, and mailing list.",
+    "Get in touch with Boston painter Jamie Kendrioski — painting inquiries, commissions, and mailing list sign-up.",
+  alternates: { canonical: "/contact" },
+  openGraph: {
+    title: "Contact Jamie Kendrioski",
+    description:
+      "Painting inquiries, commissions, and mailing list for Boston artist Jamie Kendrioski.",
+    url: "/contact",
+  },
 }
 
 export default async function ContactPage() {

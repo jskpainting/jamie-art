@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { getSettings, getAllPaintingsForPicker } from "@/lib/db/queries"
+import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { SettingsForm } from "./settings-form"
 import { SiteCopyForm } from "./site-copy-form"
 import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
@@ -11,9 +12,10 @@ export const metadata: Metadata = {
 }
 
 export default async function SettingsPage() {
-  const [settings, paintings] = await Promise.all([
+  const [settings, paintings, capabilities] = await Promise.all([
     getSettings(),
     getAllPaintingsForPicker(),
+    getSchemaCapabilities(),
   ])
 
   return (
@@ -26,14 +28,16 @@ export default async function SettingsPage() {
       </h1>
       <SettingsForm initialValues={settings} />
 
-      <div className="mt-12 pt-10 border-t border-border">
-        <h2 className="text-lg font-medium mb-1">Site copy</h2>
-        <p className="text-sm text-muted-foreground mb-8">
-          Editable text shown on the public site. Leave any field blank to use
-          the built-in default.
-        </p>
-        <SiteCopyForm initialValues={settings} />
-      </div>
+      {capabilities.siteCopy && (
+        <div className="mt-12 pt-10 border-t border-border">
+          <h2 className="text-lg font-medium mb-1">Site copy</h2>
+          <p className="text-sm text-muted-foreground mb-8">
+            Editable text shown on the public site. Leave any field blank to use
+            the built-in default.
+          </p>
+          <SiteCopyForm initialValues={settings} />
+        </div>
+      )}
 
       <div className="mt-12 pt-10 border-t border-border">
         <h2 className="text-lg font-medium mb-1">Images</h2>

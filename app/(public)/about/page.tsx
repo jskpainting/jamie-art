@@ -5,9 +5,16 @@ import remarkGfm from "remark-gfm"
 import { getBio, getSettings } from "@/lib/db/queries"
 
 export const metadata: Metadata = {
-  title: "About",
+  title: "About the Artist",
   description:
-    "About Jamie Kendrioski — Boston-based painter working in oils and acrylics.",
+    "Meet Jamie Kendrioski, a Boston-based painter working in oils and acrylics — abstracts, cityscapes, seascapes, and florals rooted in light, color, and texture.",
+  alternates: { canonical: "/about" },
+  openGraph: {
+    title: "About Jamie Kendrioski",
+    description:
+      "Boston-based painter working in oils and acrylics.",
+    url: "/about",
+  },
 }
 
 export default async function AboutPage() {

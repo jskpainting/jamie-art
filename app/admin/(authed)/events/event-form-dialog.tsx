@@ -27,12 +27,15 @@ interface EventFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   event?: Event
+  /** Whether the events 'current' status migration is applied. */
+  allowCurrent?: boolean
 }
 
 export function EventFormDialog({
   open,
   onOpenChange,
   event,
+  allowCurrent = false,
 }: EventFormDialogProps) {
   const isEdit = !!event
 
@@ -154,7 +157,9 @@ export function EventFormDialog({
               className="w-full h-8 rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="upcoming">Upcoming</option>
-              <option value="current">Current — on view now</option>
+              {(allowCurrent || status === "current") && (
+                <option value="current">Current — on view now</option>
+              )}
               <option value="past">Past</option>
               <option value="cancelled">Cancelled</option>
             </select>

@@ -4,6 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { motion, useReducedMotion, type Transition } from "framer-motion"
 import { buttonVariants } from "@/components/ui/button"
+import { paintingAlt } from "@/lib/site"
 import type { Painting } from "@/lib/types"
 
 interface HeroSectionProps {
@@ -38,7 +39,11 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: Hero
           >
             <Image
               src={heroImageUrl ?? painting!.primary_image_url!}
-              alt={heroImageUrl ? "Jamie Kendrioski" : painting!.title}
+              alt={
+                heroImageUrl
+                  ? "Jamie Kendrioski — Boston painter"
+                  : paintingAlt(painting!.title)
+              }
               fill
               className="object-cover"
               priority

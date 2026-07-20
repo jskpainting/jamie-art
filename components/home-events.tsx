@@ -13,19 +13,25 @@ interface HomeEventsProps {
 
 function formatDateRange(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt)
-  const fmt = new Intl.DateTimeFormat("en-US", {
+  const full = new Intl.DateTimeFormat("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
   })
-  if (!endsAt) return fmt.format(start)
+  if (!endsAt) return full.format(start)
   const end = new Date(endsAt)
-  // Same year: "June 1 – 15, 2026"
-  if (start.getFullYear() === end.getFullYear()) {
-    const startFmt = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" })
-    return `${startFmt.format(start)} – ${fmt.format(end)}`
+  const monthDay = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" })
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+  // Same month: "September 24 – 27, 2026"
+  if (sameMonth) {
+    return `${monthDay.format(start)} – ${end.getDate()}, ${end.getFullYear()}`
   }
-  return `${fmt.format(start)} – ${fmt.format(end)}`
+  // Same year, different month: "September 30 – October 3, 2026"
+  if (sameYear) {
+    return `${monthDay.format(start)} – ${full.format(end)}`
+  }
+  return `${full.format(start)} – ${full.format(end)}`
 }
 
 interface EventCardProps {

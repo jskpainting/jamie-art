@@ -1,25 +1,64 @@
 import type { Metadata } from "next"
 import { EventCard } from "@/components/event-card"
 import { EmptyState } from "@/components/empty-state"
+import { JsonLd } from "@/components/json-ld"
 import { getAllEvents } from "@/lib/db/queries"
 import { bucketEvents } from "@/lib/event-bucket"
+import { SITE_URL, ARTIST_NAME, absoluteUrl } from "@/lib/site"
+import type { Event } from "@/lib/types"
 
 export const metadata: Metadata = {
-  title: "Events",
-  description: "Upcoming and past shows featuring work by Jamie Kendrioski.",
+  title: "Events — Shows & Openings",
+  description:
+    "Upcoming and past exhibitions, gallery shows, and openings featuring paintings by Boston artist Jamie Kendrioski.",
+  alternates: { canonical: "/events" },
+  openGraph: {
+    title: "Events — Jamie Kendrioski",
+    description:
+      "Shows and openings featuring paintings by Boston artist Jamie Kendrioski.",
+    url: "/events",
+  },
 }
 
 export const dynamic = "force-dynamic"
 
+function eventJsonLd(event: Event) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    startDate: event.starts_at,
+    ...(event.ends_at ? { endDate: event.ends_at } : {}),
+    eventStatus:
+      event.status === "cancelled"
+        ? "https://schema.org/EventCancelled"
+        : "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    ...(event.description ? { description: event.description } : {}),
+    ...(event.link ? { url: event.link } : {}),
+    ...(event.location
+      ? { location: { "@type": "Place", name: event.location } }
+      : {}),
+    performer: { "@type": "Person", name: ARTIST_NAME, url: SITE_URL },
+    organizer: { "@type": "Person", name: ARTIST_NAME, url: SITE_URL },
+    image: event.image_url ? [event.image_url] : [absoluteUrl("/og-image.png")],
+  }
+}
+
 export default async function EventsPage() {
   const all = await getAllEvents()
   const { current, upcoming, past } = bucketEvents(all)
+
+  const eventsForSchema = [...current, ...upcoming, ...past]
 
   const isEmpty =
     current.length === 0 && upcoming.length === 0 && past.length === 0
 
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-10 py-20 md:py-32">
+      {eventsForSchema.length > 0 && (
+        <JsonLd data={eventsForSchema.map(eventJsonLd)} />
+      )}
       <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-3">
         Events
       </p>

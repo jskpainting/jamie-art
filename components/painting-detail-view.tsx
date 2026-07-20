@@ -10,6 +10,7 @@ import { InquireDialog } from "@/components/inquire-dialog"
 import { PrintRequestDialog } from "@/components/print-request-dialog"
 import { ZoomOverlay } from "@/components/zoom-overlay"
 import { formatPrice, cn } from "@/lib/utils"
+import { paintingAlt } from "@/lib/site"
 import type { PaintingWithImages, PaintingStatus, Settings } from "@/lib/types"
 
 const statusLabel: Record<PaintingStatus, string> = {
@@ -84,7 +85,7 @@ export function PaintingDetailView({
               >
                 <Image
                   src={painting.primary_image_url}
-                  alt={painting.title}
+                  alt={paintingAlt(painting.title)}
                   width={painting.width ?? 1200}
                   height={painting.height ?? 900}
                   sizes="(max-width: 1024px) 100vw, 66vw"
@@ -119,7 +120,7 @@ export function PaintingDetailView({
                 >
                   <Image
                     src={img.url}
-                    alt={img.alt ?? painting.title}
+                    alt={paintingAlt(painting.title, img.alt)}
                     fill
                     sizes="20vw"
                     quality={85}

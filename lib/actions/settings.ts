@@ -6,6 +6,7 @@ import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { SettingsSchema, type SettingsInput } from "@/lib/schemas"
+import { isSchemaSetupError, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -88,6 +89,7 @@ export async function updateSiteCopy(input: SiteCopyInput) {
     revalidatePath("/admin/settings")
     return { ok: true }
   } catch (e) {
+    if (isSchemaSetupError(e)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
     return { ok: false, error: e instanceof Error ? e.message : "Failed to update site copy" }
   }
 }

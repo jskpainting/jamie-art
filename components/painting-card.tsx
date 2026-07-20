@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { paintingAlt } from "@/lib/site"
 import type { Painting } from "@/lib/types"
 
 interface PaintingCardProps {
@@ -18,7 +19,7 @@ export function PaintingCard({ painting, onClick }: PaintingCardProps) {
       {painting.primary_image_url ? (
         <Image
           src={painting.primary_image_url}
-          alt={painting.title}
+          alt={paintingAlt(painting.title)}
           fill
           sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
           className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"

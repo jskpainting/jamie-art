@@ -3,24 +3,55 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { PaintingDetailView } from "@/components/painting-detail-view"
+import { JsonLd } from "@/components/json-ld"
 import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings } from "@/lib/db/queries"
+import { SITE_URL, ARTIST_NAME, paintingAlt } from "@/lib/site"
+import { parsePhysical } from "@/lib/mosaic-layout"
+import type { PaintingWithImages } from "@/lib/types"
 
 type Props = {
   params: Promise<{ section: string; slug: string }>
+}
+
+/** Build a concise, keyword-aware meta description for a painting. */
+function paintingDescription(painting: PaintingWithImages): string {
+  if (painting.story && painting.story.trim()) {
+    const clean = painting.story.replace(/\s+/g, " ").trim()
+    return clean.length > 160 ? `${clean.slice(0, 157)}…` : clean
+  }
+  const bits = [painting.medium, painting.dimensions].filter(Boolean).join(", ")
+  return `${painting.title} — original ${bits ? `${bits} ` : ""}painting by ${ARTIST_NAME}, Boston.`
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { section, slug } = await params
   const painting = await getPaintingBySlug(section, slug)
   if (!painting) return { title: "Not Found" }
+
+  const title = `${painting.title} by ${ARTIST_NAME}`
+  const description = paintingDescription(painting)
+  const canonical = `/portfolio/${section}/${slug}`
+  const image = painting.primary_image_url
+
   return {
-    title: painting.title,
-    description: painting.story
-      ? painting.story.slice(0, 160)
-      : `${painting.title} — original painting by Jamie Kendrioski`,
-    openGraph: painting.primary_image_url
-      ? { images: [{ url: painting.primary_image_url }] }
-      : undefined,
+    title: { absolute: title },
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: "article",
+      title,
+      description,
+      url: canonical,
+      images: image
+        ? [{ url: image, alt: paintingAlt(painting.title) }]
+        : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
   }
 }
 
@@ -47,8 +78,64 @@ export default async function PaintingPage({ params }: Props) {
   const relatedHeading =
     relatedSource === "tags" ? "Related work" : `More from ${section.title}`
 
+  const dims = parsePhysical(painting.dimensions)
+  const availabilityMap: Record<string, string | undefined> = {
+    available: "https://schema.org/InStock",
+    sold: "https://schema.org/SoldOut",
+    reserved: "https://schema.org/LimitedAvailability",
+    nfs: undefined,
+  }
+
+  const artworkLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "VisualArtwork",
+    name: painting.title,
+    url: paintingUrl,
+    creator: { "@type": "Person", name: ARTIST_NAME, url: SITE_URL },
+    artform: "Painting",
+    description: paintingDescription(painting),
+    ...(painting.primary_image_url ? { image: painting.primary_image_url } : {}),
+    ...(painting.medium ? { artMedium: painting.medium } : {}),
+    ...(painting.year ? { dateCreated: String(painting.year) } : {}),
+    ...(dims
+      ? {
+          width: { "@type": "QuantitativeValue", value: dims[0], unitCode: "INH" },
+          height: { "@type": "QuantitativeValue", value: dims[1], unitCode: "INH" },
+        }
+      : {}),
+  }
+
+  // Add a purchasable Offer when a price and a sellable status are known.
+  if (painting.price_cents != null && availabilityMap[painting.status]) {
+    artworkLd.offers = {
+      "@type": "Offer",
+      price: (painting.price_cents / 100).toFixed(2),
+      priceCurrency: "USD",
+      availability: availabilityMap[painting.status],
+      url: paintingUrl,
+      seller: { "@type": "Person", name: ARTIST_NAME },
+    }
+  }
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Portfolio", item: `${SITE_URL}/portfolio` },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: section.title,
+        item: `${SITE_URL}/portfolio/${sectionSlug}`,
+      },
+      { "@type": "ListItem", position: 4, name: painting.title, item: paintingUrl },
+    ],
+  }
+
   return (
     <>
+      <JsonLd data={[artworkLd, breadcrumbLd]} />
       <PaintingDetailView
         painting={painting}
         sectionSlug={sectionSlug}
@@ -74,7 +161,7 @@ export default async function PaintingPage({ params }: Props) {
             {related.map((p) => (
               <Link
                 key={p.id}
-                href={`/portfolio/${sectionSlug}/${p.slug}`}
+                href={`/portfolio/${p.home_section_slug || sectionSlug}/${p.slug}`}
                 className="group block"
                 aria-label={p.title}
               >
@@ -82,7 +169,7 @@ export default async function PaintingPage({ params }: Props) {
                   {p.primary_image_url && (
                     <Image
                       src={p.primary_image_url}
-                      alt={p.title}
+                      alt={paintingAlt(p.title)}
                       fill
                       sizes="(max-width: 640px) 50vw, 25vw"
                       quality={85}

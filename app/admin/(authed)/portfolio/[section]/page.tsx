@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
 import { getSectionBySlug, getPaintingsWithImagesForSection, getSections } from "@/lib/db/queries"
+import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { PaintingListClient } from "./painting-list-client"
 
 interface Props {
@@ -20,9 +21,10 @@ export default async function SectionDetailPage({ params, searchParams }: Props)
   const section = await getSectionBySlug(slug)
   if (!section) notFound()
 
-  const [paintings, sections] = await Promise.all([
+  const [paintings, sections, capabilities] = await Promise.all([
     getPaintingsWithImagesForSection(section.id),
     getSections(),
+    getSchemaCapabilities(),
   ])
 
   return (
@@ -37,6 +39,7 @@ export default async function SectionDetailPage({ params, searchParams }: Props)
         initialPaintings={paintings}
         initialAddOpen={sp.add === "1"}
         sections={sections}
+        showAlsoShowIn={capabilities.paintingSections}
       />
     </div>
   )
