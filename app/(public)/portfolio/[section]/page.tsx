@@ -17,9 +17,11 @@ function sectionDescription(title: string, custom: string | null): string {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { section } = await params
-  if (section === "uncategorized") return { title: "Not Found" }
+  // Call notFound() here (not just in the component) so Next commits a real 404
+  // status before streaming — otherwise unknown URLs are soft-404s (200 + 404 body).
+  if (section === "uncategorized") notFound()
   const data = await getSectionBySlug(section)
-  if (!data) return { title: "Not Found" }
+  if (!data) notFound()
   const description = sectionDescription(data.title, data.description)
   return {
     title: `${data.title} — Paintings`,

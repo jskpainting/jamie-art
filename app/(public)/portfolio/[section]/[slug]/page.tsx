@@ -26,7 +26,8 @@ function paintingDescription(painting: PaintingWithImages): string {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { section, slug } = await params
   const painting = await getPaintingBySlug(section, slug)
-  if (!painting) return { title: "Not Found" }
+  // notFound() in metadata → real 404 status (avoids a soft-404: 200 + 404 body).
+  if (!painting) notFound()
 
   const title = `${painting.title} by ${ARTIST_NAME}`
   const description = paintingDescription(painting)
