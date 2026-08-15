@@ -55,7 +55,7 @@ export default async function CommissionPage({ searchParams }: Props) {
         </h1>
         <p className="text-base md:text-lg leading-relaxed text-muted-foreground mb-12 whitespace-pre-line">
           {settings?.commission_intro?.trim() ||
-            "Jamie takes a limited number of commissions each year. Tell her what you have in mind — size, subject, palette, where it’ll live — and she’ll be in touch."}
+            "Jamie takes a limited number of commissions each year. Tell him what you have in mind — size, subject, palette, where it’ll live — and he’ll be in touch."}
         </p>
 
         <CommissionFormLoader
