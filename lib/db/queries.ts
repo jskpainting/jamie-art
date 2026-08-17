@@ -36,7 +36,7 @@ export async function getSections(): Promise<SectionWithCount[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("sections")
-      .select("*, paintings(count)")
+      .select("*, paintings!paintings_section_id_fkey(count)")
       .order("sort_order")
     if (error) throw error
     return (data ?? []).map((s) => ({
@@ -55,7 +55,7 @@ export async function getPublicSections(): Promise<SectionWithCount[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("sections")
-      .select("*, paintings(count)")
+      .select("*, paintings!paintings_section_id_fkey(count)")
       .neq("slug", "uncategorized")
       .order("sort_order")
     if (error) throw error

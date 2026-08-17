@@ -69,7 +69,7 @@ export default async function PaintingPage({ params }: Props) {
 
   const arModelUrl = await getArModelUrl(painting.id)
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jamiekendrioski.com"
+  const siteUrl = SITE_URL
   const paintingUrl = `${siteUrl}/portfolio/${sectionSlug}/${slug}`
 
   const { paintings: related, source: relatedSource } = await getRelatedPaintings(

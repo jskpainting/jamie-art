@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { getUser } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { SITE_URL } from "@/lib/site"
 import {
   renderNewsletterHtml,
   renderNewsletterPlainText,
@@ -85,8 +86,9 @@ export async function sendNewsletter(input: {
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY)
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://jamie-art.vercel.app"
+  // Single canonical origin — a stale fallback here sends unsubscribe links to
+  // the wrong domain, which breaks opt-out and hurts deliverability.
+  const siteUrl = SITE_URL
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"
 
