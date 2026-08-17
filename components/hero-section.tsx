@@ -5,6 +5,7 @@ import Image from "next/image"
 import { motion, useReducedMotion, type Transition } from "framer-motion"
 import { buttonVariants } from "@/components/ui/button"
 import { paintingAlt } from "@/lib/site"
+import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 import type { Painting } from "@/lib/types"
 
 interface HeroSectionProps {
@@ -75,7 +76,7 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: Hero
           transition={transition}
           className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-6"
         >
-          {tagline || "Painter · Boston · Oils & Acrylics"}
+          {tagline || SITE_COPY_DEFAULTS.tagline_hero}
         </motion.p>
 
         <motion.h1

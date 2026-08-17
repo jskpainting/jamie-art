@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import { CommissionFormLoader } from "@/components/commission-form-loader"
 import { getSettings } from "@/lib/db/queries"
+import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 
 export const metadata: Metadata = {
   title: "Commissions — Custom Paintings",
@@ -54,8 +55,7 @@ export default async function CommissionPage({ searchParams }: Props) {
           Commissions
         </h1>
         <p className="text-base md:text-lg leading-relaxed text-muted-foreground mb-12 whitespace-pre-line">
-          {settings?.commission_intro?.trim() ||
-            "Jamie takes a limited number of commissions each year. Tell him what you have in mind — size, subject, palette, where it’ll live — and he’ll be in touch."}
+          {settings?.commission_intro?.trim() || SITE_COPY_DEFAULTS.commission_intro}
         </p>
 
         <CommissionFormLoader

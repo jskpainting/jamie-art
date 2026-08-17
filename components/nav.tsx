@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
+import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 
 const navLinks = [
   { href: "/portfolio", label: "Portfolio" },
@@ -151,7 +152,7 @@ export function Nav({ navSettings }: NavProps) {
                   Jamie Kendrioski
                 </Link>
                 <p className="mt-2 text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-                  {navSettings?.tagline || "Painter · Boston"}
+                  {navSettings?.tagline || SITE_COPY_DEFAULTS.tagline_nav}
                 </p>
               </div>
 

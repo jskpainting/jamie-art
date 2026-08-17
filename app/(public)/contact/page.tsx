@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { ContactForm } from "@/components/contact-form"
 import { NewsletterForm } from "@/components/newsletter-form"
 import { getSettings } from "@/lib/db/queries"
+import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -48,8 +49,7 @@ export default async function ContactPage() {
         {/* Contact form */}
         <div>
           <p className="text-base text-muted-foreground mb-8 leading-relaxed whitespace-pre-line">
-            {settings?.contact_intro?.trim() ||
-              "Have a question about a painting, want to discuss a commission, or just want to say hello? Send a note and Jamie will reply within a few days."}
+            {settings?.contact_intro?.trim() || SITE_COPY_DEFAULTS.contact_intro}
           </p>
           <ContactForm />
         </div>
