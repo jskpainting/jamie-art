@@ -12,7 +12,7 @@ import {
   Users,
   Mail,
   Menu,
-  FlaskConical,
+  LayoutGrid,
   Send,
   Settings,
 } from "lucide-react"
@@ -32,18 +32,22 @@ const navItems = [
   { href: "/admin/contacts", label: "Contacts", Icon: Users, exact: false },
   { href: "/admin/inquiries", label: "Inquiries", Icon: Mail, exact: false },
   { href: "/admin/newsletters", label: "Newsletters", Icon: Send, exact: false },
+  {
+    href: "/admin/layout-preview",
+    label: "Gallery layout",
+    Icon: LayoutGrid,
+    exact: false,
+  },
   { href: "/admin/settings", label: "Settings", Icon: Settings, exact: false },
 ]
 
 // Temporary dev tools — removed once their purpose is served
-const devNavItems = [
-  {
-    href: "/admin/layout-preview",
-    label: "Layout Preview",
-    Icon: FlaskConical,
-    exact: false,
-  },
-]
+const devNavItems: {
+  href: string
+  label: string
+  Icon: typeof LayoutGrid
+  exact: boolean
+}[] = []
 
 function NavLink({
   href,
@@ -111,9 +115,11 @@ function SidebarContent({ user, onNavClick }: SidebarContentProps) {
           ))}
         </div>
 
-        <p className="px-3 pt-6 pb-2 text-xs uppercase tracking-[0.1em] font-medium text-muted-foreground">
-          Dev
-        </p>
+        {devNavItems.length > 0 && (
+          <p className="px-3 pt-6 pb-2 text-xs uppercase tracking-[0.1em] font-medium text-muted-foreground">
+            Dev
+          </p>
+        )}
         <div className="space-y-0.5">
           {devNavItems.map(({ href, label, Icon, exact }) => (
             <NavLink
