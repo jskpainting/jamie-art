@@ -18,9 +18,10 @@ import type { SectionWithCount } from "@/lib/types"
 
 interface SectionsClientProps {
   initialSections: SectionWithCount[]
+  showFocal?: boolean
 }
 
-export function SectionsClient({ initialSections }: SectionsClientProps) {
+export function SectionsClient({ initialSections, showFocal }: SectionsClientProps) {
   const [sections, setOptimistic] = useOptimistic(initialSections)
   const [, startTransition] = useTransition()
   const router = useRouter()
@@ -166,12 +167,13 @@ export function SectionsClient({ initialSections }: SectionsClientProps) {
         }}
       />
 
-      <SectionFormDialog open={addOpen} onOpenChange={setAddOpen} />
+      <SectionFormDialog open={addOpen} onOpenChange={setAddOpen} showFocal={showFocal} />
 
       <SectionFormDialog
         open={!!editSection}
         onOpenChange={(open) => { if (!open) setEditSection(null) }}
         section={editSection ?? undefined}
+        showFocal={showFocal}
       />
     </div>
   )

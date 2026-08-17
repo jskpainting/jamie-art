@@ -11,8 +11,9 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { section } = await params
-  return { title: `${section} · Portfolio · Admin · Jamie Kendrioski` }
+  const { section: slug } = await params
+  const section = await getSectionBySlug(slug)
+  return { title: `${section?.title ?? slug} · Portfolio · Admin · Jamie Kendrioski` }
 }
 
 export default async function SectionDetailPage({ params, searchParams }: Props) {

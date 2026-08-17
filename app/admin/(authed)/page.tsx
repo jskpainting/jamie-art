@@ -70,7 +70,7 @@ export default async function DashboardPage() {
         {[
           { label: "Paintings", value: paintings },
           { label: "Events", value: events },
-          { label: "Inquiries", value: inquiries },
+          { label: "New inquiries", value: inquiries },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-border bg-card p-6">
             <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">

@@ -31,12 +31,22 @@ export async function createEvent(input: EventWriteInput) {
 
   try {
     const supabase = await db()
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("events")
       .insert(parsed.data)
       .select("id")
       .single()
-    if (error) throw error
+    if (error && isSchemaSetupError(error)) {
+      const { image_focal_x: _fx, image_focal_y: _fy, ...withoutFocal } = parsed.data
+      void _fx
+      void _fy
+      ;({ data, error } = await supabase
+        .from("events")
+        .insert(withoutFocal)
+        .select("id")
+        .single())
+    }
+    if (error || !data) throw error ?? new Error("Failed to create event")
     revalidateEvents()
     return { ok: true, data: { id: data.id } }
   } catch (e) {
@@ -57,10 +67,16 @@ export async function updateEvent(id: string, input: EventWriteInput) {
 
   try {
     const supabase = await db()
-    const { error } = await supabase
+    let { error } = await supabase
       .from("events")
       .update(parsed.data)
       .eq("id", id)
+    if (error && isSchemaSetupError(error)) {
+      const { image_focal_x: _fx, image_focal_y: _fy, ...withoutFocal } = parsed.data
+      void _fx
+      void _fy
+      ;({ error } = await supabase.from("events").update(withoutFocal).eq("id", id))
+    }
     if (error) throw error
     revalidateEvents()
     return { ok: true }

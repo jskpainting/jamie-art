@@ -28,6 +28,8 @@ export const SectionWriteSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens only"),
   description: z.string().nullable().optional(),
   cover_image_url: z.string().nullable().optional(),
+  cover_focal_x: FocalSchema.optional(),
+  cover_focal_y: FocalSchema.optional(),
 })
 
 export type SectionWriteInput = z.infer<typeof SectionWriteSchema>
@@ -87,6 +89,8 @@ export const EventWriteSchema = z.object({
     }),
   image_url: z.string().nullable().optional(),
   status: z.enum(["upcoming", "current", "past", "cancelled"]).default("upcoming"),
+  image_focal_x: FocalSchema.optional(),
+  image_focal_y: FocalSchema.optional(),
 })
 
 export type EventWriteInput = z.infer<typeof EventWriteSchema>

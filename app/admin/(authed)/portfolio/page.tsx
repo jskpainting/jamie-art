@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
 import { getSections } from "@/lib/db/queries"
+import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { SectionsClient } from "./sections-client"
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function PortfolioAdminPage() {
-  const sections = await getSections()
+  const [sections, capabilities] = await Promise.all([getSections(), getSchemaCapabilities()])
 
   return (
     <div>
@@ -17,7 +18,7 @@ export default async function PortfolioAdminPage() {
         title="Portfolio"
         description="Manage paintings across all sections."
       />
-      <SectionsClient initialSections={sections} />
+      <SectionsClient initialSections={sections} showFocal={capabilities.focalPoints} />
     </div>
   )
 }

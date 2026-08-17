@@ -28,7 +28,14 @@ export default async function EventsAdminPage({
         title="Events"
         description="Manage upcoming and past shows."
       />
-      <EventsClient current={current} upcoming={upcoming} past={past} allowCurrent={capabilities.eventCurrentStatus} initialAddOpen={params.add === "1"} />
+      <EventsClient
+        current={current}
+        upcoming={upcoming}
+        past={past}
+        allowCurrent={capabilities.eventCurrentStatus}
+        showFocal={capabilities.focalPoints}
+        initialAddOpen={params.add === "1"}
+      />
     </div>
   )
 }

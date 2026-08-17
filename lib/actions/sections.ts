@@ -8,6 +8,7 @@ import {
   SectionWriteSchema,
   type SectionWriteInput,
 } from "@/lib/schemas"
+import { isSchemaSetupError } from "@/lib/schema-capabilities"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -29,13 +30,23 @@ export async function createSection(input: SectionWriteInput) {
 
   try {
     const supabase = await db()
-    const { error } = await supabase.from("sections").insert({
+    const payload: Record<string, unknown> = {
       title: parsed.data.title,
       slug: parsed.data.slug,
       description: parsed.data.description ?? null,
       cover_image_url: parsed.data.cover_image_url ?? null,
       sort_order: 0,
-    })
+    }
+    if (parsed.data.cover_focal_x !== undefined) payload.cover_focal_x = parsed.data.cover_focal_x
+    if (parsed.data.cover_focal_y !== undefined) payload.cover_focal_y = parsed.data.cover_focal_y
+
+    let { error } = await supabase.from("sections").insert(payload)
+    if (error && isSchemaSetupError(error)) {
+      const { cover_focal_x: _fx, cover_focal_y: _fy, ...withoutFocal } = payload
+      void _fx
+      void _fy
+      ;({ error } = await supabase.from("sections").insert(withoutFocal))
+    }
     if (error) {
       if (error.code === "23505") {
         return { ok: false as const, error: "Slug already in use — choose a different slug" }
@@ -74,15 +85,22 @@ export async function updateSection(id: string, input: SectionWriteInput) {
       return { ok: false as const, error: "The Uncategorized section slug cannot be changed" }
     }
 
-    const { error } = await supabase
-      .from("sections")
-      .update({
-        title: parsed.data.title,
-        slug: parsed.data.slug,
-        description: parsed.data.description ?? null,
-        cover_image_url: parsed.data.cover_image_url ?? null,
-      })
-      .eq("id", id)
+    const payload: Record<string, unknown> = {
+      title: parsed.data.title,
+      slug: parsed.data.slug,
+      description: parsed.data.description ?? null,
+      cover_image_url: parsed.data.cover_image_url ?? null,
+    }
+    if (parsed.data.cover_focal_x !== undefined) payload.cover_focal_x = parsed.data.cover_focal_x
+    if (parsed.data.cover_focal_y !== undefined) payload.cover_focal_y = parsed.data.cover_focal_y
+
+    let { error } = await supabase.from("sections").update(payload).eq("id", id)
+    if (error && isSchemaSetupError(error)) {
+      const { cover_focal_x: _fx, cover_focal_y: _fy, ...withoutFocal } = payload
+      void _fx
+      void _fy
+      ;({ error } = await supabase.from("sections").update(withoutFocal).eq("id", id))
+    }
     if (error) {
       if (error.code === "23505") {
         return { ok: false as const, error: "Slug already in use — choose a different slug" }

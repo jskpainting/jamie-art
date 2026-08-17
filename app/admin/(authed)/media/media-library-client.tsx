@@ -63,6 +63,7 @@ export function MediaLibraryClient() {
       {/* Detail / delete dialog */}
       {selected && (
         <MediaDetailDialog
+          key={selected.path}
           item={selected}
           onClose={() => setSelected(null)}
           onDeleted={() => {
@@ -84,16 +85,24 @@ function MediaDetailDialog({
   onClose: () => void
   onDeleted: () => void
 }) {
-  const [usage, setUsage] = useState<MediaUsage[] | null>(null)
-  const [loadingUsage, setLoadingUsage] = useState(true)
+  const [usageState, setUsageState] = useState<"loading" | "ok" | "error">("loading")
+  const [usage, setUsage] = useState<MediaUsage[]>([])
 
   useEffect(() => {
     let cancelled = false
-    getMediaUsage(item.url).then((res) => {
-      if (cancelled) return
-      setLoadingUsage(false)
-      if (res.ok) setUsage(res.data)
-    })
+    getMediaUsage(item.url)
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok) {
+          setUsage(res.data)
+          setUsageState("ok")
+        } else {
+          setUsageState("error")
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUsageState("error")
+      })
     return () => {
       cancelled = true
     }
@@ -133,12 +142,17 @@ function MediaDetailDialog({
           <p className="text-xs uppercase tracking-[0.15em] font-medium text-muted-foreground">
             Used on
           </p>
-          {loadingUsage ? (
+          {usageState === "loading" ? (
             <p className="text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Checking…
             </p>
-          ) : usage && usage.length > 0 ? (
+          ) : usageState === "error" ? (
+            <p className="text-sm text-destructive">
+              Couldn&apos;t check where this image is used — delete is disabled until this
+              succeeds.
+            </p>
+          ) : usage.length > 0 ? (
             <ul className="text-sm space-y-1">
               {usage.map((u, i) => (
                 <li key={i}>
@@ -165,7 +179,7 @@ function MediaDetailDialog({
                 variant="outline"
                 size="sm"
                 className="text-destructive hover:text-destructive"
-                disabled={loadingUsage || (usage?.length ?? 0) > 0}
+                disabled={usageState !== "ok" || usage.length > 0}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
                 Delete
@@ -176,7 +190,10 @@ function MediaDetailDialog({
             destructive
             onConfirm={async () => {
               const result = await deleteMedia(item.bucket, item.path)
-              if (!result.ok) throw new Error(result.error)
+              if (!result.ok) {
+                toast.error(result.error ?? "Failed to delete image", { duration: 5000 })
+                throw new Error(result.error)
+              }
               toast.success("Image deleted", { duration: 5000 })
               onDeleted()
             }}

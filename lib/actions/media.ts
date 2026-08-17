@@ -31,11 +31,21 @@ async function db() {
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
+// Safety caps for the recursive walk — painting images live in per-section
+// folders (e.g. "abstracts/emergence.JPG"), so listing must recurse, but a
+// bounded depth + item count keeps a single admin page load fast and finite.
+const MAX_LIST_DEPTH = 2
+const MAX_ITEMS_PER_BUCKET = 1000
+
 async function listBucketFolder(
   admin: AdminClient,
   bucket: MediaBucket,
-  folder: string
+  folder: string,
+  depth = 0,
+  budget: { remaining: number } = { remaining: MAX_ITEMS_PER_BUCKET }
 ): Promise<MediaItem[]> {
+  if (budget.remaining <= 0) return []
+
   const { data, error } = await admin.storage.from(bucket).list(folder, {
     limit: 500,
     sortBy: { column: "created_at", order: "desc" },
@@ -43,11 +53,20 @@ async function listBucketFolder(
   if (error || !data) return []
 
   const items: MediaItem[] = []
+  const subfolders: string[] = []
   for (const entry of data) {
-    // Sub-folders (e.g. "crops") come back as entries with no id/metadata — skip.
-    if (!entry.id || !entry.name) continue
     if (entry.name === ".emptyFolderPlaceholder") continue
-    if (!IMAGE_EXT_RE.test(entry.name)) continue
+
+    // Supabase Storage returns folder entries with no id/metadata. Recurse
+    // into them (bounded by MAX_LIST_DEPTH) instead of skipping — painting
+    // images live under per-section prefixes like "abstracts/emergence.JPG".
+    if (!entry.id) {
+      if (depth < MAX_LIST_DEPTH) subfolders.push(entry.name)
+      continue
+    }
+
+    if (!entry.name || !IMAGE_EXT_RE.test(entry.name)) continue
+    if (budget.remaining <= 0) break
 
     const path = folder ? `${folder}/${entry.name}` : entry.name
     const {
@@ -60,9 +79,18 @@ async function listBucketFolder(
       url: publicUrl,
       size: entry.metadata?.size ?? 0,
       createdAt: entry.created_at ?? null,
-      isCrop: folder === "crops",
+      isCrop: folder === "crops" || folder.split("/").pop() === "crops",
     })
+    budget.remaining--
   }
+
+  for (const sub of subfolders) {
+    if (budget.remaining <= 0) break
+    const subPath = folder ? `${folder}/${sub}` : sub
+    const subItems = await listBucketFolder(admin, bucket, subPath, depth + 1, budget)
+    items.push(...subItems)
+  }
+
   return items
 }
 
@@ -81,10 +109,7 @@ export async function listMedia(
   try {
     const admin = createAdminClient()
     const results = await Promise.all(
-      buckets.flatMap((b) => [
-        listBucketFolder(admin, b, ""),
-        listBucketFolder(admin, b, "crops"),
-      ])
+      buckets.map((b) => listBucketFolder(admin, b, ""))
     )
     const all = results.flat().sort((a, b) => {
       const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0

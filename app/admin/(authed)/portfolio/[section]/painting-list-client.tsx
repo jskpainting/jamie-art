@@ -359,18 +359,18 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
           </span>
 
           <div className="flex items-center gap-1 shrink-0">
-            {/* Quick move to another gallery (Dialog — see note above) */}
-            {otherSections.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-foreground/60 hover:text-foreground"
-                aria-label="Move to another gallery"
-                onClick={() => setMoveOpen(true)}
-              >
-                <FolderInput className="h-3.5 w-3.5" />
-              </Button>
-            )}
+            {/* Quick move to another gallery (Dialog — see note above). Always
+                rendered, even with no other galleries — the dialog explains
+                why in that case rather than the feature silently vanishing. */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-foreground/60 hover:text-foreground"
+              aria-label="Move to another gallery"
+              onClick={() => setMoveOpen(true)}
+            >
+              <FolderInput className="h-3.5 w-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -412,21 +412,30 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
             <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
               Move to another gallery
             </p>
-            <p className="text-xs text-muted-foreground mb-2">
-              Moves it out of {currentSectionTitle} and into the one you pick.
-            </p>
-            {otherSections.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  setMoveOpen(false)
-                  onMove(s.id)
-                }}
-                className="w-full text-left text-sm px-3 py-2 rounded-md border border-transparent hover:bg-muted hover:border-border transition-colors"
-              >
-                {s.title}
-              </button>
-            ))}
+            {otherSections.length > 0 ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Moves it out of {currentSectionTitle} and into the one you pick.
+                </p>
+                {otherSections.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setMoveOpen(false)
+                      onMove(s.id)
+                    }}
+                    className="w-full text-left text-sm px-3 py-2 rounded-md border border-transparent hover:bg-muted hover:border-border transition-colors"
+                  >
+                    {s.title}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                There are no other galleries yet — add another section under
+                Portfolio to move paintings between galleries.
+              </p>
+            )}
           </div>
 
           {/* Also show in — keeps it here AND adds it to others (multi-gallery) */}

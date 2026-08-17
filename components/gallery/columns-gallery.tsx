@@ -31,7 +31,7 @@ export function ColumnsGallery({ paintings, sectionSlug }: ColumnsGalleryProps) 
         Shown to relative scale
       </p>
 
-      <div className="columns-2 md:columns-3 gap-8">
+      <div className="columns-1 sm:columns-2 md:columns-3 gap-8">
         {paintings.map((p) => (
           <Link
             key={p.id}
@@ -45,7 +45,7 @@ export function ColumnsGallery({ paintings, sectionSlug }: ColumnsGalleryProps) 
                   src={p.primary_image_url}
                   alt={paintingAlt(p.title)}
                   fill
-                  sizes="(min-width: 768px) 33vw, 50vw"
+                  sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
                   quality={90}
                   className="object-cover"
                 />

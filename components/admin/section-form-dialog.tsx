@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { FormField } from "@/components/admin/form-field"
 import { CoverImagePicker } from "@/components/admin/cover-image-picker"
+import { FocalPointPicker } from "@/components/admin/focal-point-picker"
 import { slugify } from "@/lib/utils"
 import type { SectionWithCount } from "@/lib/types"
 
@@ -24,6 +25,8 @@ interface SectionFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   section?: SectionWithCount
+  /** Whether the focal-point columns migration is applied. */
+  showFocal?: boolean
 }
 
 // Inner component keyed by open+section so it remounts fresh each time the
@@ -31,9 +34,10 @@ interface SectionFormDialogProps {
 interface SectionFormInnerProps {
   section?: SectionWithCount
   onOpenChange: (open: boolean) => void
+  showFocal?: boolean
 }
 
-function SectionFormInner({ section, onOpenChange }: SectionFormInnerProps) {
+function SectionFormInner({ section, onOpenChange, showFocal }: SectionFormInnerProps) {
   const isEdit = !!section
   const isUncategorized = section?.slug === "uncategorized"
   const router = useRouter()
@@ -43,6 +47,10 @@ function SectionFormInner({ section, onOpenChange }: SectionFormInnerProps) {
   const [slugTouched, setSlugTouched] = useState(isEdit)
   const [description, setDescription] = useState(section?.description ?? "")
   const [coverUrl, setCoverUrl] = useState<string | null>(section?.cover_image_url ?? null)
+  const [focal, setFocal] = useState({
+    x: section?.cover_focal_x ?? 50,
+    y: section?.cover_focal_y ?? 50,
+  })
   const [saving, setSaving] = useState(false)
   const [slugError, setSlugError] = useState("")
 
@@ -74,6 +82,8 @@ function SectionFormInner({ section, onOpenChange }: SectionFormInnerProps) {
         slug: slug.trim(),
         description: description.trim() || null,
         cover_image_url: coverUrl,
+        cover_focal_x: focal.x,
+        cover_focal_y: focal.y,
       }
       const result = isEdit
         ? await updateSection(section!.id, input)
@@ -149,6 +159,18 @@ function SectionFormInner({ section, onOpenChange }: SectionFormInnerProps) {
             onChange={setCoverUrl}
           />
         </FormField>
+
+        {showFocal && coverUrl && (
+          <FormField label="Cover focal point">
+            <FocalPointPicker
+              key={coverUrl}
+              imageUrl={coverUrl}
+              focalX={focal.x}
+              focalY={focal.y}
+              onChange={(x, y) => setFocal({ x, y })}
+            />
+          </FormField>
+        )}
       </div>
 
       <DialogFooter>
@@ -172,6 +194,7 @@ export function SectionFormDialog({
   open,
   onOpenChange,
   section,
+  showFocal,
 }: SectionFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,6 +203,7 @@ export function SectionFormDialog({
           key={open ? (section?.id ?? "new") : "closed"}
           section={section}
           onOpenChange={onOpenChange}
+          showFocal={showFocal}
         />
       </DialogContent>
     </Dialog>

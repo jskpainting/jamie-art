@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
+import { FocalPointPicker } from "@/components/admin/focal-point-picker"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import type { Event } from "@/lib/types"
 
@@ -29,6 +30,8 @@ interface EventFormDialogProps {
   event?: Event
   /** Whether the events 'current' status migration is applied. */
   allowCurrent?: boolean
+  /** Whether the focal-point columns migration is applied. */
+  showFocal?: boolean
 }
 
 export function EventFormDialog({
@@ -36,6 +39,7 @@ export function EventFormDialog({
   onOpenChange,
   event,
   allowCurrent = false,
+  showFocal = false,
 }: EventFormDialogProps) {
   const isEdit = !!event
 
@@ -55,6 +59,10 @@ export function EventFormDialog({
   const [status, setStatus] = useState<
     "upcoming" | "current" | "past" | "cancelled"
   >(event?.status ?? "upcoming")
+  const [focal, setFocal] = useState({
+    x: event?.image_focal_x ?? 50,
+    y: event?.image_focal_y ?? 50,
+  })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -79,6 +87,8 @@ export function EventFormDialog({
         link: link || null,
         image_url,
         status: status as "upcoming" | "current" | "past" | "cancelled",
+        image_focal_x: focal.x,
+        image_focal_y: focal.y,
       }
 
       const result = isEdit
@@ -183,6 +193,18 @@ export function EventFormDialog({
               onUploadComplete={(url) => setImageUrl(url)}
             />
           </FormField>
+
+          {showFocal && image_url && (
+            <FormField label="Image focal point">
+              <FocalPointPicker
+                key={image_url}
+                imageUrl={image_url}
+                focalX={focal.x}
+                focalY={focal.y}
+                onChange={(x, y) => setFocal({ x, y })}
+              />
+            </FormField>
+          )}
         </div>
 
         <DialogFooter>

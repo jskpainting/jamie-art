@@ -78,6 +78,7 @@ export function BioForm({ bio, showFocal }: BioFormProps) {
         {showFocal && headshot_url && (
           <div className="mt-4">
             <FocalPointPicker
+              key={headshot_url}
               imageUrl={headshot_url}
               focalX={focal.x}
               focalY={focal.y}

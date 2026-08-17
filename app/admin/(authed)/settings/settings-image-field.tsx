@@ -67,6 +67,7 @@ export function SettingsImageField({
       />
       {showFocal && imageUrl && (
         <FocalPointPicker
+          key={imageUrl}
           imageUrl={imageUrl}
           focalX={focalX ?? 50}
           focalY={focalY ?? 50}

@@ -28,18 +28,33 @@ export function FocalPointPicker({ imageUrl, focalX, focalY, onChange }: FocalPo
   // once from props — this component owns the point once mounted, same
   // pattern as the rest of the admin forms (e.g. BioForm's local state).
   const [pos, setPos] = useState({ x: focalX ?? 50, y: focalY ?? 50 })
+  // Mirrors `pos` for use in event handlers / the unmount cleanup, where
+  // reading the latest value without waiting on a render is required —
+  // updated alongside every setPos call below, never during render.
+  const posRef = useRef(pos)
+  const onChangeRef = useRef(onChange)
 
-  const commit = useCallback(
-    (x: number, y: number) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => onChange(x, y), 400)
-    },
-    [onChange]
-  )
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  const commit = useCallback((x: number, y: number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null
+      onChangeRef.current(x, y)
+    }, 400)
+  }, [])
 
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      // A pending debounce means the last drag/keypress hasn't been saved
+      // yet — flush it now instead of silently discarding the edit.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+        onChangeRef.current(posRef.current.x, posRef.current.y)
+      }
     }
   }, [])
 
@@ -50,6 +65,7 @@ export function FocalPointPicker({ imageUrl, focalX, focalY, onChange }: FocalPo
       const rect = el.getBoundingClientRect()
       const x = clamp(((clientX - rect.left) / rect.width) * 100, 0, 100)
       const y = clamp(((clientY - rect.top) / rect.height) * 100, 0, 100)
+      posRef.current = { x, y }
       setPos({ x, y })
       commit(x, y)
     },
@@ -69,6 +85,12 @@ export function FocalPointPicker({ imageUrl, focalX, focalY, onChange }: FocalPo
 
   function handlePointerUp() {
     draggingRef.current = false
+    // Flush immediately on release rather than waiting out the drag debounce.
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+      onChangeRef.current(posRef.current.x, posRef.current.y)
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -80,6 +102,7 @@ export function FocalPointPicker({ imageUrl, focalX, focalY, onChange }: FocalPo
     else if (e.key === "ArrowDown") y = clamp(y + step, 0, 100)
     else return
     e.preventDefault()
+    posRef.current = { x, y }
     setPos({ x, y })
     commit(x, y)
   }
