@@ -7,92 +7,81 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { updateSiteCopy } from "@/lib/actions/settings"
-import type { Settings } from "@/lib/types"
 
-interface SiteCopyFormProps {
-  initialValues: Settings | null
+interface SiteCopyFieldFormProps {
+  /** Which settings column this field saves to. */
+  field: "tagline" | "commission_intro" | "contact_intro"
+  label: string
+  helper?: string
+  /** Current effective text — saved value if set, otherwise the built-in default. */
+  initialValue: string
+  /** The built-in default text, used by "Reset to original text". */
+  defaultText: string
+  multiline?: boolean
+  rows?: number
 }
 
-export function SiteCopyForm({ initialValues }: SiteCopyFormProps) {
-  const [tagline, setTagline] = useState(initialValues?.tagline ?? "")
-  const [commissionIntro, setCommissionIntro] = useState(
-    initialValues?.commission_intro ?? ""
-  )
-  const [contactIntro, setContactIntro] = useState(
-    initialValues?.contact_intro ?? ""
-  )
+/**
+ * One page-copy field, saved independently of every other field on the
+ * Settings page. Always pre-filled with the real, currently-shown sentence
+ * (never a blank box) — see lib/site-copy.ts.
+ */
+export function SiteCopyFieldForm({
+  field,
+  label,
+  helper,
+  initialValue,
+  defaultText,
+  multiline = false,
+  rows = 4,
+}: SiteCopyFieldFormProps) {
+  const [value, setValue] = useState(initialValue)
   const [saving, setSaving] = useState(false)
+  const id = `site-copy-${field}`
 
   async function handleSave() {
     setSaving(true)
     try {
-      const result = await updateSiteCopy({
-        tagline,
-        commission_intro: commissionIntro,
-        contact_intro: contactIntro,
-      })
+      const result = await updateSiteCopy({ [field]: value })
       if (result.ok) {
-        toast.success("Site copy saved.", { duration: 5000 })
+        toast.success("Saved.", { duration: 5000 })
       } else {
-        toast.error(result.error ?? "Failed to save site copy.", {
-          duration: 5000,
-        })
+        toast.error(result.error ?? "Failed to save.", { duration: 5000 })
       }
     } finally {
       setSaving(false)
     }
   }
 
+  function handleReset() {
+    setValue(defaultText)
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="tagline">Tagline</Label>
-        <Input
-          id="tagline"
-          placeholder="Painter · Boston"
-          value={tagline}
-          onChange={(e) => setTagline(e.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">
-          Shown under your name in the menu and hero. Leave blank to use the
-          default (&ldquo;Painter · Boston&rdquo;).
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="commission_intro">Commission page intro</Label>
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {multiline ? (
         <Textarea
-          id="commission_intro"
-          rows={3}
-          placeholder="Tell visitors how commissions work…"
-          value={commissionIntro}
-          onChange={(e) => setCommissionIntro(e.target.value)}
+          id={id}
+          rows={rows}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">
-          The paragraph under the Commission heading. Leave blank for the
-          default copy.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="contact_intro">Contact page intro</Label>
-        <Textarea
-          id="contact_intro"
-          rows={3}
-          placeholder="A friendly note above the contact form…"
-          value={contactIntro}
-          onChange={(e) => setContactIntro(e.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">
-          The paragraph above the contact form. Leave blank for the default
-          copy.
-        </p>
-      </div>
-
-      <div className="pt-1">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save site copy"}
+      ) : (
+        <Input id={id} value={value} onChange={(e) => setValue(e.target.value)} />
+      )}
+      {helper && <p className="text-xs text-muted-foreground">{helper}</p>}
+      <div className="flex items-center gap-4 pt-1">
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
+        <button
+          type="button"
+          onClick={handleReset}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+        >
+          Reset to original text
+        </button>
       </div>
     </div>
   )

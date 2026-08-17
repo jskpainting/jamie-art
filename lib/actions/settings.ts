@@ -7,6 +7,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { SettingsSchema, type SettingsInput } from "@/lib/schemas"
 import { isSchemaSetupError, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
+import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -62,12 +63,24 @@ export async function updateSiteCopy(input: SiteCopyInput) {
     return { ok: false, error: parsed.error.issues[0].message }
   }
 
-  // Normalise empty strings to null so fallbacks kick in.
+  // Maps each settings column to the default it should collapse back to null for.
+  // `tagline` backs both the nav and hero taglines — SITE_COPY_DEFAULTS.tagline_nav
+  // is the one shown in the admin editor, so it's the one we compare against.
+  const DEFAULT_BY_FIELD: Record<string, string> = {
+    tagline: SITE_COPY_DEFAULTS.tagline_nav,
+    commission_intro: SITE_COPY_DEFAULTS.commission_intro,
+    contact_intro: SITE_COPY_DEFAULTS.contact_intro,
+  }
+
+  // Normalise empty strings — and text matching the built-in default — to null
+  // so the fallback in SITE_COPY_DEFAULTS kicks in instead of storing a duplicate.
   const clean = Object.fromEntries(
-    Object.entries(parsed.data).map(([k, v]) => [
-      k,
-      typeof v === "string" && v.trim() === "" ? null : v,
-    ])
+    Object.entries(parsed.data).map(([k, v]) => {
+      if (typeof v !== "string") return [k, v]
+      const trimmed = v.trim()
+      if (trimmed === "" || trimmed === DEFAULT_BY_FIELD[k]) return [k, null]
+      return [k, v]
+    })
   )
 
   try {

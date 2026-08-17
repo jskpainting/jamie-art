@@ -31,22 +31,25 @@ export default async function AboutPage() {
         The Painter
       </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-12 lg:gap-16">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 lg:gap-20 items-start">
         {/* Profile photo — hidden entirely when no image set */}
         {profileImageUrl && (
-          <div>
-            <div className="relative aspect-square w-full max-w-sm overflow-hidden bg-muted">
+          <figure className="lg:sticky lg:top-24 max-w-sm lg:max-w-none mx-auto lg:mx-0 w-full">
+            <div className="relative aspect-[4/5] overflow-hidden bg-muted border border-border shadow-sm">
               <Image
                 src={profileImageUrl}
-                alt="Jamie Kendrioski"
+                alt="Jamie Kendrioski in the studio"
                 fill
-                sizes="(max-width: 768px) 60vw, 400px"
+                sizes="(max-width: 1024px) 384px, 40vw"
                 className="object-cover"
                 quality={90}
                 priority
               />
             </div>
-          </div>
+            <figcaption className="mt-4 text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              Jamie Kendrioski · Boston, MA
+            </figcaption>
+          </figure>
         )}
 
         {/* Bio — spans full width if no profile image */}

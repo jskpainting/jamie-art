@@ -45,11 +45,11 @@ export function BioForm({ bio }: BioFormProps) {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <FormField label="Headshot">
+      <FormField label="Headshot (portrait, 4:5)">
         <ImageUploadCropper
           bucket="headshots"
           currentImageUrl={headshot_url}
-          aspectRatio={1}
+          aspectRatio={4 / 5}
           label="Headshot"
           onUploadComplete={(url) => setHeadshot(url)}
         />

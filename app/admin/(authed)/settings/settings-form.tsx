@@ -103,7 +103,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
       {/* Newsletter from-name */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="newsletter_from_name">
-          Newsletter from-name{" "}
+          Name shown on newsletter emails{" "}
           <span className="text-muted-foreground font-normal">(optional)</span>
         </Label>
         <Input
