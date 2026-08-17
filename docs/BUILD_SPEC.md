@@ -282,7 +282,8 @@ create policy "auth all events"     on events       for all using (auth.role() =
 create policy "auth all contacts"   on contacts     for all using (auth.role() = 'authenticated');
 create policy "auth all inquiries"  on inquiries    for all using (auth.role() = 'authenticated');
 
--- Settings (single row — see also Phase 6C-6 migration for image columns)
+-- Settings (single row — see also Phase 6C-6 migration for image columns,
+-- and the focal-point + active-layout migration below)
 create table settings (
   id uuid primary key default gen_random_uuid(),
   phone text,
@@ -293,8 +294,18 @@ create table settings (
   about_image_url text,           -- profile photo on About page
   commission_image_url text,      -- 16:9 hero on Commission page
   featured_painting_id uuid references paintings(id) on delete set null, -- specific painting pinned to hero
+  home_hero_focal_x real not null default 50,   -- focal point (0-100%) into home_hero_image_url
+  home_hero_focal_y real not null default 50,
+  commission_focal_x real not null default 50,  -- focal point (0-100%) into commission_image_url
+  commission_focal_y real not null default 50,
+  active_layout text not null default 'pairs'
+    check (active_layout in ('pairs', 'mosaic', 'columns')),
   updated_at timestamptz default now()
 );
+
+-- bio.headshot_focal_x/y, sections.cover_focal_x/y, events.image_focal_x/y
+-- (real not null default 50) ship in the same migration — see
+-- supabase/migrations/20260817120000_focal_and_layout.sql
 
 -- Seed sections
 insert into sections (slug, title, sort_order) values
@@ -573,3 +584,5 @@ exactly. Use Plan Mode first — show me the file changes before executing.
 | 2026-06-12 | Smoke-test fix: Section dropdown added to `PaintingFormDialog` | Edit dialog now accepts `sections?: Section[]` and renders a `<select>` field. `activeSectionId` state initialised from `painting?.section_id ?? sectionId` prop so it reflects the painting's current section; saved as `input.section_id`. Mirrors the bulk "Move to" action. |
 | 2026-06-14 | Crop output at source pixel resolution + 4000/0.95 JPEG ceiling | `MAX_OUTPUT_PX` raised from 2400→4000; JPEG quality from 0.9→0.95; `ctx.imageSmoothingQuality = 'high'` added. Note: `react-easy-crop` v6 `croppedAreaPixels` are already in natural-pixel coordinates (computed as `croppedAreaPercentages × mediaSize.naturalWidth/Height`) — no scaleX/scaleY correction needed. `next.config.ts` now emits AVIF/WebP (`formats`), sets `minimumCacheTTL: 31536000` (Supabase URLs are immutable per upload), and extends `deviceSizes` to 3840 for retina. All public `<Image>` components updated to `quality={90}`; painting detail hero `sizes` widened to `80vw` at desktop; section gallery and headshot `sizes` aligned to spec. |
 | 2026-06-12 | Unified `ImageUploadCropper` via `react-easy-crop`; root fix for null `toBlob` | Previous `ImageCropUploader` used `flex-1` inside a `sm:h-auto` Dialog, which collapsed the crop panel to 0 px — yielding a 0×0 canvas and a null `toBlob`. Fix: crop container uses explicit `h-[60dvh] sm:h-[400px]`. Unified component replaces `ImageUpload` + `ImageCropUploader` everywhere (bio, events, painting form, section form). Supports `aspectRatio="free"` (compress-and-upload, no crop step) for painting/section cover images. Settings image fields use a thin `SettingsImageField` client wrapper so the server action can be called inside a client component (can't pass functions as props from server components). Bug A fix: `/about` now reads `bio.headshot_url ?? settings.about_image_url`; the `settings.about_image_url` input is removed from admin/settings (bio page is the canonical source). Bug C fix: event images now render in a 16:9 banner in `EventCard`. `site-images` bucket added to the `delete-upload` route allowlist. |
+| 2026-08-17 | Focal points: percentage coordinates (0–100), gated behind `schema-capabilities.focalPoints` until `20260817120000_focal_and_layout.sql` runs | `lib/focal.ts` exports `focalObjectPosition(x, y)` → CSS `object-position`; every render site reads `?? 50` so a pre-migration/null value renders as dead-center (today's behavior, unchanged). `components/admin/focal-point-picker.tsx` is a click/drag/keyboard picker with a live phone/tablet/desktop crop-preview strip, debounced ~400ms before calling the server action. Home hero + Commission image fields switched from a forced crop (`aspectRatio={3/4}` / `16/9`) to `aspectRatio="free"` — the focal picker replaces "force-crop to guess the safe zone" with "upload full photo, then mark what matters." `updateSettingImage` resets that field's focal to 50/50 whenever a *new* photo is saved (stale focal from the old photo is a trap), attempted in the same update and silently retried without the focal columns if they're not migrated yet. |
+| 2026-08-17 | Gallery layout activation: `settings.active_layout` (`pairs` \| `mosaic` \| `columns`), default `'pairs'` | Ground truth verified before building: the live portfolio already renders `PairsGallery` — the layout-preview tool's "(current)" label on mosaic was stale/wrong (fixed). Extracted `components/gallery/gallery-shared.tsx` (TILE class, Caption, Tile, aspectOf, priceOrStatus, dimsLabel, hrefFor, `useContainerWidth`) so `pairs-gallery.tsx`, new `mosaic-gallery.tsx`, and new `columns-gallery.tsx` (production versions of layout-preview's B/C) share one implementation with the admin preview — preview and live can never drift. `components/gallery/section-gallery.tsx` picks the live layout by `settings.active_layout ?? "pairs"`. Old `components/pairs-gallery.tsx` import path kept alive as a re-export. `/admin/layout-preview` now renders its three tabs through the same shared gallery components, shows a dynamic "Live now" badge instead of a hardcoded note, and gates its "Make this the site layout" button (shadcn/base-ui `AlertDialog` confirm → `updateActiveLayout` → toast with an Undo action) behind `capabilities.activeLayout`. New `components/ui/alert-dialog.tsx` built on `@base-ui/react/alert-dialog`, mirroring the existing `dialog.tsx` pattern (no new dependency — Base UI already ships it). |

@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { PairsGallery } from "@/components/pairs-gallery"
+import { SectionGallery } from "@/components/gallery/section-gallery"
 import { JsonLd } from "@/components/json-ld"
-import { getSectionBySlug, getPaintingsBySection } from "@/lib/db/queries"
+import { getSectionBySlug, getPaintingsBySection, getSettings } from "@/lib/db/queries"
 import { SITE_URL, ARTIST_NAME } from "@/lib/site"
 
 type Props = {
@@ -42,7 +42,10 @@ export default async function SectionPage({ params }: Props) {
   const section = await getSectionBySlug(sectionSlug)
   if (!section) notFound()
 
-  const paintings = await getPaintingsBySection(section.id)
+  const [paintings, settings] = await Promise.all([
+    getPaintingsBySection(section.id),
+    getSettings(),
+  ])
 
   const breadcrumbLd = {
     "@context": "https://schema.org",
@@ -86,7 +89,11 @@ export default async function SectionPage({ params }: Props) {
         )}
       </div>
 
-      <PairsGallery paintings={paintings} sectionSlug={sectionSlug} />
+      <SectionGallery
+        paintings={paintings}
+        sectionSlug={sectionSlug}
+        layout={settings?.active_layout ?? "pairs"}
+      />
     </div>
   )
 }

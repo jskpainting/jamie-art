@@ -13,6 +13,8 @@ export interface Section {
   cover_image_url: string | null
   sort_order: number
   created_at: string
+  cover_focal_x: number
+  cover_focal_y: number
 }
 
 export interface Painting {
@@ -50,6 +52,8 @@ export interface Bio {
   short_statement: string | null
   headshot_url: string | null
   updated_at: string
+  headshot_focal_x: number
+  headshot_focal_y: number
 }
 
 export interface Event {
@@ -63,6 +67,8 @@ export interface Event {
   image_url: string | null
   status: EventStatus
   created_at: string
+  image_focal_x: number
+  image_focal_y: number
 }
 
 export interface Contact {
@@ -149,6 +155,8 @@ export interface PaintingTag {
   tag_id: string
 }
 
+export type GalleryLayout = "pairs" | "mosaic" | "columns"
+
 export interface Settings {
   id: string
   phone: string | null
@@ -164,6 +172,11 @@ export interface Settings {
   commission_intro?: string | null
   contact_intro?: string | null
   updated_at: string
+  home_hero_focal_x: number
+  home_hero_focal_y: number
+  commission_focal_x: number
+  commission_focal_y: number
+  active_layout: GalleryLayout
 }
 
 export interface CommissionInquiry {

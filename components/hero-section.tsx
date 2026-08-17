@@ -6,6 +6,7 @@ import { motion, useReducedMotion, type Transition } from "framer-motion"
 import { buttonVariants } from "@/components/ui/button"
 import { paintingAlt } from "@/lib/site"
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
+import { focalObjectPosition } from "@/lib/focal"
 import type { Painting } from "@/lib/types"
 
 interface HeroSectionProps {
@@ -13,6 +14,8 @@ interface HeroSectionProps {
   bioTeaser: string | null
   heroImageUrl: string | null
   tagline?: string | null
+  /** Only set when heroImageUrl is the image being shown — fallback paintings stay centered. */
+  heroFocal?: { x: number; y: number } | null
 }
 
 const fadeUp = {
@@ -20,7 +23,7 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 }
 
-export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: HeroSectionProps) {
+export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline, heroFocal }: HeroSectionProps) {
   const shouldReduceMotion = useReducedMotion()
 
   const transition: Transition = shouldReduceMotion
@@ -28,9 +31,9 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: Hero
     : { duration: 0.4, ease: "easeOut" }
 
   return (
-    <section className="relative flex flex-col md:grid md:grid-cols-[60%_40%] min-h-[calc(100vh-4rem)]">
+    <section className="relative flex flex-col md:grid md:grid-cols-[60%_40%] min-h-[calc(100svh-4rem)]">
       {/* Image column */}
-      <div className="relative h-[60vh] md:h-auto">
+      <div className="relative h-[62svh] md:h-auto">
         {heroImageUrl || painting?.primary_image_url ? (
           <motion.div
             className="absolute inset-0"
@@ -47,6 +50,7 @@ export function HeroSection({ painting, bioTeaser, heroImageUrl, tagline }: Hero
               }
               fill
               className="object-cover"
+              style={heroImageUrl ? focalObjectPosition(heroFocal?.x, heroFocal?.y) : undefined}
               priority
               sizes="(max-width: 768px) 100vw, 60vw"
               quality={90}

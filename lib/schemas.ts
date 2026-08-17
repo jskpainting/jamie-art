@@ -1,9 +1,13 @@
 import { z } from "zod"
 
+export const FocalSchema = z.number().min(0).max(100)
+
 export const BioSchema = z.object({
   headshot_url: z.string().nullable().optional(),
   short_statement: z.string().nullable().optional(),
   body_markdown: z.string().nullable().optional(),
+  headshot_focal_x: FocalSchema.optional(),
+  headshot_focal_y: FocalSchema.optional(),
 })
 
 export type BioInput = z.infer<typeof BioSchema>
@@ -165,3 +169,5 @@ export const SettingsSchema = z.object({
 export type SettingsInput = z.infer<typeof SettingsSchema>
 // Raw form-field shape (before the instagram_handle transform runs).
 export type SettingsFormValues = z.input<typeof SettingsSchema>
+
+export const GalleryLayoutSchema = z.enum(["pairs", "mosaic", "columns"])

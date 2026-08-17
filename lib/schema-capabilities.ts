@@ -14,6 +14,10 @@ export interface SchemaCapabilities {
   siteCopy: boolean
   /** events status CHECK allows 'current' → the manual "Current show" status. */
   eventCurrentStatus: boolean
+  /** settings/bio/sections/events focal_x/focal_y columns → the focal point picker. */
+  focalPoints: boolean
+  /** settings.active_layout → the "make this the site layout" control. */
+  activeLayout: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -49,20 +53,32 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc] = await Promise.all([
+    const [ps, sc, fp, al] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
+      supabase.from("settings").select("home_hero_focal_x").limit(1),
+      supabase.from("settings").select("active_layout").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
+    const focalPoints = !fp.error
+    const activeLayout = !al.error
     return {
       paintingSections,
       siteCopy,
       // The 'current' event status ships in the same one-shot migration block as
       // painting_sections, so use that as the signal (avoids an INSERT probe).
       eventCurrentStatus: paintingSections,
+      focalPoints,
+      activeLayout,
     }
   } catch {
-    return { paintingSections: false, siteCopy: false, eventCurrentStatus: false }
+    return {
+      paintingSections: false,
+      siteCopy: false,
+      eventCurrentStatus: false,
+      focalPoints: false,
+      activeLayout: false,
+    }
   }
 }

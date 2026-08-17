@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ImageWithSkeleton } from "@/components/image-with-skeleton"
+import { focalObjectPosition } from "@/lib/focal"
 import type { Section } from "@/lib/types"
 
 const sectionColors: Record<string, string> = {
@@ -29,6 +30,7 @@ export function SectionCard({ section }: SectionCardProps) {
             fill
             sizes="(min-width: 640px) 50vw, 100vw"
             className="object-cover transition-all duration-500 group-hover:scale-[1.03] group-hover:brightness-95"
+            style={focalObjectPosition(section.cover_focal_x, section.cover_focal_y)}
           />
         ) : (
           <div

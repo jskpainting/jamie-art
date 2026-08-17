@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { updateBio } from "@/lib/actions/bio"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
+import { FocalPointPicker } from "@/components/admin/focal-point-picker"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { FormField } from "@/components/admin/form-field"
 import { Button } from "@/components/ui/button"
@@ -13,9 +14,10 @@ import type { Bio } from "@/lib/types"
 
 interface BioFormProps {
   bio: Bio | null
+  showFocal?: boolean
 }
 
-export function BioForm({ bio }: BioFormProps) {
+export function BioForm({ bio, showFocal }: BioFormProps) {
   const [headshot_url, setHeadshot] = useState<string | null>(
     bio?.headshot_url ?? null
   )
@@ -23,6 +25,10 @@ export function BioForm({ bio }: BioFormProps) {
     bio?.short_statement ?? ""
   )
   const [body_markdown, setBody] = useState(bio?.body_markdown ?? "")
+  const [focal, setFocal] = useState({
+    x: bio?.headshot_focal_x ?? 50,
+    y: bio?.headshot_focal_y ?? 50,
+  })
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -32,6 +38,8 @@ export function BioForm({ bio }: BioFormProps) {
         headshot_url,
         short_statement: short_statement || null,
         body_markdown: body_markdown || null,
+        headshot_focal_x: focal.x,
+        headshot_focal_y: focal.y,
       })
       if (!result.ok) {
         toast.error(result.error)
@@ -41,6 +49,20 @@ export function BioForm({ bio }: BioFormProps) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Focal point changes save immediately (own debounce), independent of the
+  // "Save bio" button, matching the settings image fields.
+  async function handleFocalChange(x: number, y: number) {
+    setFocal({ x, y })
+    const result = await updateBio({
+      headshot_url,
+      short_statement: short_statement || null,
+      body_markdown: body_markdown || null,
+      headshot_focal_x: x,
+      headshot_focal_y: y,
+    })
+    if (!result.ok) toast.error(result.error)
   }
 
   return (
@@ -53,6 +75,16 @@ export function BioForm({ bio }: BioFormProps) {
           label="Headshot"
           onUploadComplete={(url) => setHeadshot(url)}
         />
+        {showFocal && headshot_url && (
+          <div className="mt-4">
+            <FocalPointPicker
+              imageUrl={headshot_url}
+              focalX={focal.x}
+              focalY={focal.y}
+              onChange={handleFocalChange}
+            />
+          </div>
+        )}
       </FormField>
 
       <FormField label="Short statement">

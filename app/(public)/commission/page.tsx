@@ -3,6 +3,7 @@ import Image from "next/image"
 import { CommissionFormLoader } from "@/components/commission-form-loader"
 import { getSettings } from "@/lib/db/queries"
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
+import { focalObjectPosition } from "@/lib/focal"
 
 export const metadata: Metadata = {
   title: "Commissions — Custom Paintings",
@@ -37,6 +38,7 @@ export default async function CommissionPage({ searchParams }: Props) {
             alt="Commission"
             fill
             className="object-cover"
+            style={focalObjectPosition(settings?.commission_focal_x, settings?.commission_focal_y)}
             priority
             sizes="100vw"
             quality={90}

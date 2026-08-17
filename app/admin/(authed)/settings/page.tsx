@@ -69,11 +69,14 @@ export default async function SettingsPage() {
 
           <SettingsImageField
             label="Or upload a custom hero photo"
-            aspectRatio={3 / 4}
+            aspectRatio="free"
             currentImageUrl={settings?.home_hero_image_url ?? null}
             bucket="site-images"
             field="home_hero_image_url"
-            hintText="Shown in the home page hero. Portrait photo."
+            hintText="Upload the full photo — then click the focal point below to control what stays visible."
+            focalX={settings?.home_hero_focal_x ?? 50}
+            focalY={settings?.home_hero_focal_y ?? 50}
+            showFocal={capabilities.focalPoints}
           />
         </PageCard>
 
@@ -94,11 +97,14 @@ export default async function SettingsPage() {
 
           <SettingsImageField
             label="Photo at the top of the page"
-            aspectRatio={16 / 9}
+            aspectRatio="free"
             currentImageUrl={settings?.commission_image_url ?? null}
             bucket="site-images"
             field="commission_image_url"
-            hintText="Shown on the Commission page. Wide photo."
+            hintText="Upload the full photo — then click the focal point below to control what stays visible."
+            focalX={settings?.commission_focal_x ?? 50}
+            focalY={settings?.commission_focal_y ?? 50}
+            showFocal={capabilities.focalPoints}
           />
         </PageCard>
 

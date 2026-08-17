@@ -34,6 +34,11 @@ export default async function HomePage() {
         bioTeaser={bio?.short_statement ?? null}
         heroImageUrl={settings?.home_hero_image_url ?? null}
         tagline={settings?.tagline ?? null}
+        heroFocal={
+          settings?.home_hero_image_url
+            ? { x: settings?.home_hero_focal_x ?? 50, y: settings?.home_hero_focal_y ?? 50 }
+            : null
+        }
       />
       <HomeEvents events={events} />
     </>

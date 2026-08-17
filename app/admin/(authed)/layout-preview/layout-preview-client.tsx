@@ -1,23 +1,40 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
-import Image from "next/image"
+import { useState, useTransition } from "react"
+import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { layoutMosaic, parsePhysical } from "@/lib/mosaic-layout"
-import { layoutPairs, PAIRS } from "@/lib/pairs-layout"
-import { formatPrice } from "@/lib/utils"
-import type { Painting, PaintingStatus } from "@/lib/types"
+import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { PairsGallery } from "@/components/gallery/pairs-gallery"
+import { MosaicGallery } from "@/components/gallery/mosaic-gallery"
+import { ColumnsGallery } from "@/components/gallery/columns-gallery"
+import { updateActiveLayout } from "@/lib/actions/settings"
+import type { GalleryLayout, Painting } from "@/lib/types"
 
-type LayoutKey = "pairs" | "mosaic" | "columns"
+// Mirrors lib/schema-capabilities.ts SCHEMA_SETUP_MESSAGE — duplicated (not
+// imported) because that module pulls in server-only Supabase clients and
+// can't be imported from a client component.
+const SCHEMA_SETUP_MESSAGE =
+  "This feature needs a quick one-time setup that hasn't run yet — everything else works normally."
 
-const layoutNotes: Record<LayoutKey, { title: string; body: string }> = {
+type PaintingInGallery = Painting & { home_section_slug?: string }
+
+const layoutNotes: Record<GalleryLayout, { title: string; body: string }> = {
   pairs: {
     title: "A · Two per row",
     body: "Max two paintings per row, each sized to its real dimensions so bigger canvases read bigger and nothing is cropped. Spacious and gallery-like; rows vary in height. Best when you want each piece to breathe.",
   },
   mosaic: {
-    title: "B · Column mosaic (current)",
+    title: "B · Column mosaic",
     body: "A fixed 4-column grid; large canvases span two columns. Densest and most structured — everything aligns to columns, no gaps. Best for browsing a lot of work at once.",
   },
   columns: {
@@ -26,234 +43,129 @@ const layoutNotes: Record<LayoutKey, { title: string; body: string }> = {
   },
 }
 
-const TILE =
-  "relative overflow-hidden bg-muted/40 ring-1 ring-foreground/[0.06] shadow-[0_2px_7px_rgba(20,18,14,0.16),0_14px_30px_-8px_rgba(20,18,14,0.26)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_4px_10px_rgba(20,18,14,0.20),0_20px_40px_-10px_rgba(20,18,14,0.32)] group-hover:brightness-[1.02]"
-
-const statusWord: Record<PaintingStatus, string> = {
-  available: "Available",
-  sold: "Sold",
-  nfs: "Not for sale",
-  reserved: "Reserved",
-}
-
-function priceOrStatus(p: Painting): string {
-  if (p.status === "available")
-    return p.price_cents ? formatPrice(p.price_cents) : "Available"
-  return statusWord[p.status]
-}
-
-function dimsLabel(dimensions: string | null): string | null {
-  const d = parsePhysical(dimensions)
-  return d ? `${d[0]} × ${d[1]} in` : null
-}
-
-function Caption({ p, w }: { p: Painting; w?: number }) {
-  const meta = [dimsLabel(p.dimensions), priceOrStatus(p)]
-    .filter(Boolean)
-    .join(" · ")
-  return (
-    <div className="mt-3" style={w ? { maxWidth: Math.round(w) } : undefined}>
-      <p className="font-serif font-semibold text-[15px] leading-tight text-foreground truncate">
-        {p.title}
-        {p.year ? `, ${p.year}` : ""}
-      </p>
-      <p className="mt-1 text-xs tracking-[0.01em] text-muted-foreground truncate">
-        {meta}
-      </p>
-    </div>
-  )
-}
-
-function aspectOf(p: Painting): number {
-  if (p.width && p.height && p.height > 0) return p.width / p.height
-  const d = parsePhysical(p.dimensions)
-  return d ? d[0] / d[1] : 4 / 3
-}
-
-function Tile({ p, w, h }: { p: Painting; w: number; h: number }) {
-  return (
-    <Link href={`/portfolio/abstracts/${p.slug}`} className="group block">
-      <div className={TILE} style={{ width: w, height: h }}>
-        {p.primary_image_url ? (
-          <Image
-            src={p.primary_image_url}
-            alt={p.title}
-            fill
-            sizes="50vw"
-            quality={90}
-            className="object-cover"
-          />
-        ) : (
-          <div className="h-full w-full bg-muted" />
-        )}
-      </div>
-      <Caption p={p} w={w} />
-    </Link>
-  )
-}
-
-// --- Layout A: max two per row, sized by real dimensions (shared framework) ---
-function PairsLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
-  const layout = layoutPairs(
-    paintings.map((p) => {
-      const d = parsePhysical(p.dimensions)
-      return {
-        physHeightInches: d ? d[1] : null,
-        aspect: aspectOf(p),
-      }
-    }),
-    W
-  )
-  const gap = PAIRS.gap[layout.bp]
-  return (
-    <div>
-      {layout.rows.map((row, ri) => (
-        <div
-          key={ri}
-          className="flex items-end justify-center"
-          style={{ columnGap: gap, marginBottom: PAIRS.rowGap }}
-        >
-          {row.tiles.map((t) => (
-            <div key={paintings[t.index].id} className="shrink-0">
-              <Tile
-                p={paintings[t.index]}
-                w={Math.round(t.w)}
-                h={Math.round(t.h)}
-              />
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// --- Layout B: column mosaic (the current live layout) -----------------------
-function MosaicLayout({ paintings, W }: { paintings: Painting[]; W: number }) {
-  const layout = useMemo(
-    () =>
-      layoutMosaic(
-        paintings.map((p) => ({
-          physical: parsePhysical(p.dimensions),
-          aspect: aspectOf(p),
-        })),
-        W
-      ),
-    [paintings, W]
-  )
-  return (
-    <div className="relative" style={{ height: layout.height }}>
-      {layout.tiles.map((tile) => {
-        const p = paintings[tile.index]
-        return (
-          <div
-            key={p.id}
-            className="absolute"
-            style={{ left: Math.round(tile.x), top: Math.round(tile.y), width: Math.round(tile.w) }}
-          >
-            <Tile p={p} w={Math.round(tile.w)} h={Math.round(tile.h)} />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// --- Layout C: uniform 3-column masonry --------------------------------------
-function ColumnsLayout({ paintings }: { paintings: Painting[] }) {
-  return (
-    <div className="columns-2 md:columns-3 gap-8">
-      {paintings.map((p) => (
-        <Link
-          key={p.id}
-          href={`/portfolio/abstracts/${p.slug}`}
-          className="group mb-8 block break-inside-avoid"
-        >
-          <div className={TILE} style={{ aspectRatio: String(aspectOf(p)) }}>
-            {p.primary_image_url && (
-              <Image
-                src={p.primary_image_url}
-                alt={p.title}
-                fill
-                sizes="(min-width: 768px) 33vw, 50vw"
-                quality={90}
-                className="object-cover"
-              />
-            )}
-          </div>
-          <Caption p={p} />
-        </Link>
-      ))}
-    </div>
-  )
+const layoutTabLabel: Record<GalleryLayout, string> = {
+  pairs: "A · Two per row",
+  mosaic: "B · Mosaic",
+  columns: "C · Columns",
 }
 
 interface LayoutPreviewClientProps {
-  paintings: Painting[]
+  paintings: PaintingInGallery[]
+  activeLayout: GalleryLayout
+  canActivate: boolean
 }
 
-export function LayoutPreviewClient({ paintings }: LayoutPreviewClientProps) {
-  const [tab, setTab] = useState<LayoutKey>("pairs")
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState<number | null>(null)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    let raf = 0
-    const apply = () => {
-      const w = el.getBoundingClientRect().width
-      if (w > 0) {
-        setWidth(w)
-        return true
-      }
-      return false
-    }
-    const pump = () => {
-      if (!apply()) raf = requestAnimationFrame(pump)
-    }
-    pump()
-    const observer = new ResizeObserver(apply)
-    observer.observe(el)
-    window.addEventListener("resize", apply)
-    return () => {
-      cancelAnimationFrame(raf)
-      observer.disconnect()
-      window.removeEventListener("resize", apply)
-    }
-  }, [])
+export function LayoutPreviewClient({
+  paintings,
+  activeLayout: initialActiveLayout,
+  canActivate,
+}: LayoutPreviewClientProps) {
+  const [tab, setTab] = useState<GalleryLayout>(initialActiveLayout)
+  const [activeLayout, setActiveLayout] = useState<GalleryLayout>(initialActiveLayout)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   const notes = layoutNotes[tab]
+  const isViewingActive = tab === activeLayout
+
+  function activate() {
+    const previous = activeLayout
+    const next = tab
+    startTransition(async () => {
+      const result = await updateActiveLayout(next)
+      if (!result.ok) {
+        toast.error(result.error ?? "Couldn't update the layout", { duration: 5000 })
+        return
+      }
+      setActiveLayout(next)
+      toast.success(`Portfolio switched to "${layoutNotes[next].title}".`, {
+        duration: 5000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            startTransition(async () => {
+              const undoResult = await updateActiveLayout(previous)
+              if (undoResult.ok) {
+                setActiveLayout(previous)
+                setTab(previous)
+                toast.success("Reverted.", { duration: 5000 })
+              } else {
+                toast.error(undoResult.error ?? "Couldn't undo", { duration: 5000 })
+              }
+            })
+          },
+        },
+      })
+    })
+  }
 
   return (
     <div className="space-y-6">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as LayoutKey)}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as GalleryLayout)}>
         <TabsList>
-          <TabsTrigger value="pairs">A · Two per row</TabsTrigger>
-          <TabsTrigger value="mosaic">B · Mosaic</TabsTrigger>
-          <TabsTrigger value="columns">C · Columns</TabsTrigger>
+          {(Object.keys(layoutTabLabel) as GalleryLayout[]).map((key) => (
+            <TabsTrigger key={key} value={key}>
+              {layoutTabLabel[key]}
+            </TabsTrigger>
+          ))}
         </TabsList>
       </Tabs>
 
       <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
-          Notes — {notes.title}
-        </p>
-        <p className="text-sm leading-relaxed text-card-foreground">{notes.body}</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
+              Notes — {notes.title}
+              {tab === activeLayout && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[10px] tracking-normal normal-case font-medium text-accent">
+                  Live now
+                </span>
+              )}
+            </p>
+            <p className="text-sm leading-relaxed text-card-foreground max-w-2xl">{notes.body}</p>
+          </div>
+
+          <div className="shrink-0">
+            {isViewingActive ? (
+              <p className="text-xs text-muted-foreground whitespace-nowrap">
+                This is what visitors see today.
+              </p>
+            ) : canActivate ? (
+              <>
+                <Button onClick={() => setConfirmOpen(true)} disabled={isPending}>
+                  Make this the site layout
+                </Button>
+                <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Switch the portfolio layout?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Your portfolio pages will switch to &quot;{notes.title}&quot;. You can
+                        switch back anytime.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={activate} disabled={isPending}>
+                        Switch layout
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground max-w-[220px] text-right">
+                {SCHEMA_SETUP_MESSAGE}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div ref={containerRef} className="w-full">
-        {tab === "columns" ? (
-          <ColumnsLayout paintings={paintings} />
-        ) : width && width > 0 ? (
-          tab === "pairs" ? (
-            <PairsLayout paintings={paintings} W={width} />
-          ) : (
-            <MosaicLayout paintings={paintings} W={width} />
-          )
-        ) : (
-          <ColumnsLayout paintings={paintings} />
-        )}
+      <div className="w-full">
+        {tab === "pairs" && <PairsGallery paintings={paintings} sectionSlug="abstracts" />}
+        {tab === "mosaic" && <MosaicGallery paintings={paintings} sectionSlug="abstracts" />}
+        {tab === "columns" && <ColumnsGallery paintings={paintings} sectionSlug="abstracts" />}
       </div>
     </div>
   )

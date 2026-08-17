@@ -143,7 +143,7 @@ export async function getPaintingsBySection(
     // Home paintings — those whose primary section is this one.
     const { data: homeData, error } = await supabase
       .from("paintings")
-      .select("*, sections(slug)")
+      .select("*, sections!paintings_section_id_fkey(slug)")
       .eq("section_id", sectionId)
     if (error) throw error
     const home = (homeData ?? []).map(attachHomeSlug)
@@ -154,7 +154,7 @@ export async function getPaintingsBySection(
     let linked: PaintingInGallery[] = []
     const { data: linkData } = await supabase
       .from("painting_sections")
-      .select("paintings(*, sections(slug))")
+      .select("paintings(*, sections!paintings_section_id_fkey(slug))")
       .eq("section_id", sectionId)
     if (linkData) {
       linked = linkData
@@ -246,7 +246,7 @@ export async function getAllPaintingsForPicker(): Promise<PaintingForPicker[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("paintings")
-      .select("*, sections(slug, title, sort_order)")
+      .select("*, sections!paintings_section_id_fkey(slug, title, sort_order)")
       .neq("status", "sold")
       .order("sort_order")
     if (error) throw error
@@ -414,7 +414,7 @@ export async function getRelatedPaintings(
 
         const { data: paintings } = await supabase
           .from("paintings")
-          .select("*, sections(slug)")
+          .select("*, sections!paintings_section_id_fkey(slug)")
           .in("id", topIds)
         // Preserve the ranked order; attach each painting's home-section slug so
         // cross-section related links resolve to the correct canonical URL.
@@ -434,7 +434,7 @@ export async function getRelatedPaintings(
       const excludeIds = [paintingId, ...tagPaintings.map((p) => p.id)]
       const { data: sectionPaintings } = await supabase
         .from("paintings")
-        .select("*, sections(slug)")
+        .select("*, sections!paintings_section_id_fkey(slug)")
         .eq("section_id", sectionId)
         .not("id", "in", `(${excludeIds.join(",")})`)
         .limit(8)
@@ -465,7 +465,7 @@ export async function getPaintingsForSitemap(): Promise<PaintingSitemapEntry[]> 
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("paintings")
-      .select("slug, created_at, sections(slug)")
+      .select("slug, created_at, sections!paintings_section_id_fkey(slug)")
       .order("created_at", { ascending: false })
     if (error) throw error
     return (data ?? [])
@@ -706,7 +706,7 @@ export async function getInquiriesWithPainting(): Promise<InquiryWithPainting[]>
     const supabase = await db()
     const { data, error } = await supabase
       .from("inquiries")
-      .select("*, paintings(title, slug, sections(slug))")
+      .select("*, paintings(title, slug, sections!paintings_section_id_fkey(slug))")
       .order("created_at", { ascending: false })
     if (error) throw error
     return (data ?? []).map((inq) => {

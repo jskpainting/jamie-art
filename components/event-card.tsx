@@ -3,6 +3,7 @@ import Image from "next/image"
 import type { Event } from "@/lib/types"
 import type { EventBucket } from "@/lib/event-bucket"
 import { cn, formatEventDateRange } from "@/lib/utils"
+import { focalObjectPosition } from "@/lib/focal"
 
 function normalizeUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url
@@ -59,6 +60,7 @@ export function EventCard({ event, variant }: EventCardProps) {
             alt={event.title}
             fill
             className="object-cover"
+            style={focalObjectPosition(event.image_focal_x, event.image_focal_y)}
             sizes="(min-width: 768px) 50vw, 100vw"
             quality={90}
           />

@@ -3,6 +3,7 @@ import Image from "next/image"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { getBio, getSettings } from "@/lib/db/queries"
+import { focalObjectPosition } from "@/lib/focal"
 
 export const metadata: Metadata = {
   title: "About the Artist",
@@ -42,6 +43,11 @@ export default async function AboutPage() {
                 fill
                 sizes="(max-width: 1024px) 384px, 40vw"
                 className="object-cover"
+                style={
+                  bio?.headshot_url === profileImageUrl
+                    ? focalObjectPosition(bio?.headshot_focal_x, bio?.headshot_focal_y)
+                    : undefined
+                }
                 quality={90}
                 priority
               />

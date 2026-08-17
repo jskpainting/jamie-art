@@ -6,7 +6,7 @@ import Cropper from "react-easy-crop"
 import type { Area } from "react-easy-crop"
 import "react-easy-crop/react-easy-crop.css"
 import Image from "next/image"
-import { Loader2, Upload } from "lucide-react"
+import { Loader2, Upload, Images } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { cn } from "@/lib/utils"
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -30,6 +31,8 @@ interface Props {
   onUploadComplete: (url: string | null) => void
   label?: string
   className?: string
+  /** Show the "Choose from library" button. Defaults to true — set false to avoid nesting (e.g. inside the library's own uploader). */
+  libraryEnabled?: boolean
 }
 
 // Compress (and optionally crop) an image data-URL to a JPEG Blob.
@@ -83,6 +86,7 @@ export function ImageUploadCropper({
   onUploadComplete,
   label = "Image",
   className,
+  libraryEnabled = true,
 }: Props) {
   const [localUrl, setLocalUrl] = useState<string | null>(currentImageUrl ?? null)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
@@ -92,17 +96,51 @@ export function ImageUploadCropper({
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // True when the image currently in the crop dialog came from the library
+  // (re-crop for this field) rather than a fresh file — uploads go into
+  // `crops/` so derivatives stay grouped with the source image.
+  const [croppingFromLibrary, setCroppingFromLibrary] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function uploadBlob(blob: Blob): Promise<string> {
+  async function uploadBlob(blob: Blob, folder?: "crops"): Promise<string> {
     const formData = new FormData()
     formData.append("file", blob, "image.jpg")
     formData.append("bucket", bucket)
+    if (folder) formData.append("folder", folder)
     const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
     const json = (await res.json()) as { url?: string; error?: string }
     if (!res.ok) throw new Error(json.error ?? "Upload failed")
     return json.url!
+  }
+
+  async function handlePick(pickedUrl: string) {
+    if (aspectRatio === "free") {
+      // Free-form field — reuse the picked image by reference, no re-upload.
+      setLocalUrl(pickedUrl)
+      onUploadComplete(pickedUrl)
+      toast.success("Image selected", { duration: 5000 })
+      return
+    }
+
+    // Fixed aspect ratio — feed the picked image into the existing crop flow.
+    // Supabase public buckets send access-control-allow-origin:*, so this
+    // fetch→blob round trip doesn't taint the canvas.
+    try {
+      const res = await fetch(pickedUrl)
+      const blob = await res.blob()
+      const dataUrl = await readAsDataUrl(new File([blob], "picked", { type: blob.type }))
+      setImageSrc(dataUrl)
+      setCrop({ x: 0, y: 0 })
+      setZoom(1)
+      setCroppedAreaPixels(null)
+      setUploadError(null)
+      setCroppingFromLibrary(true)
+      setDialogOpen(true)
+    } catch {
+      toast.error("Couldn't load that image — try another", { duration: 5000 })
+    }
   }
 
   function readAsDataUrl(file: File): Promise<string> {
@@ -142,6 +180,7 @@ export function ImageUploadCropper({
       setZoom(1)
       setCroppedAreaPixels(null)
       setUploadError(null)
+      setCroppingFromLibrary(false)
       setDialogOpen(true)
     }
   }
@@ -164,10 +203,14 @@ export function ImageUploadCropper({
     setUploadError(null)
     try {
       const blob = await compress(imageSrc, croppedAreaPixels)
-      const url = await uploadBlob(blob)
+      const url = await uploadBlob(blob, croppingFromLibrary ? "crops" : undefined)
+      // Dialog-close-before-callback: clear dialog state before the parent's
+      // callback fires, so an RSC refresh triggered by the caller's server
+      // action doesn't race with this component's own state updates.
       setLocalUrl(url)
       setDialogOpen(false)
       setImageSrc(null)
+      setCroppingFromLibrary(false)
       toast.success("Image uploaded", { duration: 5000 })
       onUploadComplete(url)
     } catch (e) {
@@ -182,6 +225,7 @@ export function ImageUploadCropper({
     setDialogOpen(false)
     setImageSrc(null)
     setUploadError(null)
+    setCroppingFromLibrary(false)
   }
 
   function openPicker() {
@@ -227,6 +271,18 @@ export function ImageUploadCropper({
               {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
               Replace
             </Button>
+            {libraryEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPickerOpen(true)}
+                disabled={uploading}
+              >
+                <Images className="h-3.5 w-3.5 mr-1" />
+                Choose from library
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -268,17 +324,30 @@ export function ImageUploadCropper({
             </p>
             <p className="text-xs">JPEG, PNG, WebP · max 20 MB</p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={openPicker}
-            disabled={uploading}
-          >
-            <Upload className="h-3.5 w-3.5 mr-1" />
-            Select file
-          </Button>
+          <div className="mt-3 flex justify-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openPicker}
+              disabled={uploading}
+            >
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              Select file
+            </Button>
+            {libraryEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPickerOpen(true)}
+                disabled={uploading}
+              >
+                <Images className="h-3.5 w-3.5 mr-1" />
+                Choose from library
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -289,6 +358,15 @@ export function ImageUploadCropper({
         className="hidden"
         onChange={onFileInputChange}
       />
+
+      {libraryEnabled && (
+        <MediaPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          initialBucket={bucket}
+          onPick={(url) => handlePick(url)}
+        />
+      )}
 
       <Dialog
         open={dialogOpen}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
 import { getBio } from "@/lib/db/queries"
+import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { BioForm } from "./bio-form"
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function BioPage() {
-  const bio = await getBio()
+  const [bio, capabilities] = await Promise.all([getBio(), getSchemaCapabilities()])
 
   return (
     <div>
@@ -17,7 +18,7 @@ export default async function BioPage() {
         title="Bio"
         description="Edit your biography, statement, and headshot."
       />
-      <BioForm bio={bio} />
+      <BioForm bio={bio} showFocal={capabilities.focalPoints} />
     </div>
   )
 }

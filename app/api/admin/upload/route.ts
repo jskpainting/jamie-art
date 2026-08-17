@@ -3,6 +3,7 @@ import { getUser } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 const ALLOWED_BUCKETS = ["paintings", "headshots", "events", "site-images"] as const
+const ALLOWED_FOLDERS = ["crops"] as const
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
 // 15 MB — comfortably above the cropper's compressed JPEG output (4000px / q0.95)
 // so a valid crop never fails the upload after the user has already cropped it.
@@ -31,12 +32,16 @@ export async function POST(request: NextRequest) {
 
   const file = formData.get("file")
   const bucket = formData.get("bucket")
+  const folder = formData.get("folder")
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 })
   }
   if (typeof bucket !== "string" || !(ALLOWED_BUCKETS as readonly string[]).includes(bucket)) {
     return NextResponse.json({ error: "Invalid bucket" }, { status: 400 })
+  }
+  if (folder !== null && (typeof folder !== "string" || !(ALLOWED_FOLDERS as readonly string[]).includes(folder))) {
+    return NextResponse.json({ error: "Invalid folder" }, { status: 400 })
   }
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: "File must be under 15 MB" }, { status: 400 })
@@ -48,7 +53,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const path = `${crypto.randomUUID()}.${extFromType(file.type as AllowedType)}`
+  const filename = `${crypto.randomUUID()}.${extFromType(file.type as AllowedType)}`
+  const path = folder ? `${folder}/${filename}` : filename
 
   const supabase = createAdminClient()
   const { error } = await supabase.storage
