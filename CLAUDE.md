@@ -51,8 +51,37 @@ All DB reads/writes go through `lib/actions/*.ts` (Next.js server actions, each 
 ### Workflow
 Plan Mode first → show plan → execute → `npm run build && npm run lint` → commit per phase.
 
+## ⚠️ Critical: verifying data-layer changes
+
+A green build proves almost nothing here. Every query helper catches its errors
+and returns `[]`, so a broken query renders an **empty page** while
+`npm run build`, `lint`, and `tsc` all pass. After ANY change to
+`lib/db/queries.ts`, `lib/actions/*`, or the DB schema, verify by counting real
+rendered content on localhost **and** production:
+
+```bash
+curl -s https://www.jamiekendrioski.com/portfolio/abstracts \
+  | grep -oE "/portfolio/[a-z-]+/[a-z0-9-]+\"" | sort -u | wc -l   # expect 50
+```
+
+Expected counts: abstracts 50 · cityscapes-seascapes 14 · florals 8 ·
+pixels-rainbows 12 (84 total).
+
+**Adding an FK/join table can silently break existing PostgREST embeds.** A
+second relationship between two tables makes implicit embeds ambiguous
+(`PGRST201`). This caused two production outages. Always pin embeds to the FK —
+`sections!paintings_section_id_fkey(...)`, `paintings!paintings_section_id_fkey(...)`
+— and grep every `.select(` touching those tables before shipping the migration.
+
+Migrations are applied **by hand** by the owner in the Supabase SQL editor. Put
+the SQL in `supabase/migrations/`, add a copy-paste block to
+`docs/RUN_THIS_SQL.md`, and gate the new UI behind `lib/schema-capabilities.ts`
+so nothing errors before it runs.
+
 ## Recent shipped phases
 
+- Focal points, image library, gallery-layout switcher, AR "View on my wall",
+  per-page Settings ("Edit your site"), About portrait redesign
 - 6D-2: Featured painting picker + mobile menu redesign
 - 6D-1: Newsletter blast tool with Resend
 - 6C-7: Threaded mailto reply for inquiries
