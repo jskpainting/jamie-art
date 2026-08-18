@@ -17,11 +17,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 interface MagicLinkFormProps {
-  error?: string
   next?: string
 }
 
-export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
+export function MagicLinkForm({ next }: MagicLinkFormProps) {
   const [sent, setSent] = useState(false)
   const [cooldown, setCooldown] = useState(0)
 
@@ -93,16 +92,6 @@ export function MagicLinkForm({ error, next }: MagicLinkFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {error && (
-        <p className="text-sm text-destructive text-center">
-          {error === "callback_failed"
-            ? "The link has expired or is invalid. Please request a new one."
-            : error === "not_allowed"
-              ? "This email isn't authorized for admin access."
-              : error}
-        </p>
-      )}
-
       {sent ? (
         <div className="flex flex-col gap-4 text-center">
           <p className="text-sm text-muted-foreground leading-relaxed">

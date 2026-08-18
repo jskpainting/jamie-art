@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ExternalLink, LogOut } from "lucide-react"
+import { ExternalLink, KeyRound, LogOut } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -52,6 +52,15 @@ export function UserMenu({ user }: UserMenuProps) {
           >
             <ExternalLink className="h-4 w-4" />
             View site
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem>
+          <Link
+            href="/admin/account"
+            className="flex items-center gap-2 w-full"
+          >
+            <KeyRound className="h-4 w-4" />
+            Account
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

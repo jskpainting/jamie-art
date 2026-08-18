@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   Send,
   Settings,
+  KeyRound,
 } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -39,6 +40,7 @@ const navItems = [
     exact: false,
   },
   { href: "/admin/settings", label: "Settings", Icon: Settings, exact: false },
+  { href: "/admin/account", label: "Account", Icon: KeyRound, exact: false },
 ]
 
 // Temporary dev tools — removed once their purpose is served

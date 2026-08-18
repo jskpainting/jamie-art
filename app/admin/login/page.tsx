@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { MagicLinkForm } from "@/components/admin/magic-link-form"
+import { LoginMethodSwitcher } from "@/components/admin/login-method-switcher"
 import { getUser } from "@/lib/supabase/auth"
 
 export const metadata: Metadata = {
@@ -36,12 +36,9 @@ export default async function LoginPage({ searchParams }: Props) {
             <h1 className="font-serif text-2xl font-light tracking-tight">
               Sign in
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Enter your email to receive a magic link.
-            </p>
           </div>
 
-          <MagicLinkForm error={error} next={next} />
+          <LoginMethodSwitcher error={error} next={next} />
         </div>
       </div>
     </div>

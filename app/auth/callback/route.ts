@@ -2,22 +2,20 @@ import { NextResponse } from "next/server"
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import { isAllowedAdmin } from "@/lib/supabase/auth"
+import { safeNext } from "@/lib/safe-next"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get("code")
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type") as EmailOtpType | null
-  const rawNext = searchParams.get("next") ?? "/admin"
-  // Open-redirect guard: allow only same-site absolute paths. Reject
-  // protocol-relative ("//evil.com") and backslash ("/\evil.com") tricks
-  // that browsers resolve to an external origin.
-  const next =
-    rawNext.startsWith("/") &&
-    !rawNext.startsWith("//") &&
-    !rawNext.startsWith("/\\")
-      ? rawNext
-      : "/admin"
+  // Password-recovery links land here with type=recovery. They're handled the
+  // same way as any other OTP below (verifyOtp), but we route the signed-in
+  // user to /admin/account by default so they land where they can actually
+  // set a new password, instead of the normal /admin dashboard.
+  const rawNext =
+    searchParams.get("next") ?? (type === "recovery" ? "/admin/account" : "/admin")
+  const next = safeNext(rawNext)
 
   const supabase = await createClient()
 
