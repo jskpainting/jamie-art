@@ -56,6 +56,8 @@ interface PaintingListClientProps {
   sections: Section[]
   /** Whether the painting_sections migration is applied (enables "Also show in"). */
   showAlsoShowIn?: boolean
+  /** Whether the story_public/story_notes migration is applied (enables the AI story writer). */
+  storyToolsEnabled?: boolean
 }
 
 // ─── Bulk action bar ─────────────────────────────────────────────────────────
@@ -490,6 +492,7 @@ export function PaintingListClient({
   initialAddOpen = false,
   sections,
   showAlsoShowIn = false,
+  storyToolsEnabled = false,
 }: PaintingListClientProps) {
   const [paintings, setOptimistic] = useOptimistic(initialPaintings)
   const [, startTransition] = useTransition()
@@ -686,6 +689,7 @@ export function PaintingListClient({
         onOpenChange={setAddOpen}
         sectionId={section.id}
         sections={sections}
+        storyToolsEnabled={storyToolsEnabled}
       />
 
       {/* Edit dialog */}
@@ -697,6 +701,7 @@ export function PaintingListClient({
           painting={editPainting}
           defaultTags={editPainting.tags}
           sections={sections}
+          storyToolsEnabled={storyToolsEnabled}
         />
       )}
     </div>

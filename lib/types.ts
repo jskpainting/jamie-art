@@ -28,6 +28,8 @@ export interface Painting {
   price_cents: number | null
   status: PaintingStatus
   story: string | null
+  story_public: boolean
+  story_notes: string | null
   primary_image_url: string | null
   sort_order: number
   created_at: string

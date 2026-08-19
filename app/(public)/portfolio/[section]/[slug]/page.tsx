@@ -15,7 +15,8 @@ type Props = {
 
 /** Build a concise, keyword-aware meta description for a painting. */
 function paintingDescription(painting: PaintingWithImages): string {
-  if (painting.story && painting.story.trim()) {
+  // A private story must never leak into meta description or JSON-LD.
+  if (painting.story && painting.story.trim() && painting.story_public !== false) {
     const clean = painting.story.replace(/\s+/g, " ").trim()
     return clean.length > 160 ? `${clean.slice(0, 157)}…` : clean
   }

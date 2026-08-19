@@ -20,6 +20,8 @@ export interface SchemaCapabilities {
   activeLayout: boolean
   /** webauthn_credentials table → passkey (Face ID / Touch ID / Windows Hello) sign-in. */
   passkeys: boolean
+  /** paintings.story_public / story_notes → the AI story writer + visibility toggle. */
+  storyTools: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -55,18 +57,20 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc, fp, al, pk] = await Promise.all([
+    const [ps, sc, fp, al, pk, st] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
       supabase.from("settings").select("home_hero_focal_x").limit(1),
       supabase.from("settings").select("active_layout").limit(1),
       supabase.from("webauthn_credentials").select("id").limit(1),
+      supabase.from("paintings").select("story_public").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
     const focalPoints = !fp.error
     const activeLayout = !al.error
     const passkeys = !pk.error
+    const storyTools = !st.error
     return {
       paintingSections,
       siteCopy,
@@ -76,6 +80,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       focalPoints,
       activeLayout,
       passkeys,
+      storyTools,
     }
   } catch {
     return {
@@ -85,6 +90,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       focalPoints: false,
       activeLayout: false,
       passkeys: false,
+      storyTools: false,
     }
   }
 }

@@ -179,8 +179,8 @@ export function PaintingDetailView({
             </dl>
           )}
 
-          {/* Story */}
-          {painting.story && (
+          {/* Story — never rendered when the owner has marked it private */}
+          {painting.story && painting.story_public !== false && (
             <div className="prose prose-sm dark:prose-invert max-w-none mt-6 text-muted-foreground leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {painting.story}

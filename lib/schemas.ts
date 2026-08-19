@@ -57,6 +57,8 @@ export const PaintingWriteSchema = z.object({
     }),
   status: z.enum(["available", "sold", "nfs", "reserved"]).default("available"),
   story: z.string().nullable().optional(),
+  story_public: z.boolean().default(true),
+  story_notes: z.string().nullable().optional(),
   primary_image_url: z.string().nullable().optional(),
   print_available: z.boolean().default(false),
   commission_available: z.boolean().default(false),

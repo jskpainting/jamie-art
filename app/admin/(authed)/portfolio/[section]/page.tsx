@@ -41,6 +41,7 @@ export default async function SectionDetailPage({ params, searchParams }: Props)
         initialAddOpen={sp.add === "1"}
         sections={sections}
         showAlsoShowIn={capabilities.paintingSections}
+        storyToolsEnabled={capabilities.storyTools}
       />
     </div>
   )

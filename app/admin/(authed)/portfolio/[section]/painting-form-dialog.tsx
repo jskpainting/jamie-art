@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 import {
   createPainting,
   updatePainting,
@@ -10,6 +10,7 @@ import {
   deletePaintingImage,
   reorderPaintingImages,
 } from "@/lib/actions/paintings"
+import { generatePaintingStory } from "@/lib/actions/ai"
 import { updatePaintingTags } from "@/lib/actions/tags"
 import {
   Dialog,
@@ -20,7 +21,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { FormField } from "@/components/admin/form-field"
+import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MultiImageUpload } from "@/components/admin/multi-image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
@@ -41,6 +44,8 @@ interface PaintingFormDialogProps {
   painting?: PaintingWithImages
   defaultTags?: string[]
   sections?: Section[]
+  /** Whether the story_public/story_notes migration is applied (enables the AI story writer). */
+  storyToolsEnabled?: boolean
 }
 
 export function PaintingFormDialog({
@@ -50,6 +55,7 @@ export function PaintingFormDialog({
   painting,
   defaultTags = [],
   sections = [],
+  storyToolsEnabled = false,
 }: PaintingFormDialogProps) {
   const isEdit = !!painting
 
@@ -68,6 +74,10 @@ export function PaintingFormDialog({
   )
   const [status, setStatus] = useState<string>(painting?.status ?? "available")
   const [story, setStory] = useState(painting?.story ?? "")
+  const [storyNotes, setStoryNotes] = useState(painting?.story_notes ?? "")
+  const [storyPublic, setStoryPublic] = useState(painting?.story_public ?? true)
+  const [storyDraft, setStoryDraft] = useState<string | null>(null)
+  const [storyGenerating, setStoryGenerating] = useState(false)
   const [primaryUrl, setPrimaryUrl] = useState<string | null>(
     painting?.primary_image_url ?? null
   )
@@ -86,6 +96,35 @@ export function PaintingFormDialog({
   function handleTitleChange(value: string) {
     setTitle(value)
     if (!slugManual) setSlug(slugify(value))
+  }
+
+  async function handleGenerateStory() {
+    if (!storyNotes.trim()) return
+    setStoryGenerating(true)
+    setStoryDraft(null)
+    try {
+      const result = await generatePaintingStory({
+        notes: storyNotes,
+        title: title || null,
+        medium: medium || null,
+        dimensions: dimensions || null,
+        year: year || null,
+      })
+      if (!result.ok) {
+        toast.error(result.error, { duration: 5000 })
+        return
+      }
+      setStoryDraft(result.story ?? null)
+    } finally {
+      setStoryGenerating(false)
+    }
+  }
+
+  function applyStoryDraft() {
+    if (storyDraft == null) return
+    setStory(storyDraft)
+    setStoryDraft(null)
+    toast.success("Story updated — remember to save", { duration: 5000 })
   }
 
   function validate(): boolean {
@@ -112,6 +151,8 @@ export function PaintingFormDialog({
         price_dollars: price || undefined,
         status: status as "available" | "sold" | "nfs" | "reserved",
         story: story || null,
+        story_public: storyPublic,
+        story_notes: storyNotes || null,
         primary_image_url: primaryUrl,
         print_available: printAvailable,
         commission_available: commissionAvailable,
@@ -276,14 +317,120 @@ export function PaintingFormDialog({
             />
           </FormField>
 
-          <FormField label="Story">
-            <MarkdownEditor
-              value={story}
-              onChange={setStory}
-              placeholder="Tell the story of this painting…"
-              rows={6}
-            />
-          </FormField>
+          {storyToolsEnabled ? (
+            <div className="space-y-3 rounded-xl border border-border p-3">
+              <FormField
+                label="Your notes"
+                className="space-y-1"
+              >
+                <Textarea
+                  value={storyNotes}
+                  onChange={(e) => setStoryNotes(e.target.value)}
+                  placeholder='e.g. "glow but broken, damaged, looking into the centre, decayed tiles"'
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Jot down words, feelings, whatever you were thinking. This is
+                  just for you — visitors never see it.
+                </p>
+              </FormField>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!storyNotes.trim() || storyGenerating}
+                onClick={handleGenerateStory}
+              >
+                {storyGenerating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                {storyGenerating ? "Writing…" : "Write it for me"}
+              </Button>
+
+              {storyDraft != null && (
+                <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                  <p className="text-sm leading-relaxed">{storyDraft}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {story.trim() ? (
+                      <ConfirmDialog
+                        trigger={
+                          <Button type="button" size="sm" variant="default">
+                            Replace story
+                          </Button>
+                        }
+                        title="Replace the existing story?"
+                        description="This will overwrite the Story field below with the AI suggestion. You can still edit it by hand afterward."
+                        confirmLabel="Replace"
+                        onConfirm={async () => {
+                          applyStoryDraft()
+                        }}
+                      />
+                    ) : (
+                      <Button type="button" size="sm" onClick={applyStoryDraft}>
+                        Use this
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={storyGenerating}
+                      onClick={handleGenerateStory}
+                    >
+                      Try again
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setStoryDraft(null)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <FormField label="Story">
+                <MarkdownEditor
+                  value={story}
+                  onChange={setStory}
+                  placeholder="Tell the story of this painting…"
+                  rows={6}
+                />
+              </FormField>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <Checkbox
+                  checked={storyPublic}
+                  onCheckedChange={(v) => setStoryPublic(!!v)}
+                />
+                <span className="text-sm">Show this story on the website</span>
+              </label>
+              <p className="text-xs text-muted-foreground -mt-2 ml-[26px]">
+                Turn this off to keep the story private — you&rsquo;ll still see
+                it here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <FormField label="Story">
+                <MarkdownEditor
+                  value={story}
+                  onChange={setStory}
+                  placeholder="Tell the story of this painting…"
+                  rows={6}
+                />
+              </FormField>
+              <p className="text-xs text-muted-foreground">
+                This feature needs a quick one-time setup that hasn&rsquo;t
+                run yet — everything else works normally.
+              </p>
+            </div>
+          )}
 
           <FormField label="Primary image">
             <ImageUploadCropper
