@@ -16,6 +16,7 @@ import {
   Send,
   Settings,
   KeyRound,
+  Brush,
 } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -39,6 +40,7 @@ const navItems = [
     Icon: LayoutGrid,
     exact: false,
   },
+  { href: "/admin/commission", label: "Commission page", Icon: Brush, exact: false },
   { href: "/admin/settings", label: "Settings", Icon: Settings, exact: false },
   { href: "/admin/account", label: "Account", Icon: KeyRound, exact: false },
 ]

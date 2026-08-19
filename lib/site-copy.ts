@@ -12,6 +12,10 @@ export const SITE_COPY_DEFAULTS = {
   tagline_nav: "Painter · Boston",
   // Under the name on the home hero (components/hero-section.tsx)
   tagline_hero: "Painter · Boston · Oils & Acrylics",
+  // Small-caps label above the heading on the Commission page (app/(public)/commission/page.tsx)
+  commission_eyebrow: "Commissions",
+  // <h1> on the Commission page (app/(public)/commission/page.tsx)
+  commission_heading: "Commissions",
   // Opening paragraph on the Commission page (app/(public)/commission/page.tsx)
   commission_intro:
     "Jamie takes a limited number of commissions each year. Tell him what you have in mind — size, subject, palette, where it’ll live — and he’ll be in touch.",

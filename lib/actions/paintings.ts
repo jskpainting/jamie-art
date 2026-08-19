@@ -67,6 +67,19 @@ function revalidateSectionPaths(sectionSlug: string | null) {
   }
 }
 
+/**
+ * Bulk actions can touch paintings across an unknown set of section slugs
+ * (e.g. a bulk move's destination, or a delete spanning galleries), so we
+ * can't enumerate every specific slug cheaply. Revalidate the whole
+ * `/portfolio` and `/admin/portfolio` subtrees (including the dynamic
+ * `[section]` route the user is currently viewing) so the list reflects the
+ * change without a manual refresh.
+ */
+function revalidateAllPortfolioPaths() {
+  revalidatePath("/portfolio", "layout")
+  revalidatePath("/admin/portfolio", "layout")
+}
+
 export async function createPainting(input: unknown) {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
@@ -281,8 +294,7 @@ export async function bulkUpdateStatus(
       ids.map((id) => supabase.from("paintings").update({ status }).eq("id", id)),
       "status updates"
     )
-    revalidatePath("/portfolio")
-    revalidatePath("/admin/portfolio")
+    revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to update status" }
@@ -305,8 +317,7 @@ export async function bulkUpdateSection(
       ),
       "section updates"
     )
-    revalidatePath("/portfolio")
-    revalidatePath("/admin/portfolio")
+    revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to update section" }
@@ -344,8 +355,7 @@ export async function setPaintingSectionMembership(
         .eq("section_id", sectionId)
       if (error) throw error
     }
-    revalidatePath("/portfolio")
-    revalidatePath("/admin/portfolio")
+    revalidateAllPortfolioPaths()
     return { ok: true }
   } catch (e) {
     if (isSchemaSetupError(e)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
@@ -383,6 +393,7 @@ export async function bulkAddTag(
         ids.map((painting_id) => ({ painting_id, tag_id: tagRow.id })),
         { onConflict: "painting_id,tag_id" }
       )
+    revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to add tag" }
@@ -412,6 +423,7 @@ export async function bulkRemoveTag(
       .delete()
       .eq("tag_id", tagRow.id)
       .in("painting_id", ids)
+    revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to remove tag" }
@@ -429,8 +441,7 @@ export async function bulkDelete(
     const supabase = await db()
     const { error } = await supabase.from("paintings").delete().in("id", ids)
     if (error) throw error
-    revalidatePath("/portfolio")
-    revalidatePath("/admin/portfolio")
+    revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to delete paintings" }

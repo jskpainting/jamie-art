@@ -50,10 +50,17 @@ export async function updateSettings(input: SettingsInput) {
 
 const SiteCopySchema = z.object({
   tagline: z.string().max(120).nullable().optional(),
+  commission_eyebrow: z.string().max(200).nullable().optional(),
+  commission_heading: z.string().max(200).nullable().optional(),
   commission_intro: z.string().max(2000).nullable().optional(),
   contact_intro: z.string().max(2000).nullable().optional(),
 })
 export type SiteCopyInput = z.infer<typeof SiteCopySchema>
+
+// Columns that may not exist yet on production (added in a later migration than
+// the rest of site copy) — a write touching these needs the schema-setup-safe
+// retry below instead of the plain isSchemaSetupError catch used elsewhere.
+const NOT_YET_MIGRATED_COLUMNS = new Set(["commission_eyebrow", "commission_heading"])
 
 export async function updateSiteCopy(input: SiteCopyInput) {
   const user = await getUser()
@@ -69,6 +76,8 @@ export async function updateSiteCopy(input: SiteCopyInput) {
   // is the one shown in the admin editor, so it's the one we compare against.
   const DEFAULT_BY_FIELD: Record<string, string> = {
     tagline: SITE_COPY_DEFAULTS.tagline_nav,
+    commission_eyebrow: SITE_COPY_DEFAULTS.commission_eyebrow,
+    commission_heading: SITE_COPY_DEFAULTS.commission_heading,
     commission_intro: SITE_COPY_DEFAULTS.commission_intro,
     contact_intro: SITE_COPY_DEFAULTS.contact_intro,
   }
@@ -84,19 +93,43 @@ export async function updateSiteCopy(input: SiteCopyInput) {
     })
   )
 
+  // commission_eyebrow / commission_heading ship in a migration the owner hasn't
+  // run yet. Try the write with everything; if the DB reports one of those
+  // columns is missing, retry without them so the rest of the save still lands.
+  const touchesUnmigrated = Object.keys(clean).some((k) => NOT_YET_MIGRATED_COLUMNS.has(k))
+
   try {
     const supabase = await db()
     const { data: existing } = await supabase.from("settings").select("id").single()
-    if (existing) {
-      const { error } = await supabase
-        .from("settings")
-        .update({ ...clean, updated_at: new Date().toISOString() })
-        .eq("id", existing.id)
-      if (error) throw error
-    } else {
-      const { error } = await supabase.from("settings").insert(clean)
-      if (error) throw error
+
+    async function write(payload: Record<string, unknown>) {
+      if (existing) {
+        const { error } = await supabase
+          .from("settings")
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq("id", existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from("settings").insert(payload)
+        if (error) throw error
+      }
     }
+
+    try {
+      await write(clean)
+    } catch (e) {
+      if (!touchesUnmigrated || !isSchemaSetupError(e)) throw e
+      const fallback = Object.fromEntries(
+        Object.entries(clean).filter(([k]) => !NOT_YET_MIGRATED_COLUMNS.has(k))
+      )
+      if (Object.keys(fallback).length > 0) await write(fallback)
+      revalidatePath("/")
+      revalidatePath("/commission")
+      revalidatePath("/contact")
+      revalidatePath("/admin/settings")
+      return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+    }
+
     revalidatePath("/")
     revalidatePath("/commission")
     revalidatePath("/contact")

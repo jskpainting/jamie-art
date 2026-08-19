@@ -191,8 +191,7 @@ function MediaDetailDialog({
             onConfirm={async () => {
               const result = await deleteMedia(item.bucket, item.path)
               if (!result.ok) {
-                toast.error(result.error ?? "Failed to delete image", { duration: 5000 })
-                throw new Error(result.error)
+                throw new Error(result.error ?? "Failed to delete image")
               }
               toast.success("Image deleted", { duration: 5000 })
               onDeleted()

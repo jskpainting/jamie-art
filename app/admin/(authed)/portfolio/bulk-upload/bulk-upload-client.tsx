@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
 import { TagInput } from "@/components/admin/tag-input"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
+import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -736,14 +737,18 @@ export function BulkUploadClient({
 
             {/* Actions */}
             <div className="flex items-center gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCancel}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
+              <ConfirmDialog
+                trigger={
+                  <Button variant="outline" size="sm" disabled={saving}>
+                    Cancel
+                  </Button>
+                }
+                title="Discard this upload batch?"
+                description={`${cards.length} photo${cards.length !== 1 ? "s" : ""} and any details you've entered will be discarded. This can't be undone.`}
+                destructive
+                confirmLabel="Discard"
+                onConfirm={handleCancel}
+              />
               <Button
                 size="sm"
                 onClick={handleSaveAll}

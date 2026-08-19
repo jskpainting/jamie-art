@@ -10,7 +10,7 @@ import { FormField } from "@/components/admin/form-field"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
-const MIN_LENGTH = 10
+const MIN_LENGTH = 8
 
 const schema = z
   .object({

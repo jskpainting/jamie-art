@@ -10,7 +10,7 @@ import { updateSiteCopy } from "@/lib/actions/settings"
 
 interface SiteCopyFieldFormProps {
   /** Which settings column this field saves to. */
-  field: "tagline" | "commission_intro" | "contact_intro"
+  field: "tagline" | "commission_eyebrow" | "commission_heading" | "commission_intro" | "contact_intro"
   label: string
   helper?: string
   /** Current effective text — saved value if set, otherwise the built-in default. */

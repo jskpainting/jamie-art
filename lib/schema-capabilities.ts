@@ -18,6 +18,8 @@ export interface SchemaCapabilities {
   focalPoints: boolean
   /** settings.active_layout → the "make this the site layout" control. */
   activeLayout: boolean
+  /** webauthn_credentials table → passkey (Face ID / Touch ID / Windows Hello) sign-in. */
+  passkeys: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -53,16 +55,18 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc, fp, al] = await Promise.all([
+    const [ps, sc, fp, al, pk] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
       supabase.from("settings").select("home_hero_focal_x").limit(1),
       supabase.from("settings").select("active_layout").limit(1),
+      supabase.from("webauthn_credentials").select("id").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
     const focalPoints = !fp.error
     const activeLayout = !al.error
+    const passkeys = !pk.error
     return {
       paintingSections,
       siteCopy,
@@ -71,6 +75,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       eventCurrentStatus: paintingSections,
       focalPoints,
       activeLayout,
+      passkeys,
     }
   } catch {
     return {
@@ -79,6 +84,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       eventCurrentStatus: false,
       focalPoints: false,
       activeLayout: false,
+      passkeys: false,
     }
   }
 }

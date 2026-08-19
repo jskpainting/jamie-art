@@ -51,10 +51,10 @@ export default async function CommissionPage({ searchParams }: Props) {
 
       <div className="max-w-2xl">
         <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-4">
-          Commissions
+          {settings?.commission_eyebrow?.trim() || SITE_COPY_DEFAULTS.commission_eyebrow}
         </p>
         <h1 className="font-serif text-4xl md:text-5xl font-light tracking-tight mb-6">
-          Commissions
+          {settings?.commission_heading?.trim() || SITE_COPY_DEFAULTS.commission_heading}
         </h1>
         <p className="text-base md:text-lg leading-relaxed text-muted-foreground mb-12 whitespace-pre-line">
           {settings?.commission_intro?.trim() || SITE_COPY_DEFAULTS.commission_intro}

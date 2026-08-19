@@ -80,34 +80,6 @@ export default async function SettingsPage() {
           />
         </PageCard>
 
-        {/* Commission page */}
-        <PageCard title="Commission page" href="/commission">
-          {capabilities.siteCopy ? (
-            <SiteCopyFieldForm
-              field="commission_intro"
-              label="Opening paragraph"
-              helper="The text under the Commissions heading"
-              initialValue={settings?.commission_intro ?? SITE_COPY_DEFAULTS.commission_intro}
-              defaultText={SITE_COPY_DEFAULTS.commission_intro}
-              multiline
-            />
-          ) : (
-            <p className="text-xs text-muted-foreground">{SCHEMA_SETUP_MESSAGE}</p>
-          )}
-
-          <SettingsImageField
-            label="Photo at the top of the page"
-            aspectRatio="free"
-            currentImageUrl={settings?.commission_image_url ?? null}
-            bucket="site-images"
-            field="commission_image_url"
-            hintText="Upload the full photo — then click the focal point below to control what stays visible."
-            focalX={settings?.commission_focal_x ?? 50}
-            focalY={settings?.commission_focal_y ?? 50}
-            showFocal={capabilities.focalPoints}
-          />
-        </PageCard>
-
         {/* Contact page */}
         <PageCard title="Contact page" href="/contact">
           {capabilities.siteCopy ? (

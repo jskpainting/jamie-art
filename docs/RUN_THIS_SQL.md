@@ -62,6 +62,44 @@ create policy "auth all painting_sections"
   on painting_sections for all using (auth.role() = 'authenticated');
 ```
 
+---
+
+# Round 2 — passkeys + Commission page text
+
+Run this the same way (SQL Editor → New query → paste → **Run**).
+
+```sql
+-- 1) PASSKEYS — lets you sign in with Face ID, Touch ID, Windows Hello, or an
+--    Android fingerprint. Stores one row per device you register.
+create table if not exists webauthn_credentials (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null,
+  credential_id text not null unique,
+  public_key    text not null,
+  counter       bigint not null default 0,
+  transports    text[] default '{}',
+  device_label  text,
+  created_at    timestamptz default now(),
+  last_used_at  timestamptz
+);
+
+create index if not exists webauthn_credentials_user_idx
+  on webauthn_credentials (user_id);
+
+alter table webauthn_credentials enable row level security;
+
+drop policy if exists "public read webauthn_credentials" on webauthn_credentials;
+drop policy if exists "auth all webauthn_credentials"   on webauthn_credentials;
+
+-- 2) COMMISSION PAGE TEXT — makes the small label and the heading editable
+--    from Admin → Commission page (the intro paragraph already is).
+alter table settings add column if not exists commission_eyebrow text;
+alter table settings add column if not exists commission_heading text;
+```
+
+Unlocks: **Sign in with Face ID / fingerprint** (Account → Passkeys) and the
+**label + heading** fields on Admin → Commission page.
+
 ## What you unlock
 
 | Feature | Where it shows up |

@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { MagicLinkForm } from "@/components/admin/magic-link-form"
 import { PasswordLoginForm } from "@/components/admin/password-login-form"
+import { PasskeySignInButton } from "@/components/admin/passkey-sign-in-button"
+import { useBrowserSupportsPasskeys } from "@/lib/passkeys"
 
 interface LoginMethodSwitcherProps {
   error?: string
@@ -15,6 +17,10 @@ interface LoginMethodSwitcherProps {
  * locked the owner out ("nothing happens, wait a few minutes"), which is the
  * whole reason password sign-in exists. Magic link stays one click away for
  * anyone who hasn't set a password yet.
+ *
+ * The passkey button (Face ID / fingerprint / Windows Hello) sits above both
+ * — it self-hides on browsers/devices without WebAuthn support, and every
+ * failure path falls straight through to whichever method is showing below.
  */
 export function LoginMethodSwitcher({ error, next }: LoginMethodSwitcherProps) {
   const [method, setMethod] = useState<"magic-link" | "password">("password")
@@ -30,6 +36,8 @@ export function LoginMethodSwitcher({ error, next }: LoginMethodSwitcherProps) {
               : error}
         </p>
       )}
+
+      <PasskeySignInButtonWithDivider next={next} />
 
       {method === "magic-link" ? (
         <>
@@ -74,6 +82,27 @@ export function LoginMethodSwitcher({ error, next }: LoginMethodSwitcherProps) {
           </button>
         </>
       )}
+    </div>
+  )
+}
+
+/** Passkey button + its own "or" divider — both hidden together on browsers
+ *  without WebAuthn support, feature-detected on mount (no SSR mismatch). */
+function PasskeySignInButtonWithDivider({ next }: { next?: string }) {
+  const supported = useBrowserSupportsPasskeys()
+
+  if (!supported) return null
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PasskeySignInButton next={next} />
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+          or
+        </span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
     </div>
   )
 }
