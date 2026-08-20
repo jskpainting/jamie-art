@@ -411,13 +411,17 @@ export async function bulkAddTag(
       .single()
     if (tagErr) throw tagErr
 
-    // Link to each painting (ignore conflicts)
-    await supabase
+    // Link to each painting, ignoring duplicate links but NOT real failures.
+    // supabase-js does not throw on an API error — it resolves with
+    // { error }. Discarding that reported "added to N paintings" after a
+    // write that changed nothing.
+    const { error: linkErr } = await supabase
       .from("painting_tags")
       .upsert(
         ids.map((painting_id) => ({ painting_id, tag_id: tagRow.id })),
         { onConflict: "painting_id,tag_id" }
       )
+    if (linkErr) throw linkErr
     revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {
@@ -436,18 +440,23 @@ export async function bulkRemoveTag(
   try {
     const supabase = await db()
     const name = tagName.trim().toLowerCase()
-    const { data: tagRow } = await supabase
+    const { data: tagRow, error: lookupErr } = await supabase
       .from("tags")
       .select("id")
       .eq("name", name)
       .single()
+    // PGRST116 means no row matched — the tag simply doesn't exist, so there
+    // is genuinely nothing to remove. Any other error is a real failure and
+    // must not be reported as a successful removal.
+    if (lookupErr && lookupErr.code !== "PGRST116") throw lookupErr
     if (!tagRow) return { ok: true, count: 0 }
 
-    await supabase
+    const { error: unlinkErr } = await supabase
       .from("painting_tags")
       .delete()
       .eq("tag_id", tagRow.id)
       .in("painting_id", ids)
+    if (unlinkErr) throw unlinkErr
     revalidateAllPortfolioPaths()
     return { ok: true, count: ids.length }
   } catch (e) {

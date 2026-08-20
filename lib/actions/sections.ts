@@ -142,11 +142,16 @@ export async function reorderSections(ids: string[]) {
 
   try {
     const supabase = await db()
-    await Promise.all(
+    // Promise.all never rejects here: supabase-js resolves with { error }
+    // instead of throwing, so every one of these writes could fail and the
+    // owner would still be told "Order saved".
+    const results = await Promise.all(
       ids.map((id, i) =>
         supabase.from("sections").update({ sort_order: i }).eq("id", id)
       )
     )
+    const failed = results.find((r) => r.error)
+    if (failed?.error) throw failed.error
     revalidate()
     return { ok: true }
   } catch (e) {
