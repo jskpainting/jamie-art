@@ -113,6 +113,27 @@ export const ContactWriteSchema = z.object({
 
 export type ContactWriteInput = z.infer<typeof ContactWriteSchema>
 
+/**
+ * Editing a contact must write ONLY the fields the form actually sent.
+ *
+ * ContactWriteSchema.partial() looks like it does that, but Zod's .partial()
+ * does not drop .default() values: parsing { first_name: "Jane" } through it
+ * yields { first_name: "Jane", source: "manual", tags: [], subscribed: true }.
+ * Editing someone's name therefore re-subscribed them if they had opted out,
+ * reset their source, and wiped their tags. No defaults here, by design.
+ */
+export const ContactUpdateSchema = z.object({
+  email: z.string().email("Valid email required").optional(),
+  first_name: z.string().nullable().optional(),
+  last_name: z.string().nullable().optional(),
+  source: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  subscribed: z.boolean().optional(),
+})
+
+export type ContactUpdateInput = z.infer<typeof ContactUpdateSchema>
+
+
 export const ContactImportRowSchema = z.object({
   email: z.string().email(),
   first_name: z.string().optional(),

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getUser } from "@/lib/supabase/auth"
 import {
   ContactWriteSchema,
+  ContactUpdateSchema,
   ContactImportRowSchema,
   type ContactImportRow,
 } from "@/lib/schemas"
@@ -48,7 +49,7 @@ export async function updateContact(id: string, input: unknown) {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
 
-  const parsed = ContactWriteSchema.partial().safeParse(input)
+  const parsed = ContactUpdateSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message }
   }
