@@ -89,8 +89,25 @@ export async function sendNewsletter(input: {
   // Single canonical origin — a stale fallback here sends unsubscribe links to
   // the wrong domain, which breaks opt-out and hurts deliverability.
   const siteUrl = SITE_URL
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"
+  const fromEmail = process.env.RESEND_FROM_EMAIL
+
+  // Resend's onboarding@resend.dev sandbox sender only delivers to the Resend
+  // account owner; every other recipient is rejected. Refusing here is far
+  // kinder than "sent" followed by silence.
+  if (!fromEmail) {
+    await adminClient
+      .from("newsletters")
+      .update({
+        status: "failed",
+        error_message: "RESEND_FROM_EMAIL is not set",
+      })
+      .eq("id", newsletter.id)
+    return {
+      ok: false as const,
+      error:
+        "Your sending email address isn't set up yet, so this wasn't sent. Nothing has gone out. Ask your developer to set RESEND_FROM_EMAIL to an address on your verified domain.",
+    }
+  }
 
   let sent = 0
   const failures: string[] = []
@@ -98,14 +115,24 @@ export async function sendNewsletter(input: {
   for (const contact of contacts ?? []) {
     const unsubscribeUrl = `${siteUrl}/unsubscribe?token=${contact.unsubscribe_token}`
     try {
-      await resend.emails.send({
+      // The Resend SDK does NOT throw on an API error — it returns
+      // { data: null, error }. Its only throws are a missing API key and a
+      // missing React renderer. Counting a send as successful without checking
+      // `error` meant a blast that delivered to nobody still reported "Sent".
+      const { error: sendError } = await resend.emails.send({
         from: fromEmail,
         to: contact.email,
         subject,
         html: renderNewsletterHtml({ subject, bodyMarkdown, unsubscribeUrl }),
         text: renderNewsletterPlainText({ bodyMarkdown, unsubscribeUrl }),
       })
-      sent++
+      if (sendError) {
+        failures.push(
+          `${contact.email}: ${sendError.message ?? "rejected by the email service"}`
+        )
+      } else {
+        sent++
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "unknown error"
       failures.push(`${contact.email}: ${msg}`)
