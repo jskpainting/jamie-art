@@ -32,7 +32,18 @@ export async function updateSettings(input: SettingsInput) {
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
 
     if (existing) {
       const { error } = await supabase
@@ -107,7 +118,18 @@ export async function updateSiteCopy(input: SiteCopyInput) {
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
 
     async function write(payload: Record<string, unknown>) {
       if (existing) {
@@ -185,7 +207,18 @@ export async function updateFeaturedPainting(paintingId: string | null) {
       if (!painting) return { ok: false, error: "Painting not found" }
     }
 
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
     if (existing) {
       const { error } = await supabase
         .from("settings")
@@ -214,7 +247,18 @@ export async function updateSettingImage(field: ImageField, url: string | null) 
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
     if (existing) {
       const focal = IMAGE_FOCAL_FIELDS[field]
       // A freshly-uploaded photo resets its focal point back to center — a
@@ -258,7 +302,18 @@ export async function updateSettingFocal(field: ImageField, x: number, y: number
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
     if (existing) {
       const { error } = await supabase
         .from("settings")
@@ -299,7 +354,18 @@ export async function updateQuickInquireSettings(input: QuickInquireSettingsInpu
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
     if (existing) {
       const { error } = await supabase
         .from("settings")
@@ -329,7 +395,18 @@ export async function updateActiveLayout(layout: GalleryLayout) {
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("settings").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("settings")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second settings row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
     if (existing) {
       const { error } = await supabase
         .from("settings")

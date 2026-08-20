@@ -28,7 +28,18 @@ export async function updateBio(input: BioInput) {
 
   try {
     const supabase = await db()
-    const { data: existing } = await supabase.from("bio").select("id").single()
+    const { data: existing, error: lookupError } = await supabase
+      .from("bio")
+      .select("id")
+      // Ordered so reads and writes always land on the same row if a
+      // duplicate ever appears.
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    // `.single()` also errors on a transient failure, and the old code read
+    // any error as "no row yet" and inserted one. A second bio row makes the
+    // read below fail permanently. Insert only when the table is provably empty.
+    if (lookupError) throw lookupError
 
     if (existing) {
       let { error } = await supabase

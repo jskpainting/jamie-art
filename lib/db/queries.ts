@@ -508,7 +508,12 @@ export async function getPaintingsForSitemap(): Promise<PaintingSitemapEntry[]> 
 export async function getBio(): Promise<Bio | null> {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase.from("bio").select("*").single()
+    const { data, error } = await supabase
+      .from("bio")
+      .select("*")
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
     if (error) throw error
     return data
   } catch (err) {
@@ -840,10 +845,15 @@ export async function getRecentContacts(limit = 5): Promise<Contact[]> {
 export async function getSettings(): Promise<Settings | null> {
   try {
     const supabase = await createClient()
+    // .single() fails outright if a duplicate row ever appears, which would
+    // blank the phone, email and Instagram handle across the whole site.
+    // Reading the first row keeps the site working instead.
     const { data, error } = await supabase
       .from("settings")
       .select("*")
-      .single()
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle()
     if (error) throw error
     return data
   } catch (err) {
