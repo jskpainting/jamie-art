@@ -57,7 +57,10 @@ export const PaintingWriteSchema = z.object({
     }),
   status: z.enum(["available", "sold", "nfs", "reserved"]).default("available"),
   story: z.string().nullable().optional(),
-  story_public: z.boolean().default(true),
+  // NOT .default(true): Zod would then inject this key into every payload, and a
+  // payload naming a column that does not exist makes PostgREST reject the whole
+  // statement. The story columns ship behind a migration the owner runs by hand.
+  story_public: z.boolean().optional(),
   story_notes: z.string().nullable().optional(),
   primary_image_url: z.string().nullable().optional(),
   print_available: z.boolean().default(false),

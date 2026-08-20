@@ -10,7 +10,11 @@ import {
   type PaintingImageInput,
 } from "@/lib/schemas"
 import { slugify } from "@/lib/utils"
-import { isSchemaSetupError, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
+import {
+  isSchemaSetupError,
+  SCHEMA_SETUP_MESSAGE,
+  getSchemaCapabilities,
+} from "@/lib/schema-capabilities"
 import type { PaintingStatus } from "@/lib/types"
 
 export interface BulkCreateItem {
@@ -80,6 +84,27 @@ function revalidateAllPortfolioPaths() {
   revalidatePath("/admin/portfolio", "layout")
 }
 
+/**
+ * The AI-story columns (story_public, story_notes) ship behind a migration the
+ * owner applies by hand. The admin UI is gated on `storyTools`, but the WRITE
+ * path was not — and PostgREST rejects the ENTIRE statement when a payload names
+ * a column that does not exist, which silently broke every painting save on
+ * production. Strip them unless the migration has actually run.
+ *
+ * Costs nothing in the normal case: if neither key is present we never probe.
+ */
+async function withoutUnmigratedStoryFields<T extends Record<string, unknown>>(
+  row: T
+): Promise<T> {
+  if (!("story_public" in row) && !("story_notes" in row)) return row
+  const { storyTools } = await getSchemaCapabilities()
+  if (storyTools) return row
+  const safe = { ...row } as Record<string, unknown>
+  delete safe.story_public
+  delete safe.story_notes
+  return safe as T
+}
+
 export async function createPainting(input: unknown) {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
@@ -94,7 +119,7 @@ export async function createPainting(input: unknown) {
     const { price_dollars: price_cents, ...rest } = parsed.data
     const { data, error } = await supabase
       .from("paintings")
-      .insert({ ...rest, price_cents })
+      .insert(await withoutUnmigratedStoryFields({ ...rest, price_cents }))
       .select("id")
       .single()
     if (error) throw error
@@ -130,7 +155,7 @@ export async function updatePainting(id: string, input: unknown) {
 
     const { error } = await supabase
       .from("paintings")
-      .update({ ...rest, price_cents })
+      .update(await withoutUnmigratedStoryFields({ ...rest, price_cents }))
       .eq("id", id)
     if (error) throw error
 
@@ -509,7 +534,9 @@ export async function bulkCreatePaintings(
       const { price_dollars: price_cents, ...rest } = parsed.data
       const { data, error } = await supabase
         .from("paintings")
-        .insert({ ...rest, price_cents, sort_order })
+        .insert(
+          await withoutUnmigratedStoryFields({ ...rest, price_cents, sort_order })
+        )
         .select("id")
         .single()
 
