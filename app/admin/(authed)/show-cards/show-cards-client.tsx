@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Minus, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ShowCard, CARD_WIDTH_MM, CARD_HEIGHT_MM } from "@/components/print/show-card"
@@ -84,6 +85,22 @@ interface StoredState {
   showThumb: boolean
   paper: Paper
 }
+
+type CardsFilter = "all" | "selected" | "unselected" | "with-ar" | "without-ar"
+type CardsSort = "gallery" | "title"
+
+const CARDS_FILTER_OPTIONS = [
+  { value: "all", label: "All paintings" },
+  { value: "selected", label: "Chosen for printing" },
+  { value: "unselected", label: "Not chosen yet" },
+  { value: "with-ar", label: "Works on a wall (has 3D model)" },
+  { value: "without-ar", label: "No 3D model yet" },
+]
+
+const CARDS_SORT_OPTIONS = [
+  { value: "gallery", label: "Grouped by gallery" },
+  { value: "title", label: "Title A–Z" },
+]
 
 interface ShowCardsClientProps {
   paintings: PaintingForCards[]
@@ -176,9 +193,41 @@ export function ShowCardsClient({
     }
   }, [selections, tagline, showThumb, paper])
 
+  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState<CardsFilter>("all")
+  const [sort, setSort] = useState<CardsSort>("gallery")
+
+  const hasActiveFilters =
+    search.trim() !== "" || filter !== "all" || sort !== "gallery"
+
+  const resetView = useCallback(() => {
+    setSearch("")
+    setFilter("all")
+    setSort("gallery")
+  }, [])
+
+  const visiblePaintings = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let rows = paintings.filter((p) => {
+      if (filter === "selected" && !selections[p.id]) return false
+      if (filter === "unselected" && selections[p.id]) return false
+      if (filter === "with-ar" && !arModelSet.has(p.id)) return false
+      if (filter === "without-ar" && arModelSet.has(p.id)) return false
+      if (!q) return true
+      return (
+        p.title.toLowerCase().includes(q) ||
+        (p.section_title ?? "").toLowerCase().includes(q)
+      )
+    })
+    if (sort === "title") {
+      rows = [...rows].sort((a, b) => a.title.localeCompare(b.title))
+    }
+    return rows
+  }, [paintings, search, filter, sort, selections, arModelSet])
+
   const groups = useMemo(() => {
     const map = new Map<string, { title: string; paintings: PaintingForCards[] }>()
-    for (const p of paintings) {
+    for (const p of visiblePaintings) {
       const key = p.section_slug || "uncategorized"
       if (!map.has(key)) {
         map.set(key, { title: p.section_title || "Uncategorized", paintings: [] })
@@ -186,7 +235,7 @@ export function ShowCardsClient({
       map.get(key)!.paintings.push(p)
     }
     return [...map.values()]
-  }, [paintings])
+  }, [visiblePaintings])
 
   function toggle(id: string) {
     setSelections((prev) => {
@@ -216,6 +265,14 @@ export function ShowCardsClient({
 
   const selectedIds = Object.keys(selections)
   const paintingCount = selectedIds.length
+  // Selection deliberately survives a filter change (it is also restored from
+  // localStorage), so any selected painting the filter is hiding must be
+  // disclosed — otherwise the sheet count won't match what's on screen.
+  const visibleIdSet = useMemo(
+    () => new Set(visiblePaintings.map((p) => p.id)),
+    [visiblePaintings]
+  )
+  const hiddenSelectedCount = selectedIds.filter((id) => !visibleIdSet.has(id)).length
   const cardCount = Object.values(selections).reduce((sum, n) => sum + n, 0)
   const sheetCount = cardCount > 0 ? Math.ceil(cardCount / 10) : 0
 
@@ -306,7 +363,47 @@ export function ShowCardsClient({
         </div>
       </div>
 
+      <div className="mb-4 space-y-3">
+        <ListToolbar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search by title or gallery…"
+          searchLabel="Search paintings"
+          filterValue={filter}
+          onFilterChange={(v) => setFilter(v as CardsFilter)}
+          filterOptions={CARDS_FILTER_OPTIONS}
+          filterLabel="Show only"
+          sortValue={sort}
+          onSortChange={(v) => setSort(v as CardsSort)}
+          sortOptions={CARDS_SORT_OPTIONS}
+          sortLabel="Order this list by"
+          resultCount={visiblePaintings.length}
+          totalCount={paintings.length}
+          itemNoun="paintings"
+          hasActiveFilters={hasActiveFilters}
+          onClear={resetView}
+        />
+
+        {hiddenSelectedCount > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {paintingCount} chosen for printing ({hiddenSelectedCount} hidden
+            right now —{" "}
+            <button
+              type="button"
+              onClick={resetView}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              show all
+            </button>
+            ). They will still be printed.
+          </p>
+        )}
+      </div>
+
       {/* Selection grid, grouped by gallery */}
+      {paintings.length > 0 && visiblePaintings.length === 0 ? (
+        <FilteredEmptyState query={search} itemNoun="paintings" onClear={resetView} />
+      ) : (
       <div className="space-y-8">
         {groups.map((group) => (
           <div key={group.title}>
@@ -405,6 +502,7 @@ export function ShowCardsClient({
           </div>
         ))}
       </div>
+      )}
 
       {/* Sticky summary + print action */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:left-60 md:px-8">
