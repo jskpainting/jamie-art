@@ -1,6 +1,11 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
-import { getCurrentEvents, getUpcomingEvents, getPastEvents } from "@/lib/db/queries"
+import {
+  getCurrentEvents,
+  getUpcomingEvents,
+  getPastEvents,
+  getCancelledEvents,
+} from "@/lib/db/queries"
 import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { EventsClient } from "./events-client"
 
@@ -14,10 +19,11 @@ export default async function EventsAdminPage({
   searchParams: Promise<{ add?: string }>
 }) {
   const params = await searchParams
-  const [current, upcoming, past, capabilities] = await Promise.all([
+  const [current, upcoming, past, cancelled, capabilities] = await Promise.all([
     getCurrentEvents(),
     getUpcomingEvents(),
     getPastEvents(),
+    getCancelledEvents(),
     getSchemaCapabilities(),
   ])
 
@@ -32,6 +38,7 @@ export default async function EventsAdminPage({
         current={current}
         upcoming={upcoming}
         past={past}
+        cancelled={cancelled}
         allowCurrent={capabilities.eventCurrentStatus}
         showFocal={capabilities.focalPoints}
         initialAddOpen={params.add === "1"}

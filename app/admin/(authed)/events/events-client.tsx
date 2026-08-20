@@ -102,6 +102,7 @@ interface EventsClientProps {
   current?: Event[]
   upcoming: Event[]
   past: Event[]
+  cancelled?: Event[]
   allowCurrent?: boolean
   showFocal?: boolean
   initialAddOpen?: boolean
@@ -117,7 +118,7 @@ function buildSortOptions(): { value: string; label: string }[] {
   ]
 }
 
-export function EventsClient({ current = [], upcoming, past, allowCurrent = false, showFocal = false, initialAddOpen = false }: EventsClientProps) {
+export function EventsClient({ current = [], upcoming, past, cancelled = [], allowCurrent = false, showFocal = false, initialAddOpen = false }: EventsClientProps) {
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const [search, setSearch] = useState("")
@@ -129,7 +130,10 @@ export function EventsClient({ current = [], upcoming, past, allowCurrent = fals
     if (initialAddOpen) router.replace("/admin/events")
   }, [initialAddOpen, router])
 
-  const all = useMemo(() => [...current, ...upcoming, ...past], [current, upcoming, past])
+  const all = useMemo(
+    () => [...current, ...upcoming, ...past, ...cancelled],
+    [current, upcoming, past, cancelled]
+  )
   const total = all.length
   const hasActiveFilters = search.trim().length > 0 || statusFilter !== "all"
 
@@ -158,7 +162,15 @@ export function EventsClient({ current = [], upcoming, past, allowCurrent = fals
   const filteredCurrent = useMemo(() => filterAndSort(current), [current, filterAndSort])
   const filteredUpcoming = useMemo(() => filterAndSort(upcoming), [upcoming, filterAndSort])
   const filteredPast = useMemo(() => filterAndSort(past), [past, filterAndSort])
-  const visibleCount = filteredCurrent.length + filteredUpcoming.length + filteredPast.length
+  const filteredCancelled = useMemo(
+    () => filterAndSort(cancelled),
+    [cancelled, filterAndSort]
+  )
+  const visibleCount =
+    filteredCurrent.length +
+    filteredUpcoming.length +
+    filteredPast.length +
+    filteredCancelled.length
 
   const statusFilterOptions = useMemo(() => {
     const opts = [{ value: "all", label: "All statuses" }]
@@ -246,6 +258,25 @@ export function EventsClient({ current = [], upcoming, past, allowCurrent = fals
               </h2>
               <div className="space-y-2">
                 {filteredPast.map((e) => (
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Cancelled. Kept off the public site, but reachable here so a
+              cancelled show can be found again and un-cancelled. */}
+          {filteredCancelled.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+                Cancelled
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                These are hidden from your website. Edit one and change its
+                status to bring it back.
+              </p>
+              <div className="space-y-2">
+                {filteredCancelled.map((e) => (
                   <EventRow key={e.id} event={e} onEdit={setEditEvent} />
                 ))}
               </div>

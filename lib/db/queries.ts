@@ -549,6 +549,29 @@ export async function getUpcomingEvents(): Promise<Event[]> {
   }
 }
 
+/**
+ * Cancelled shows, for the ADMIN list only. Every other event query filters to a
+ * single status, so a cancelled event was fetched by nothing: setting a show to
+ * "Cancelled" made it vanish from the admin with no way to reach it again. The
+ * public site still excludes them (getAllEvents filters cancelled out, and
+ * bucketEvents skips them a second time).
+ */
+export async function getCancelledEvents(): Promise<Event[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("status", "cancelled")
+      .order("starts_at", { ascending: false })
+    if (error) throw error
+    return data ?? []
+  } catch (err) {
+    console.error("getCancelledEvents error:", err)
+    return []
+  }
+}
+
 export async function getPastEvents(): Promise<Event[]> {
   try {
     const supabase = await createClient()
