@@ -45,12 +45,36 @@ export function cleanFilename(filename: string): string {
  *   otherwise  → "December 30, 2025 – January 2, 2026"
  * Accepts ISO strings; returns just the start date when there's no end.
  */
+/**
+ * Every event on this site happens where the artist does, and an event date must
+ * read the same on the server as in the visitor's browser. Formatting in the
+ * runtime's own zone made those disagree — Vercel renders in UTC, the browser
+ * renders in the visitor's zone — so the home page and /events advertised
+ * different dates for the same show and React threw a hydration error (#418) on
+ * every load for any visitor outside UTC.
+ */
+export const EVENT_TIME_ZONE = "America/New_York"
+
+/** Calendar year/month/day as seen in EVENT_TIME_ZONE, not in the runtime's zone. */
+function calendarPartsInEventZone(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: EVENT_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(date)
+  const value = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value)
+  return { year: value("year"), month: value("month"), day: value("day") }
+}
+
 export function formatEventDateRange(
   startsAt: string,
   endsAt: string | null
 ): string {
   const start = new Date(startsAt)
   const full = new Intl.DateTimeFormat("en-US", {
+    timeZone: EVENT_TIME_ZONE,
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -58,13 +82,16 @@ export function formatEventDateRange(
   if (!endsAt) return full.format(start)
   const end = new Date(endsAt)
   const monthDay = new Intl.DateTimeFormat("en-US", {
+    timeZone: EVENT_TIME_ZONE,
     month: "long",
     day: "numeric",
   })
-  const sameYear = start.getFullYear() === end.getFullYear()
-  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+  const s = calendarPartsInEventZone(start)
+  const e = calendarPartsInEventZone(end)
+  const sameYear = s.year === e.year
+  const sameMonth = sameYear && s.month === e.month
   if (sameMonth) {
-    return `${monthDay.format(start)} – ${end.getDate()}, ${end.getFullYear()}`
+    return `${monthDay.format(start)} – ${e.day}, ${e.year}`
   }
   if (sameYear) {
     return `${monthDay.format(start)} – ${full.format(end)}`
