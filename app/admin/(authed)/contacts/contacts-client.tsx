@@ -164,41 +164,40 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
         ))}
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 justify-between">
-        <ListToolbar
-          className="flex-1 min-w-0"
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search contacts…"
-          searchLabel="Search contacts"
-          filterValue={subscribedFilter}
-          onFilterChange={(v) => setSubscribedFilter(v as SubscribedFilter)}
-          filterOptions={FILTER_OPTIONS}
-          filterLabel="Filter by subscription"
-          sortValue={sort}
-          onSortChange={(v) => setSort(v as SortKey)}
-          sortOptions={SORT_OPTIONS}
-          sortLabel="Sort contacts"
-          resultCount={filtered.length}
-          totalCount={contacts.length}
-          itemNoun="contacts"
-          hasActiveFilters={hasActiveFilters}
-          onClear={clearFilters}
-        />
-        <div className="flex items-center gap-2 shrink-0">
-          {!showImport && (
-            <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-              <Upload className="h-4 w-4 mr-1" />
-              Import CSV
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add contact
+      {/* Actions */}
+      <div className="flex justify-end gap-2">
+        {!showImport && (
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+            <Upload className="h-4 w-4 mr-1" />
+            Import CSV
           </Button>
-        </div>
+        )}
+        <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add contact
+        </Button>
       </div>
+
+      {/* Toolbar */}
+      <ListToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search contacts…"
+        searchLabel="Search contacts"
+        filterValue={subscribedFilter}
+        onFilterChange={(v) => setSubscribedFilter(v as SubscribedFilter)}
+        filterOptions={FILTER_OPTIONS}
+        filterLabel="Filter by subscription"
+        sortValue={sort}
+        onSortChange={(v) => setSort(v as SortKey)}
+        sortOptions={SORT_OPTIONS}
+        sortLabel="Sort contacts"
+        resultCount={filtered.length}
+        totalCount={contacts.length}
+        itemNoun="contacts"
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      />
 
       {/* Table */}
       <DataTable
