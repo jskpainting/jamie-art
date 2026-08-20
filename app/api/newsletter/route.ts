@@ -22,18 +22,39 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient()
 
-    // Upsert — always 200/201 to prevent email enumeration
-    const { error } = await supabase.from("contacts").upsert(
-      {
-        email: parsed.data.email,
-        source: "newsletter_form",
-        subscribed: true,
-      },
-      { onConflict: "email", ignoreDuplicates: false }
-    )
+    // This endpoint is public and unauthenticated. An upsert that forced
+    // subscribed: true let anyone re-subscribe someone who had opted out,
+    // just by typing their address into the signup box — and it overwrote
+    // the original `source` while doing it. An existing row is therefore
+    // left exactly as it is: an opt-out stays opted out, and the owner can
+    // re-subscribe someone deliberately from /admin/contacts.
+    const { data: existing, error: lookupError } = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("email", parsed.data.email)
+      .maybeSingle()
 
-    if (error) {
-      console.error("newsletter upsert error:", error)
+    if (lookupError) {
+      console.error("newsletter lookup error:", lookupError)
+      // Still 200 to prevent enumeration.
+      return NextResponse.json({ ok: true })
+    }
+
+    if (existing) {
+      // Already known — say nothing either way.
+      return NextResponse.json({ ok: true })
+    }
+
+    const { error } = await supabase.from("contacts").insert({
+      email: parsed.data.email,
+      source: "newsletter_form",
+      subscribed: true,
+    })
+
+    // 23505 = someone signed up between the lookup and the insert. That is a
+    // known contact, not a failure.
+    if (error && error.code !== "23505") {
+      console.error("newsletter insert error:", error)
       // Still return 200 to prevent enumeration
       return NextResponse.json({ ok: true })
     }
