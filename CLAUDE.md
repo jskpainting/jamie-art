@@ -61,11 +61,11 @@ rendered content on localhost **and** production:
 
 ```bash
 curl -s https://www.jamiekendrioski.com/portfolio/abstracts \
-  | grep -oE "/portfolio/[a-z-]+/[a-z0-9-]+\"" | sort -u | wc -l   # expect 50
+  | grep -oE "/portfolio/[a-z-]+/[a-z0-9-]+\"" | sort -u | wc -l   # expect 51
 ```
 
-Expected counts: abstracts 50 · cityscapes-seascapes 14 · florals 8 ·
-pixels-rainbows 12 (84 total).
+Expected counts: abstracts 51 · cityscapes-seascapes 14 · florals 8 ·
+pixels-rainbows 12 (85 total).
 
 **Adding an FK/join table can silently break existing PostgREST embeds.** A
 second relationship between two tables makes implicit embeds ambiguous
