@@ -107,18 +107,30 @@ export async function getSectionBySlug(slug: string): Promise<Section | null> {
   }
 }
 
-function twoTierSort<T extends { status: string; sort_order: number; sold_at: string | null }>(
+function twoTierSort<T extends { id: string; status: string; sort_order: number; sold_at: string | null }>(
   rows: T[]
 ): T[] {
   const active = rows
     .filter((p) => p.status !== "sold")
-    .sort((a, b) => a.sort_order - b.sort_order)
+    .sort((a, b) =>
+      a.sort_order !== b.sort_order
+        ? a.sort_order - b.sort_order
+        : a.id < b.id
+          ? -1
+          : a.id > b.id
+            ? 1
+            : 0
+    )
   const sold = rows
     .filter((p) => p.status === "sold")
     .sort((a, b) => {
       const aT = a.sold_at ? new Date(a.sold_at).getTime() : 0
       const bT = b.sold_at ? new Date(b.sold_at).getTime() : 0
-      return bT - aT
+      if (aT !== bT) return bT - aT
+      // 71 of 74 sold paintings have no sold_at, so without this every pair
+      // compares equal and the owner's drag order is discarded.
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
     })
   return [...active, ...sold]
 }
@@ -145,6 +157,11 @@ export async function getPaintingsBySection(
       .from("paintings")
       .select("*, sections!paintings_section_id_fkey(slug)")
       .eq("section_id", sectionId)
+      // Without an explicit order Postgres returns physical heap order, which
+      // silently rearranges whenever any row is updated.
+      .order("sort_order", { ascending: true })
+      // sort_order is not unique, so a second key keeps the result deterministic.
+      .order("id", { ascending: true })
     if (error) throw error
     const home = (homeData ?? []).map(attachHomeSlug)
 
@@ -601,6 +618,10 @@ export async function getPaintingsWithImagesForSection(
       .from("paintings")
       .select("*, painting_images(id, url, alt, sort_order), painting_tags(tags(name))")
       .eq("section_id", sectionId)
+      // Admin must show the same deterministic order the public site renders.
+      .order("sort_order", { ascending: true })
+      // sort_order is not unique, so a second key keeps the result deterministic.
+      .order("id", { ascending: true })
     if (error) throw error
     const mapped = (data ?? []).map((p) => {
       type RawTag = { tags: { name: string } | null }
