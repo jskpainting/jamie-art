@@ -5,14 +5,14 @@ import { toast } from "sonner"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { FocalPointPicker } from "@/components/admin/focal-point-picker"
 import { updateSettingImage, updateSettingFocal } from "@/lib/actions/settings"
+import type { PresetKey } from "@/lib/image-presets"
 
 type ImageField = "home_hero_image_url" | "commission_image_url"
 
 interface Props {
   label: string
-  aspectRatio: number | "free"
+  preset: PresetKey
   currentImageUrl: string | null
-  bucket: "headshots" | "site-images"
   field: ImageField
   hintText?: string
   focalX?: number
@@ -22,9 +22,8 @@ interface Props {
 
 export function SettingsImageField({
   label,
-  aspectRatio,
+  preset,
   currentImageUrl,
-  bucket,
   field,
   hintText,
   focalX,
@@ -33,11 +32,12 @@ export function SettingsImageField({
 }: Props) {
   const [imageUrl, setImageUrl] = useState(currentImageUrl)
 
-  async function handleComplete(url: string | null) {
+  async function handleComplete(result: { url: string; width: number; height: number } | null) {
+    const url = result?.url ?? null
     setImageUrl(url)
-    const result = await updateSettingImage(field, url)
-    if (!result.ok) {
-      toast.error(result.error ?? "Save failed", { duration: 5000 })
+    const saveResult = await updateSettingImage(field, url)
+    if (!saveResult.ok) {
+      toast.error(saveResult.error ?? "Save failed", { duration: 5000 })
       return
     }
     toast.success(url ? `${label} saved.` : `${label} removed.`, { duration: 5000 })
@@ -60,8 +60,7 @@ export function SettingsImageField({
       </div>
       <ImageUploadCropper
         currentImageUrl={currentImageUrl}
-        aspectRatio={aspectRatio}
-        bucket={bucket}
+        preset={preset}
         onUploadComplete={handleComplete}
         label={label}
       />

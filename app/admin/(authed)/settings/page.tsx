@@ -6,6 +6,7 @@ import { getSchemaCapabilities, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabi
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 import { SettingsForm } from "./settings-form"
 import { SiteCopyFieldForm } from "./site-copy-form"
+import { QuickInquireForm } from "./quick-inquire-form"
 import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
 import { SettingsImageField } from "./settings-image-field"
 import { PageCard } from "./page-card"
@@ -69,15 +70,31 @@ export default async function SettingsPage() {
 
           <SettingsImageField
             label="Or upload a custom hero photo"
-            aspectRatio="free"
+            preset="homeHero"
             currentImageUrl={settings?.home_hero_image_url ?? null}
-            bucket="site-images"
             field="home_hero_image_url"
             hintText="Upload the full photo — then click the focal point below to control what stays visible."
             focalX={settings?.home_hero_focal_x ?? 50}
             focalY={settings?.home_hero_focal_y ?? 50}
             showFocal={capabilities.focalPoints}
           />
+        </PageCard>
+
+        {/* Quick inquire — the "Ask about this painting" sheet on every painting page */}
+        <PageCard title="When someone asks about a painting">
+          {capabilities.quickInquire ? (
+            <QuickInquireForm
+              initialMessage={
+                settings?.inquiry_message_template ??
+                SITE_COPY_DEFAULTS.inquiry_message_template
+              }
+              defaultMessage={SITE_COPY_DEFAULTS.inquiry_message_template}
+              initialSmsEnabled={settings?.inquiry_sms_enabled !== false}
+              hasPhone={Boolean(settings?.phone)}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">{SCHEMA_SETUP_MESSAGE}</p>
+          )}
         </PageCard>
 
         {/* Contact page */}

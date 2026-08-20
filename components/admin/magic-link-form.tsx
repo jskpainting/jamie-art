@@ -65,7 +65,8 @@ export function MagicLinkForm({ next }: MagicLinkFormProps) {
           "This email isn't set up for admin access. Ask the site owner to add it."
         )
       } else {
-        toast.error(otpError.message || "Couldn't send the link. Please try again.")
+        // Never surface a raw Supabase error string — always plain language.
+        toast.error("Couldn't send the link. Please try again in a moment.")
       }
       return false
     }

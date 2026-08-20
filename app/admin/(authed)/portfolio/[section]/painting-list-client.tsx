@@ -49,6 +49,10 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUSES = ["available", "sold", "nfs", "reserved"] as const
 
+// Admin-only "Featured" positional marker — purely visual, nothing is
+// persisted beyond the normal sort_order. See painting-list-client below.
+const FEATURED_COUNT = 4
+
 interface PaintingListClientProps {
   section: Section
   initialPaintings: PaintingWithImagesAndTags[]
@@ -505,9 +509,9 @@ export function PaintingListClient({
     if (initialAddOpen) router.replace(`/admin/portfolio/${section.slug}`)
   }, [initialAddOpen, router, section.slug])
 
-  // Two-tier split (query already returns active first, sold last — preserve that)
-  const activePaintings = paintings.filter((p) => p.status !== "sold")
-  const soldPaintings = paintings.filter((p) => p.status === "sold")
+  // The query still returns active-by-sort_order then sold-by-date (twoTierSort)
+  // so the very first render preserves today's on-screen order exactly — it's
+  // just rendered as one freely-orderable list now instead of two frozen groups.
   const allIds = paintings.map((p) => p.id)
   const selectedPaintings = paintings.filter((p) => selectedIds.has(p.id))
 
@@ -534,12 +538,16 @@ export function PaintingListClient({
 
   function handleLocalReorder(newIds: string[]) {
     const reordered = newIds
-      .map((id) => activePaintings.find((p) => p.id === id))
+      .map((id) => paintings.find((p) => p.id === id))
       .filter((p): p is PaintingWithImagesAndTags => !!p)
     // Optimistic dispatch must run inside a transition (React 19), otherwise the
     // reorder visually snaps back until the server round-trip lands.
     startTransition(async () => {
-      setOptimistic([...reordered, ...soldPaintings])
+      setOptimistic(reordered)
+      // reorderPaintings sets sort_order = index for every id passed in, sold
+      // included — this also normalises sort_order across the whole list on
+      // the very first save. Public ordering is unaffected: the public query
+      // still ignores sort_order for sold paintings and sorts them by sold_at.
       const result = await reorderPaintings(section.id, newIds)
       if (!result.ok) toast.error(result.error)
       else toast.success("Order saved", { duration: 1500 })
@@ -620,56 +628,53 @@ export function PaintingListClient({
         />
       ) : (
         <>
-          {/* Active paintings — sortable */}
-          {activePaintings.length > 0 && (
-            <SortableList
-              items={activePaintings}
-              onReorder={handleLocalReorder}
-              renderItem={(painting, handle) => (
-                <PaintingRow
-                  painting={painting}
-                  handle={handle}
-                  checked={selectedIds.has(painting.id)}
-                  onCheckedChange={(v) => toggleOne(painting.id, v)}
-                  onEdit={() => setEditPainting(painting)}
-                  onDeleted={clearSelection}
-                  sections={sections}
-                  currentSectionId={section.id}
-                  onMove={(target) => handleMoveOne(painting.id, target)}
-                  onToggleSection={(target, on) =>
-                    handleToggleSection(painting.id, target, on)
-                  }
-                  showAlsoShowIn={showAlsoShowIn}
-                />
-              )}
-            />
-          )}
+          {/* Admin-only ordering aid — visitors never see this, it's purely
+              about where things sit in this list. */}
+          <div className="space-y-0.5 pb-1">
+            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              Featured — shown first in your admin list
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Drag any painting anywhere. Visitors always see available work
+              first and sold work last.
+            </p>
+          </div>
 
-          {/* Sold paintings — static, non-draggable */}
-          {soldPaintings.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground pt-2">
-                Sold · sorted by date
-              </p>
-              {soldPaintings.map((painting) => (
-                <PaintingRow
-                  key={painting.id}
-                  painting={painting}
-                  checked={selectedIds.has(painting.id)}
-                  onCheckedChange={(v) => toggleOne(painting.id, v)}
-                  onEdit={() => setEditPainting(painting)}
-                  onDeleted={clearSelection}
-                  sections={sections}
-                  currentSectionId={section.id}
-                  onMove={(target) => handleMoveOne(painting.id, target)}
-                  onToggleSection={(target, on) =>
-                    handleToggleSection(painting.id, target, on)
-                  }
-                  showAlsoShowIn={showAlsoShowIn}
-                />
-              ))}
-            </div>
-          )}
+          <SortableList
+            items={paintings}
+            onReorder={handleLocalReorder}
+            renderItem={(painting, handle) => {
+              const idx = paintings.findIndex((p) => p.id === painting.id)
+              return (
+                <>
+                  {idx === FEATURED_COUNT && paintings.length > FEATURED_COUNT && (
+                    <div className="flex items-center gap-2 py-2" aria-hidden>
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
+                        Rest of the gallery
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  <PaintingRow
+                    painting={painting}
+                    handle={handle}
+                    checked={selectedIds.has(painting.id)}
+                    onCheckedChange={(v) => toggleOne(painting.id, v)}
+                    onEdit={() => setEditPainting(painting)}
+                    onDeleted={clearSelection}
+                    sections={sections}
+                    currentSectionId={section.id}
+                    onMove={(target) => handleMoveOne(painting.id, target)}
+                    onToggleSection={(target, on) =>
+                      handleToggleSection(painting.id, target, on)
+                    }
+                    showAlsoShowIn={showAlsoShowIn}
+                  />
+                </>
+              )
+            }}
+          />
         </>
       )}
 
@@ -690,6 +695,7 @@ export function PaintingListClient({
         sectionId={section.id}
         sections={sections}
         storyToolsEnabled={storyToolsEnabled}
+        neighbors={paintings}
       />
 
       {/* Edit dialog */}
@@ -702,6 +708,7 @@ export function PaintingListClient({
           defaultTags={editPainting.tags}
           sections={sections}
           storyToolsEnabled={storyToolsEnabled}
+          neighbors={paintings}
         />
       )}
     </div>

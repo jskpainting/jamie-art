@@ -19,47 +19,13 @@ import {
   listSectionPaintingImages,
   type SectionPaintingImage,
 } from "@/lib/actions/covers"
+import { IMAGE_PRESETS } from "@/lib/image-presets"
+import { IDENTITY_RECIPE, areaToRecipeCrop, renderEdit } from "@/lib/image-edit"
+import { recordImageEdit } from "@/lib/actions/image-edits"
 
-const COVER_ASPECT = 4 / 3 // matches the public section card (aspect-[4/3])
-const MAX_OUTPUT_PX = 4000
-const BUCKET = "site-images"
-
-// Crop + compress an image data-URL to a JPEG blob (mirrors ImageUploadCropper).
-async function compress(imageSrc: string, cropPixels?: Area): Promise<Blob> {
-  const img = new window.Image()
-  img.src = imageSrc
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error("Failed to load image for processing"))
-  })
-
-  const srcX = cropPixels?.x ?? 0
-  const srcY = cropPixels?.y ?? 0
-  const srcW = cropPixels?.width ?? img.naturalWidth
-  const srcH = cropPixels?.height ?? img.naturalHeight
-  if (srcW < 1 || srcH < 1) throw new Error("Crop area is too small — try zooming out")
-
-  const scale = Math.min(1, MAX_OUTPUT_PX / Math.max(srcW, srcH))
-  const outW = Math.round(srcW * scale)
-  const outH = Math.round(srcH * scale)
-
-  const canvas = document.createElement("canvas")
-  canvas.width = outW
-  canvas.height = outH
-  const ctx = canvas.getContext("2d")
-  if (!ctx) throw new Error("Could not get canvas context")
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = "high"
-  ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH)
-
-  return new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Image conversion failed"))),
-      "image/jpeg",
-      0.95
-    )
-  )
-}
+const PRESET = IMAGE_PRESETS.galleryCover
+const COVER_ASPECT = PRESET.ratio as number // matches the public section card (aspect-[4/3])
+const BUCKET = PRESET.bucket
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -147,15 +113,35 @@ export function CoverImagePicker({
     setSaving(true)
     setError(null)
     try {
-      const blob = await compress(imageSrc, croppedAreaPixels)
-      const formData = new FormData()
-      formData.append("file", blob, "cover.jpg")
-      formData.append("bucket", BUCKET)
-      const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-      const json = (await res.json()) as { url?: string; error?: string }
-      if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed")
-      setLocalUrl(json.url)
-      onChange(json.url)
+      const recipe = { crop: areaToRecipeCrop(croppedAreaPixels), brightness: 1, contrast: 1 }
+      const { blob } = await renderEdit(imageSrc, recipe, PRESET.maxOutputPx)
+
+      async function upload(b: Blob, folder?: "crops") {
+        const formData = new FormData()
+        formData.append("file", b, "cover.jpg")
+        formData.append("bucket", BUCKET)
+        if (folder) formData.append("folder", folder)
+        const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
+        const json = (await res.json()) as { url?: string; path?: string; error?: string }
+        if (!res.ok || !json.url || !json.path) throw new Error(json.error ?? "Upload failed")
+        return { url: json.url, path: json.path }
+      }
+
+      // Non-destructive: keep the untouched original at the bucket root, and
+      // save the crop as a new derivative under crops/ (never overwrite).
+      const original = await renderEdit(imageSrc, IDENTITY_RECIPE, PRESET.maxOutputPx)
+      const orig = await upload(original.blob)
+      const derivative = await upload(blob, "crops")
+      await recordImageEdit({
+        bucket: BUCKET,
+        path: derivative.path,
+        source_bucket: BUCKET,
+        source_path: orig.path,
+        recipe,
+      })
+
+      setLocalUrl(derivative.url)
+      onChange(derivative.url)
       setImageSrc(null)
       toast.success("Cover updated", { duration: 5000 })
     } catch (e) {

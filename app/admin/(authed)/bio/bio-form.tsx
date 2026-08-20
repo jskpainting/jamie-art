@@ -69,11 +69,10 @@ export function BioForm({ bio, showFocal }: BioFormProps) {
     <div className="max-w-2xl space-y-6">
       <FormField label="Headshot (portrait, 4:5)">
         <ImageUploadCropper
-          bucket="headshots"
+          preset="headshot"
           currentImageUrl={headshot_url}
-          aspectRatio={4 / 5}
           label="Headshot"
-          onUploadComplete={(url) => setHeadshot(url)}
+          onUploadComplete={(result) => setHeadshot(result?.url ?? null)}
         />
         {showFocal && headshot_url && (
           <div className="mt-4">

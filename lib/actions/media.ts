@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 import { getUser, isAuthBypassed } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -8,6 +9,24 @@ import { createAdminClient } from "@/lib/supabase/admin"
 // ar-models is intentionally excluded — it stores 3D assets, not images.
 const ALLOWED_BUCKETS = ["paintings", "events", "site-images", "headshots"] as const
 export type MediaBucket = (typeof ALLOWED_BUCKETS)[number]
+
+/**
+ * Parse a Supabase public storage URL into { bucket, path }, or null.
+ * Deliberately duplicated from lib/image-edit.ts rather than imported: that
+ * module is client-only (Canvas/Image APIs) and must not be pulled into a
+ * "use server" file.
+ */
+function parsePublicStorageUrl(
+  url: string
+): { bucket: string; path: string } | null {
+  const marker = "/storage/v1/object/public/"
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  const rest = url.slice(idx + marker.length)
+  const slash = rest.indexOf("/")
+  if (slash === -1) return null
+  return { bucket: rest.slice(0, slash), path: rest.slice(slash + 1) }
+}
 
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif)$/i
 
@@ -233,5 +252,189 @@ export async function deleteMedia(
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to delete image" }
+  }
+}
+
+const UrlSchema = z.string().url()
+
+export interface ReplaceImageUrlResult {
+  ok: boolean
+  replaced: number
+  places: string[]
+  error?: string
+}
+
+/**
+ * Points every live reference to `oldUrl` at `newUrl` instead. Mirrors
+ * `getMediaUsage` column-for-column (as UPDATEs instead of SELECTs) so the
+ * two can never drift — "where is this used" and "where do I replace it"
+ * stay the same list by construction.
+ */
+export async function replaceImageUrl(
+  oldUrl: string,
+  newUrl: string
+): Promise<ReplaceImageUrlResult> {
+  const user = await getUser()
+  if (!user) return { ok: false, replaced: 0, places: [], error: "Unauthorized" }
+
+  const oldParsed = UrlSchema.safeParse(oldUrl)
+  const newParsed = UrlSchema.safeParse(newUrl)
+  if (!oldParsed.success || !newParsed.success) {
+    return { ok: false, replaced: 0, places: [], error: "Invalid image URL" }
+  }
+
+  // Defense in depth: this action rewrites the image URL on the home hero, the
+  // About/Commission photos, paintings, events and gallery covers at once. A
+  // syntactically-valid URL is not enough — confine the replacement to a public
+  // object in one of OUR OWN storage buckets, so it can never repoint the live
+  // site's imagery at an external host.
+  const target = parsePublicStorageUrl(newParsed.data)
+  if (
+    !target ||
+    !(ALLOWED_BUCKETS as readonly string[]).includes(target.bucket) ||
+    !newParsed.data.startsWith(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/`)
+  ) {
+    return {
+      ok: false,
+      replaced: 0,
+      places: [],
+      error: "New image must be a file in your own image library.",
+    }
+  }
+
+  try {
+    const supabase = await db()
+    let replaced = 0
+    const places: string[] = []
+    // Static public routes revalidate as-is; dynamic section/painting
+    // subtree pages revalidate with "layout" so nested detail pages pick up
+    // the change too.
+    const staticRoutes = new Set<string>()
+    const layoutRoutes = new Set<string>()
+
+    const { data: heroRows, error: heroErr } = await supabase
+      .from("settings")
+      .update({ home_hero_image_url: newUrl })
+      .eq("home_hero_image_url", oldUrl)
+      .select("id")
+    if (heroErr) throw heroErr
+    if (heroRows && heroRows.length > 0) {
+      replaced += heroRows.length
+      places.push("Home page hero")
+      staticRoutes.add("/")
+    }
+
+    const { data: aboutRows, error: aboutErr } = await supabase
+      .from("settings")
+      .update({ about_image_url: newUrl })
+      .eq("about_image_url", oldUrl)
+      .select("id")
+    if (aboutErr) throw aboutErr
+    if (aboutRows && aboutRows.length > 0) {
+      replaced += aboutRows.length
+      places.push("About page photo")
+      staticRoutes.add("/about")
+    }
+
+    const { data: commissionRows, error: commissionErr } = await supabase
+      .from("settings")
+      .update({ commission_image_url: newUrl })
+      .eq("commission_image_url", oldUrl)
+      .select("id")
+    if (commissionErr) throw commissionErr
+    if (commissionRows && commissionRows.length > 0) {
+      replaced += commissionRows.length
+      places.push("Commission page photo")
+      staticRoutes.add("/commission")
+    }
+
+    const { data: bioRows, error: bioErr } = await supabase
+      .from("bio")
+      .update({ headshot_url: newUrl })
+      .eq("headshot_url", oldUrl)
+      .select("id")
+    if (bioErr) throw bioErr
+    if (bioRows && bioRows.length > 0) {
+      replaced += bioRows.length
+      places.push("About page headshot")
+      staticRoutes.add("/about")
+    }
+
+    const { data: paintingRows, error: paintingErr } = await supabase
+      .from("paintings")
+      .update({ primary_image_url: newUrl })
+      .eq("primary_image_url", oldUrl)
+      .select("title, slug, sections!paintings_section_id_fkey(slug)")
+    if (paintingErr) throw paintingErr
+    for (const p of paintingRows ?? []) {
+      replaced++
+      places.push(`Painting: ${p.title}`)
+      const sectionSlug = (p as { sections?: { slug?: string } | null }).sections?.slug
+      staticRoutes.add("/portfolio")
+      if (sectionSlug) {
+        layoutRoutes.add(`/portfolio/${sectionSlug}`)
+        layoutRoutes.add(`/portfolio/${sectionSlug}/${p.slug}`)
+      }
+    }
+
+    const { data: paintingImageRows, error: paintingImageErr } = await supabase
+      .from("painting_images")
+      .update({ url: newUrl })
+      .eq("url", oldUrl)
+      .select("paintings(title, slug, sections!paintings_section_id_fkey(slug))")
+    if (paintingImageErr) throw paintingImageErr
+    for (const row of paintingImageRows ?? []) {
+      replaced++
+      const painting = (
+        row as {
+          paintings?: { title?: string; slug?: string; sections?: { slug?: string } | null } | null
+        }
+      ).paintings
+      places.push(`Extra image on: ${painting?.title ?? "a painting"}`)
+      const sectionSlug = painting?.sections?.slug
+      staticRoutes.add("/portfolio")
+      if (sectionSlug && painting?.slug) {
+        layoutRoutes.add(`/portfolio/${sectionSlug}`)
+        layoutRoutes.add(`/portfolio/${sectionSlug}/${painting.slug}`)
+      }
+    }
+
+    const { data: eventRows, error: eventErr } = await supabase
+      .from("events")
+      .update({ image_url: newUrl })
+      .eq("image_url", oldUrl)
+      .select("title")
+    if (eventErr) throw eventErr
+    for (const ev of eventRows ?? []) {
+      replaced++
+      places.push(`Event: ${ev.title}`)
+      staticRoutes.add("/events")
+      staticRoutes.add("/")
+    }
+
+    const { data: sectionRows, error: sectionErr } = await supabase
+      .from("sections")
+      .update({ cover_image_url: newUrl })
+      .eq("cover_image_url", oldUrl)
+      .select("title")
+    if (sectionErr) throw sectionErr
+    for (const s of sectionRows ?? []) {
+      replaced++
+      places.push(`Gallery cover: ${s.title}`)
+      staticRoutes.add("/portfolio")
+    }
+
+    for (const path of staticRoutes) revalidatePath(path)
+    for (const path of layoutRoutes) revalidatePath(path, "layout")
+    revalidatePath("/admin/media")
+
+    return { ok: true, replaced, places }
+  } catch (e) {
+    return {
+      ok: false,
+      replaced: 0,
+      places: [],
+      error: e instanceof Error ? e.message : "Failed to update references",
+    }
   }
 }

@@ -36,9 +36,8 @@ export default async function AdminCommissionPage() {
       <div className="flex flex-col gap-10">
         <SettingsImageField
           label="Photo at the top of the page"
-          aspectRatio="free"
+          preset="commissionHero"
           currentImageUrl={settings?.commission_image_url ?? null}
-          bucket="site-images"
           field="commission_image_url"
           hintText="Upload the full photo — then click the focal point below to control what stays visible."
           focalX={settings?.commission_focal_x ?? 50}

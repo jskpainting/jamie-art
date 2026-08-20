@@ -1,17 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Plus, Pencil, Trash2, Search, Users, Upload, X } from "lucide-react"
+import { Plus, Pencil, Trash2, Users, Upload, X } from "lucide-react"
 import { updateContact, deleteContact } from "@/lib/actions/contacts"
 import { CsvImport } from "@/components/admin/csv-import"
 import { DataTable } from "@/components/admin/data-table"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { ContactFormDialog } from "./contact-form-dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Contact, ContactsStats } from "@/lib/types"
 
@@ -20,21 +20,68 @@ interface ContactsClientProps {
   stats: ContactsStats
 }
 
+type SubscribedFilter = "all" | "subscribed" | "unsubscribed"
+type SortKey = "newest" | "oldest" | "name" | "email"
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "name", label: "Name A–Z" },
+  { value: "email", label: "Email A–Z" },
+]
+
+const FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "subscribed", label: "Subscribed" },
+  { value: "unsubscribed", label: "Unsubscribed" },
+]
+
+function contactName(c: Contact) {
+  return [c.first_name, c.last_name].filter(Boolean).join(" ")
+}
+
 export function ContactsClient({ contacts, stats }: ContactsClientProps) {
   const [search, setSearch] = useState("")
+  const [subscribedFilter, setSubscribedFilter] = useState<SubscribedFilter>("all")
+  const [sort, setSort] = useState<SortKey>("newest")
   const [addOpen, setAddOpen] = useState(false)
   const [editContact, setEditContact] = useState<Contact | null>(null)
   const [showImport, setShowImport] = useState(contacts.length === 0)
 
-  const filtered = contacts.filter((c) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      c.email.toLowerCase().includes(q) ||
-      (c.first_name ?? "").toLowerCase().includes(q) ||
-      (c.last_name ?? "").toLowerCase().includes(q)
-    )
-  })
+  const hasActiveFilters = search.trim().length > 0 || subscribedFilter !== "all"
+
+  function clearFilters() {
+    setSearch("")
+    setSubscribedFilter("all")
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let result = contacts.filter((c) => {
+      if (subscribedFilter === "subscribed" && !c.subscribed) return false
+      if (subscribedFilter === "unsubscribed" && c.subscribed) return false
+      if (!q) return true
+      return (
+        c.email.toLowerCase().includes(q) ||
+        (c.first_name ?? "").toLowerCase().includes(q) ||
+        (c.last_name ?? "").toLowerCase().includes(q)
+      )
+    })
+    result = [...result].sort((a, b) => {
+      switch (sort) {
+        case "oldest":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case "name":
+          return contactName(a).localeCompare(contactName(b))
+        case "email":
+          return a.email.localeCompare(b.email)
+        case "newest":
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
+    return result
+  }, [contacts, search, subscribedFilter, sort])
 
   const rows = filtered as unknown as Record<string, unknown>[]
   const existingEmails = contacts.map((c) => c.email)
@@ -118,26 +165,39 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search contacts…"
-            className="pl-8"
-          />
-        </div>
-        {!showImport && (
-          <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-            <Upload className="h-4 w-4 mr-1" />
-            Import CSV
+      <div className="flex flex-wrap items-center gap-3 justify-between">
+        <ListToolbar
+          className="flex-1 min-w-0"
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search contacts…"
+          searchLabel="Search contacts"
+          filterValue={subscribedFilter}
+          onFilterChange={(v) => setSubscribedFilter(v as SubscribedFilter)}
+          filterOptions={FILTER_OPTIONS}
+          filterLabel="Filter by subscription"
+          sortValue={sort}
+          onSortChange={(v) => setSort(v as SortKey)}
+          sortOptions={SORT_OPTIONS}
+          sortLabel="Sort contacts"
+          resultCount={filtered.length}
+          totalCount={contacts.length}
+          itemNoun="contacts"
+          hasActiveFilters={hasActiveFilters}
+          onClear={clearFilters}
+        />
+        <div className="flex items-center gap-2 shrink-0">
+          {!showImport && (
+            <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+              <Upload className="h-4 w-4 mr-1" />
+              Import CSV
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add contact
           </Button>
-        )}
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Add contact
-        </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -177,10 +237,8 @@ export function ContactsClient({ contacts, stats }: ContactsClientProps) {
           )
         }}
         emptyState={
-          search ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              No contacts match your search.
-            </div>
+          hasActiveFilters ? (
+            <FilteredEmptyState query={search} itemNoun="contacts" onClear={clearFilters} />
           ) : (
             <EmptyState
               icon={Users}

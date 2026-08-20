@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
@@ -30,6 +30,17 @@ const statusStyle: Record<PaintingStatus, string> = {
     "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
 }
 
+function subscribeNoop() {
+  return () => {}
+}
+function getArRequestedSnapshot() {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("ar") === "1"
+}
+function getArRequestedServerSnapshot() {
+  return false
+}
+
 interface PaintingDetailViewProps {
   painting: PaintingWithImages
   sectionSlug: string
@@ -49,6 +60,32 @@ export function PaintingDetailView({
   arModelUrl,
 }: PaintingDetailViewProps) {
   const [zoomOpen, setZoomOpen] = useState(false)
+
+  // `?ar=1` (QR-card deep link): auto-open the AR viewer's first step so the
+  // model-viewer library + .glb start loading immediately, then smooth-scroll
+  // it into view once mounted. Read via window.location.search — NOT
+  // useSearchParams/server searchParams — so this page stays static and
+  // CSR-bailout-free. Nothing else changes under this param.
+  const arRequested = useSyncExternalStore(
+    subscribeNoop,
+    getArRequestedSnapshot,
+    getArRequestedServerSnapshot
+  )
+  const arSectionRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!arRequested || !arModelUrl) return
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    const timer = setTimeout(() => {
+      arSectionRef.current?.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "center",
+      })
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [arRequested, arModelUrl])
 
   const priceDisplay =
     painting.status === "available" && painting.price_cents
@@ -194,6 +231,7 @@ export function PaintingDetailView({
               <>
                 <InquireDialog
                   painting={painting}
+                  settings={settings}
                   className="w-full h-11 text-[15px] rounded-full"
                 />
                 <p className="text-xs text-muted-foreground text-center">
@@ -231,7 +269,7 @@ export function PaintingDetailView({
                       className="inline-flex w-fit items-center gap-2 h-9 px-4 rounded-full border border-border bg-background text-sm font-medium hover:bg-muted transition-colors"
                     >
                       <Palette className="h-4 w-4" />
-                      Request a similar commission
+                      Request a similar painting on commission
                     </Link>
                   </div>
                 )}
@@ -239,11 +277,18 @@ export function PaintingDetailView({
             )}
 
             {arModelUrl && (
-              <div className="mt-1 flex flex-col gap-3 border-t border-border pt-5">
+              <div
+                ref={arSectionRef}
+                className="mt-1 flex flex-col gap-3 border-t border-border pt-5"
+              >
                 <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
                   See it in your space
                 </span>
-                <ArViewer src={arModelUrl} alt={paintingAlt(painting.title)} />
+                <ArViewer
+                  src={arModelUrl}
+                  alt={paintingAlt(painting.title)}
+                  promoted={arRequested}
+                />
               </div>
             )}
           </div>

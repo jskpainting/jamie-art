@@ -83,11 +83,10 @@ export function SectionEditButton({ section }: SectionEditButtonProps) {
 
             <FormField label="Cover image">
               <ImageUploadCropper
-                bucket="paintings"
+                preset="galleryCover"
                 currentImageUrl={cover_image_url}
-                aspectRatio="free"
                 label="Cover image"
-                onUploadComplete={(url) => setCover(url)}
+                onUploadComplete={(result) => setCover(result?.url ?? null)}
               />
             </FormField>
           </div>

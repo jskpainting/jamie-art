@@ -175,6 +175,10 @@ export interface Settings {
   commission_heading?: string | null
   commission_intro?: string | null
   contact_intro?: string | null
+  // Optional "Ask about this painting" settings (fall back to built-in default
+  // template / SMS-enabled=true when null/missing pre-migration).
+  inquiry_message_template?: string | null
+  inquiry_sms_enabled?: boolean | null
   updated_at: string
   home_hero_focal_x: number
   home_hero_focal_y: number

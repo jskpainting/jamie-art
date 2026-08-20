@@ -1,11 +1,12 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { Mail, ChevronDown, ChevronRight, Inbox } from "lucide-react"
 import { updateCommissionInquiryStatus } from "@/lib/actions/commission"
 import { EmptyState } from "@/components/admin/empty-state"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { buildCommissionReplyMailto } from "@/lib/email-templates"
 import type { CommissionInquiry, CommissionInquiriesStats, CommissionInquiryStatus } from "@/lib/types"
 
@@ -15,18 +16,48 @@ interface CommissionInquiriesClientProps {
 }
 
 type FilterTab = "all" | CommissionInquiryStatus
+type SortKey = "newest" | "oldest"
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+]
 
 export function CommissionInquiriesClient({
   commissions,
   stats,
 }: CommissionInquiriesClientProps) {
   const [filter, setFilter] = useState<FilterTab>("all")
+  const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<SortKey>("newest")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
-  const filtered = commissions.filter(
-    (inq) => filter === "all" || inq.status === filter
-  )
+  const hasActiveFilters = search.trim().length > 0 || filter !== "all"
+
+  function clearFilters() {
+    setSearch("")
+    setFilter("all")
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let result = commissions.filter((inq) => {
+      if (filter !== "all" && inq.status !== filter) return false
+      if (!q) return true
+      return (
+        (inq.from_name ?? "").toLowerCase().includes(q) ||
+        (inq.from_email ?? "").toLowerCase().includes(q) ||
+        (inq.message ?? "").toLowerCase().includes(q) ||
+        (inq.reference_painting_title ?? "").toLowerCase().includes(q)
+      )
+    })
+    result = [...result].sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return sort === "newest" ? diff : -diff
+    })
+    return result
+  }, [commissions, filter, search, sort])
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -100,16 +131,37 @@ export function CommissionInquiriesClient({
         ))}
       </div>
 
+      {/* Search + sort */}
+      <ListToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, email, message, painting…"
+        searchLabel="Search commission inquiries"
+        sortValue={sort}
+        onSortChange={(v) => setSort(v as SortKey)}
+        sortOptions={SORT_OPTIONS}
+        sortLabel="Sort commission inquiries"
+        resultCount={filtered.length}
+        totalCount={commissions.length}
+        itemNoun="inquiries"
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      />
+
       {/* Table */}
       {filtered.length === 0 ? (
-        <EmptyState
-          icon={Inbox}
-          message={
-            filter === "all"
-              ? "Commission inquiries from your commission page will appear here."
-              : "No inquiries in this category."
-          }
-        />
+        commissions.length > 0 && hasActiveFilters ? (
+          <FilteredEmptyState query={search} itemNoun="inquiries" onClear={clearFilters} />
+        ) : (
+          <EmptyState
+            icon={Inbox}
+            message={
+              filter === "all"
+                ? "Commission inquiries from your commission page will appear here."
+                : "No inquiries in this category."
+            }
+          />
+        )
       ) : (
         <div className="w-full overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm min-w-[600px]">

@@ -17,6 +17,7 @@ import {
   Settings,
   KeyRound,
   Brush,
+  QrCode,
 } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/admin/portfolio", label: "Portfolio", Icon: Image, exact: false },
   { href: "/admin/media", label: "Images", Icon: Images, exact: false },
   { href: "/admin/events", label: "Events", Icon: Calendar, exact: false },
+  { href: "/admin/show-cards", label: "Show cards", Icon: QrCode, exact: false },
   { href: "/admin/contacts", label: "Contacts", Icon: Users, exact: false },
   { href: "/admin/inquiries", label: "Inquiries", Icon: Mail, exact: false },
   { href: "/admin/newsletters", label: "Newsletters", Icon: Send, exact: false },

@@ -22,6 +22,27 @@ export const SITE_COPY_DEFAULTS = {
   // Note above the form on the Contact page (app/(public)/contact/page.tsx)
   contact_intro:
     "Have a question about a painting, want to discuss a commission, or just want to say hello? Send a note and Jamie will reply within a few days.",
+  // Pre-filled message in the "Ask about this painting" sheet
+  // (components/inquire-dialog.tsx). Supports two placeholders, substituted at
+  // render time by fillInquiryTemplate below:
+  //   {painting}  -> the painting's title
+  //   {artist}    -> the artist's name
+  inquiry_message_template:
+    "Hi Jamie, I saw {painting} on your website and I'd love to know more about it.",
 } as const
 
 export type SiteCopyKey = keyof typeof SITE_COPY_DEFAULTS
+
+/**
+ * Fill in {painting} / {artist} placeholders in an inquiry message template.
+ * Case-sensitive, replaces every occurrence, and leaves any other {brace}
+ * text untouched (so a stray "{" in someone's edited message never throws).
+ */
+export function fillInquiryTemplate(
+  template: string,
+  values: { painting: string; artist: string }
+): string {
+  return template
+    .replaceAll("{painting}", values.painting)
+    .replaceAll("{artist}", values.artist)
+}

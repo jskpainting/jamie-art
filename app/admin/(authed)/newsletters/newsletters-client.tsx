@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ChevronDown, ChevronUp, Send } from "lucide-react"
 import { format } from "date-fns"
 import { PageHeader } from "@/components/admin/page-header"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,11 +23,33 @@ interface Props {
   subscriberCount: number
 }
 
+type SortKey = "newest" | "oldest"
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+]
+
 export function NewslettersClient({ newsletters: initialNewsletters, subscriberCount }: Props) {
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [newsletters] = useState(initialNewsletters)
+  const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<SortKey>("newest")
+
+  const hasActiveFilters = search.trim().length > 0
+
+  const filteredNewsletters = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const result = q
+      ? newsletters.filter((nl) => nl.subject.toLowerCase().includes(q))
+      : newsletters
+    return [...result].sort((a, b) => {
+      const diff = new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+      return sort === "newest" ? diff : -diff
+    })
+  }, [newsletters, search, sort])
 
   const previewHtml = subject || body
     ? renderNewsletterHtml({
@@ -131,6 +154,26 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
       {newsletters.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-medium text-base">Past sends</h2>
+
+          <ListToolbar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search subject…"
+            searchLabel="Search newsletters"
+            sortValue={sort}
+            onSortChange={(v) => setSort(v as SortKey)}
+            sortOptions={SORT_OPTIONS}
+            sortLabel="Sort newsletters"
+            resultCount={filteredNewsletters.length}
+            totalCount={newsletters.length}
+            itemNoun="newsletters"
+            hasActiveFilters={hasActiveFilters}
+            onClear={() => setSearch("")}
+          />
+
+          {filteredNewsletters.length === 0 ? (
+            <FilteredEmptyState query={search} itemNoun="newsletters" onClear={() => setSearch("")} />
+          ) : (
           <div className="rounded-2xl border border-border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -142,7 +185,7 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
                 </tr>
               </thead>
               <tbody>
-                {newsletters.map((nl) => (
+                {filteredNewsletters.map((nl) => (
                   <>
                     <tr
                       key={nl.id}
@@ -193,6 +236,7 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 

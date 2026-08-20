@@ -41,9 +41,26 @@ export function PasswordForm() {
         password: values.password,
       })
       if (error) {
-        toast.error(error.message || "Couldn't update the password.", {
-          duration: 5000,
-        })
+        // Plain-language mapping — never surface a raw Supabase error string.
+        const status = (error as { status?: number }).status
+        const msg = (error.message || "").toLowerCase()
+        if (status === 429 || msg.includes("rate") || msg.includes("too many")) {
+          toast.error("Too many attempts right now — please wait a minute and try again.", {
+            duration: 5000,
+          })
+        } else if (msg.includes("different from") || msg.includes("same password")) {
+          toast.error("Choose a password different from your current one.", {
+            duration: 5000,
+          })
+        } else if (msg.includes("session") || msg.includes("not authenticated")) {
+          toast.error("Your session expired — please sign in again.", {
+            duration: 5000,
+          })
+        } else {
+          toast.error("Couldn't update the password. Please try again in a moment.", {
+            duration: 5000,
+          })
+        }
         return
       }
       toast.success("Password updated. You can now use it to sign in.", {

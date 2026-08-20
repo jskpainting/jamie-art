@@ -186,11 +186,10 @@ export function EventFormDialog({
 
           <FormField label="Image">
             <ImageUploadCropper
-              bucket="events"
+              preset="event"
               currentImageUrl={image_url}
-              aspectRatio={16 / 9}
               label="Event image"
-              onUploadComplete={(url) => setImageUrl(url)}
+              onUploadComplete={(result) => setImageUrl(result?.url ?? null)}
             />
           </FormField>
 

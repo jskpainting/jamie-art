@@ -20,8 +20,11 @@ import { CSS } from "@dnd-kit/utilities"
 import Image from "next/image"
 import { Upload, X, Loader2, GripVertical } from "lucide-react"
 import { toast } from "sonner"
-import { uploadImage, UploadError } from "@/lib/storage/upload"
+import { IMAGE_PRESETS, type PresetKey } from "@/lib/image-presets"
+import { IDENTITY_RECIPE, renderEdit } from "@/lib/image-edit"
 import { cn } from "@/lib/utils"
+
+const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
 
 interface SortableImageProps {
   id: string
@@ -76,18 +79,19 @@ interface MultiImageItem {
 }
 
 interface MultiImageUploadProps {
-  bucket: string
+  preset: PresetKey
   value: MultiImageItem[]
   onChange: (items: MultiImageItem[]) => void
   className?: string
 }
 
 export function MultiImageUpload({
-  bucket,
+  preset: presetKey,
   value,
   onChange,
   className,
 }: MultiImageUploadProps) {
+  const preset = IMAGE_PRESETS[presetKey]
   const [uploading, setUploading] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor))
@@ -97,24 +101,35 @@ export function MultiImageUpload({
       setUploading(true)
       const results: MultiImageItem[] = []
       for (const file of acceptedFiles) {
+        if (file.size > MAX_FILE_BYTES) {
+          toast.error(`${file.name}: must be under 20 MB`)
+          continue
+        }
         try {
-          const result = await uploadImage(bucket, file)
-          results.push({ id: crypto.randomUUID(), url: result.url })
-        } catch (e) {
-          if (e instanceof UploadError) {
-            if (e.kind === "size") toast.error(`${file.name}: must be under 10 MB`)
-            else if (e.kind === "type")
-              toast.error(`${file.name}: only JPEG, PNG, WebP allowed`)
-            else toast.error(`${file.name}: upload failed — try again`)
-          } else {
-            toast.error(`${file.name}: upload failed — try again`)
-          }
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = () => reject(new Error("Failed to read file"))
+            reader.readAsDataURL(file)
+          })
+          // Extra painting photos never get cropped by this field — they're
+          // just compressed to the same ceiling as every other painting photo.
+          const rendered = await renderEdit(dataUrl, IDENTITY_RECIPE, preset.maxOutputPx)
+          const formData = new FormData()
+          formData.append("file", rendered.blob, "image.jpg")
+          formData.append("bucket", preset.bucket)
+          const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
+          const json = (await res.json()) as { url?: string; error?: string }
+          if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed")
+          results.push({ id: crypto.randomUUID(), url: json.url })
+        } catch {
+          toast.error(`${file.name}: upload failed — try again`)
         }
       }
       if (results.length > 0) onChange([...value, ...results])
       setUploading(false)
     },
-    [bucket, value, onChange]
+    [preset, value, onChange]
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

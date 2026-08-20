@@ -64,7 +64,8 @@ export function PasswordLoginForm({ next }: PasswordLoginFormProps) {
         // Never reveal whether the email exists — same message either way.
         toast.error("That email or password isn't right.")
       } else {
-        toast.error(error.message || "Couldn't sign in. Please try again.")
+        // Never surface a raw Supabase error string — always plain language.
+        toast.error("Couldn't sign in. Please try again in a moment.")
       }
       return
     }
@@ -116,8 +117,9 @@ export function PasswordLoginForm({ next }: PasswordLoginFormProps) {
         setCooldown(60)
         return
       }
-      // Never reveal whether the email exists.
-      toast.error(error.message || "Couldn't send the reset link. Please try again.")
+      // Never reveal whether the email exists, and never surface a raw
+      // Supabase error string.
+      toast.error("Couldn't send the reset link. Please try again in a moment.")
       return
     }
     setResetSent(true)

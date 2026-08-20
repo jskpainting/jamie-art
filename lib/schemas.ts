@@ -62,6 +62,8 @@ export const PaintingWriteSchema = z.object({
   primary_image_url: z.string().nullable().optional(),
   print_available: z.boolean().default(false),
   commission_available: z.boolean().default(false),
+  width: z.coerce.number().int().positive().nullable().optional(),
+  height: z.coerce.number().int().positive().nullable().optional(),
 })
 
 export type PaintingWriteInput = z.infer<typeof PaintingWriteSchema>
@@ -177,3 +179,33 @@ export type SettingsInput = z.infer<typeof SettingsSchema>
 export type SettingsFormValues = z.input<typeof SettingsSchema>
 
 export const GalleryLayoutSchema = z.enum(["pairs", "mosaic", "columns"])
+
+export const QuickInquireSettingsSchema = z.object({
+  inquiry_message_template: z.string().max(2000).nullable().optional(),
+  inquiry_sms_enabled: z.boolean().optional(),
+})
+
+export type QuickInquireSettingsInput = z.infer<typeof QuickInquireSettingsSchema>
+
+export const EditRecipeSchema = z.object({
+  crop: z
+    .object({
+      x: z.number(),
+      y: z.number(),
+      width: z.number(),
+      height: z.number(),
+    })
+    .nullable(),
+  brightness: z.number().min(0.5).max(1.5),
+  contrast: z.number().min(0.5).max(1.5),
+})
+
+export const ImageEditSchema = z.object({
+  bucket: z.string().min(1),
+  path: z.string().min(1),
+  source_bucket: z.string().min(1),
+  source_path: z.string().min(1),
+  recipe: EditRecipeSchema,
+})
+
+export type ImageEditInput = z.infer<typeof ImageEditSchema>

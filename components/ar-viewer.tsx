@@ -1,11 +1,40 @@
 "use client"
 
-import { createElement, useEffect, useState } from "react"
+import { createElement, useEffect, useRef, useState, useSyncExternalStore } from "react"
+
+function subscribeCoarsePointer(onChange: () => void) {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {}
+  const mq = window.matchMedia("(pointer: coarse)")
+  mq.addEventListener("change", onChange)
+  return () => mq.removeEventListener("change", onChange)
+}
+function getCoarsePointerSnapshot() {
+  return typeof window !== "undefined" && !!window.matchMedia
+    ? window.matchMedia("(pointer: coarse)").matches
+    : false
+}
+function getCoarsePointerServerSnapshot() {
+  return false
+}
+/** Feature-detect a coarse pointer (touch) without brittle UA sniffing. */
+function useCoarsePointer() {
+  return useSyncExternalStore(
+    subscribeCoarsePointer,
+    getCoarsePointerSnapshot,
+    getCoarsePointerServerSnapshot
+  )
+}
 
 interface ArViewerProps {
   /** Public URL of the painting's .glb model. */
   src: string
   alt: string
+  /**
+   * True for the `?ar=1` QR-card arrival flow. Opens the viewer immediately
+   * (so `@google/model-viewer` and the .glb start loading as soon as
+   * possible) and promotes the AR button so it's the obvious next tap.
+   */
+  promoted?: boolean
 }
 
 /**
@@ -15,10 +44,18 @@ interface ArViewerProps {
  * model-viewer generates a USDZ for on the fly) or Android Scene Viewer, placing
  * the painting on a wall at its real size. On desktop it's a rotatable 3D preview.
  */
-export function ArViewer({ src, alt }: ArViewerProps) {
-  const [open, setOpen] = useState(false)
+export function ArViewer({ src, alt, promoted = false }: ArViewerProps) {
+  // `promoted` is read from window.location.search in a parent effect, so it
+  // can flip true a tick after this component's first render. Deriving `open`
+  // from `promoted || manuallyOpened` (rather than syncing a separate `open`
+  // state via an effect) means that later flip is picked up for free.
+  const [manuallyOpened, setManuallyOpened] = useState(false)
+  const open = promoted || manuallyOpened
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [arSupported, setArSupported] = useState<boolean | null>(null)
+  const coarsePointer = useCoarsePointer()
+  const modelRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open || ready) return
@@ -31,11 +68,28 @@ export function ArViewer({ src, alt }: ArViewerProps) {
     }
   }, [open, ready])
 
+  // Once the model has loaded, ask model-viewer whether this device can
+  // actually launch AR (WebXR / Scene Viewer / Quick Look). The built-in
+  // ar-button slot already hides itself when AR isn't available — this is
+  // only used to swap the caption on an unsupported phone so nothing reads
+  // as broken.
+  useEffect(() => {
+    const el = modelRef.current
+    if (!el) return
+    function handleLoad() {
+      setArSupported(
+        Boolean((el as unknown as { canActivateAR?: boolean }).canActivateAR)
+      )
+    }
+    el.addEventListener("load", handleLoad)
+    return () => el.removeEventListener("load", handleLoad)
+  }, [ready])
+
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setManuallyOpened(true)}
         className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
       >
         <svg
@@ -74,11 +128,26 @@ export function ArViewer({ src, alt }: ArViewerProps) {
     )
   }
 
+  const unsupportedOnPhone = coarsePointer && arSupported === false
+
+  const caption = unsupportedOnPhone
+    ? "AR isn't supported on this phone — but here's the painting up close."
+    : promoted
+      ? "Tap, then point your camera at your wall — the painting appears at its real size."
+      : (
+          <>
+            On a phone, tap <span className="font-medium">View in your space</span>{" "}
+            and point your camera at a wall — the painting appears at its real size.
+            On a computer, drag to rotate.
+          </>
+        )
+
   return (
     <div className="space-y-3">
       {createElement(
         "model-viewer",
         {
+          ref: modelRef,
           src,
           alt,
           ar: true,
@@ -100,17 +169,14 @@ export function ArViewer({ src, alt }: ArViewerProps) {
           "button",
           {
             slot: "ar-button",
-            className:
-              "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-lg",
+            className: promoted
+              ? "ar-pulse absolute bottom-4 left-4 right-4 rounded-full bg-foreground px-5 py-3 text-sm font-medium text-background shadow-lg"
+              : "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-lg",
           },
           "View in your space"
         )
       )}
-      <p className="text-xs text-muted-foreground text-center">
-        On a phone, tap <span className="font-medium">View in your space</span>{" "}
-        and point your camera at a wall — the painting appears at its real size.
-        On a computer, drag to rotate.
-      </p>
+      <p className="text-xs text-muted-foreground text-center">{caption}</p>
     </div>
   )
 }

@@ -1,188 +1,312 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useDropzone } from "react-dropzone"
-import Cropper from "react-easy-crop"
-import type { Area } from "react-easy-crop"
-import "react-easy-crop/react-easy-crop.css"
 import Image from "next/image"
-import { Loader2, Upload, Images } from "lucide-react"
+import { Loader2, Upload, Images, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
+import { ImageEditorDialog } from "@/components/admin/image-editor-dialog"
 import { cn } from "@/lib/utils"
+import { IMAGE_PRESETS, type PresetKey } from "@/lib/image-presets"
+import {
+  IDENTITY_RECIPE,
+  isIdentityRecipe,
+  loadImageDims,
+  parsePublicStorageUrl,
+  renderEdit,
+  type EditRecipe,
+} from "@/lib/image-edit"
+import {
+  checkImageEditsEnabled,
+  getImageEdit,
+  recordImageEdit,
+} from "@/lib/actions/image-edits"
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
-const MAX_OUTPUT_PX = 4000
 
-type Bucket = "headshots" | "paintings" | "events" | "site-images"
+export interface UploadCompleteResult {
+  url: string
+  width: number
+  height: number
+}
 
 interface Props {
   currentImageUrl?: string | null
-  aspectRatio?: number | "free"
-  bucket: Bucket
-  onUploadComplete: (url: string | null) => void
+  preset: PresetKey
+  onUploadComplete: (result: UploadCompleteResult | null) => void
   label?: string
   className?: string
   /** Show the "Choose from library" button. Defaults to true — set false to avoid nesting (e.g. inside the library's own uploader). */
   libraryEnabled?: boolean
+  /** Physical width/height ratio nudge (design plan IE-4/A1) — forwarded to ImageEditorDialog. */
+  physicalRatio?: number | null
+  /** Display label for the physical size, e.g. "24 × 36 in" — forwarded to ImageEditorDialog. */
+  physicalDimsLabel?: string | null
 }
 
-// Compress (and optionally crop) an image data-URL to a JPEG Blob.
-async function compress(imageSrc: string, cropPixels?: Area): Promise<Blob> {
-  const img = new window.Image()
-  img.src = imageSrc
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error("Failed to load image for processing"))
+function publicStorageUrl(bucket: string, path: string): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  return `${base}/storage/v1/object/public/${bucket}/${path}`
+}
+
+function readAsDataUrl(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error("Failed to read file"))
+    reader.readAsDataURL(file)
   })
-
-  const srcX = cropPixels?.x ?? 0
-  const srcY = cropPixels?.y ?? 0
-  const srcW = cropPixels?.width ?? img.naturalWidth
-  const srcH = cropPixels?.height ?? img.naturalHeight
-
-  if (srcW < 1 || srcH < 1) {
-    throw new Error("Crop area is too small — try zooming out")
-  }
-
-  const scale = Math.min(1, MAX_OUTPUT_PX / Math.max(srcW, srcH))
-  const outW = Math.round(srcW * scale)
-  const outH = Math.round(srcH * scale)
-
-  const canvas = document.createElement("canvas")
-  canvas.width = outW
-  canvas.height = outH
-  const ctx = canvas.getContext("2d")
-  if (!ctx) throw new Error("Could not get canvas context")
-
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = "high"
-  ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH)
-
-  return new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(
-      (b) =>
-        b
-          ? resolve(b)
-          : reject(new Error("Image conversion failed — try a different file")),
-      "image/jpeg",
-      0.95
-    )
-  )
 }
+
+// Supabase public buckets send access-control-allow-origin:*, so this
+// fetch→blob round trip doesn't taint the canvas.
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const res = await fetch(url)
+  const blob = await res.blob()
+  return readAsDataUrl(blob)
+}
+
+type EditSource = { bucket: string; path: string }
 
 export function ImageUploadCropper({
   currentImageUrl,
-  aspectRatio = "free",
-  bucket,
+  preset: presetKey,
   onUploadComplete,
-  label = "Image",
+  label,
   className,
   libraryEnabled = true,
+  physicalRatio,
+  physicalDimsLabel,
 }: Props) {
+  const preset = IMAGE_PRESETS[presetKey]
+  const fieldLabel = label ?? preset.label
+
   const [localUrl, setLocalUrl] = useState<string | null>(currentImageUrl ?? null)
-  const [imageSrc, setImageSrc] = useState<string | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [crop, setCrop] = useState({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
-  // True when the image currently in the crop dialog came from the library
-  // (re-crop for this field) rather than a fresh file — uploads go into
-  // `crops/` so derivatives stay grouped with the source image.
-  const [croppingFromLibrary, setCroppingFromLibrary] = useState(false)
+  const [editEnabled, setEditEnabled] = useState(false)
+
+  // Editor dialog state — shared between "fresh upload / crop" and "re-edit
+  // an already-saved image" flows.
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editorSrc, setEditorSrc] = useState<string | null>(null)
+  const [initialRecipe, setInitialRecipe] = useState<EditRecipe | null>(null)
+  // Present only in "edit an existing image" mode — where the untouched
+  // original lives, so a re-edit is lossless and Revert has somewhere to go.
+  const [editSource, setEditSource] = useState<EditSource | null>(null)
+  const [editSourceDims, setEditSourceDims] = useState<{ width: number; height: number } | null>(
+    null
+  )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function uploadBlob(blob: Blob, folder?: "crops"): Promise<string> {
+  useEffect(() => {
+    checkImageEditsEnabled().then(setEditEnabled).catch(() => setEditEnabled(false))
+  }, [])
+
+  async function uploadBlob(blob: Blob, folder?: "crops"): Promise<{ url: string; path: string }> {
     const formData = new FormData()
     formData.append("file", blob, "image.jpg")
-    formData.append("bucket", bucket)
+    formData.append("bucket", preset.bucket)
     if (folder) formData.append("folder", folder)
     const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-    const json = (await res.json()) as { url?: string; error?: string }
-    if (!res.ok) throw new Error(json.error ?? "Upload failed")
-    return json.url!
+    const json = (await res.json()) as { url?: string; path?: string; error?: string }
+    if (!res.ok || !json.url || !json.path) throw new Error(json.error ?? "Upload failed")
+    return { url: json.url, path: json.path }
   }
 
-  async function handlePick(pickedUrl: string) {
-    if (aspectRatio === "free") {
-      // Free-form field — reuse the picked image by reference, no re-upload.
-      setLocalUrl(pickedUrl)
-      onUploadComplete(pickedUrl)
-      toast.success("Image selected", { duration: 5000 })
-      return
-    }
-
-    // Fixed aspect ratio — feed the picked image into the existing crop flow.
-    // Supabase public buckets send access-control-allow-origin:*, so this
-    // fetch→blob round trip doesn't taint the canvas.
-    try {
-      const res = await fetch(pickedUrl)
-      const blob = await res.blob()
-      const dataUrl = await readAsDataUrl(new File([blob], "picked", { type: blob.type }))
-      setImageSrc(dataUrl)
-      setCrop({ x: 0, y: 0 })
-      setZoom(1)
-      setCroppedAreaPixels(null)
-      setUploadError(null)
-      setCroppingFromLibrary(true)
-      setDialogOpen(true)
-    } catch {
-      toast.error("Couldn't load that image — try another", { duration: 5000 })
-    }
+  function closeDialog() {
+    setDialogOpen(false)
+    setEditorSrc(null)
+    setInitialRecipe(null)
+    setEditSource(null)
+    setEditSourceDims(null)
   }
 
-  function readAsDataUrl(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error("Failed to read file"))
-      reader.readAsDataURL(file)
-    })
-  }
+  // ---- Fresh file selection ----
 
   async function processFile(file: File) {
     if (file.size > MAX_FILE_BYTES) {
       toast.error("File must be under 20 MB", { duration: 5000 })
       return
     }
-
     const dataUrl = await readAsDataUrl(file)
 
-    if (aspectRatio === "free") {
-      // Skip crop dialog — compress and upload immediately
+    if (preset.ratio === "free") {
+      // "Free" presets skip the crop dialog entirely — compress and upload
+      // the untouched original immediately.
       setUploading(true)
       try {
-        const blob = await compress(dataUrl)
-        const url = await uploadBlob(blob)
+        const rendered = await renderEdit(dataUrl, IDENTITY_RECIPE, preset.maxOutputPx)
+        const { url } = await uploadBlob(rendered.blob)
         setLocalUrl(url)
-        onUploadComplete(url)
         toast.success("Image uploaded", { duration: 5000 })
+        onUploadComplete({ url, width: rendered.width, height: rendered.height })
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Upload failed", { duration: 5000 })
       } finally {
         setUploading(false)
       }
-    } else {
-      setImageSrc(dataUrl)
-      setCrop({ x: 0, y: 0 })
-      setZoom(1)
-      setCroppedAreaPixels(null)
-      setUploadError(null)
-      setCroppingFromLibrary(false)
-      setDialogOpen(true)
+      return
     }
+
+    // Fixed aspect ratio — open the shared editor. No original exists in
+    // storage yet, so save-time uploads BOTH the untouched original and the
+    // cropped derivative (non-destructive from the very first upload).
+    setEditorSrc(dataUrl)
+    setInitialRecipe(null)
+    setEditSource(null)
+    setEditSourceDims(null)
+    setDialogOpen(true)
+  }
+
+  async function handlePick(url: string, bucket: string, path: string) {
+    if (preset.ratio === "free") {
+      // Free fields reuse the picked image by reference (no re-upload), but
+      // still need its true pixel size — read it via the same CORS-safe
+      // fetch→blob round trip used everywhere else in this component.
+      setLocalUrl(url)
+      toast.success("Image selected", { duration: 5000 })
+      try {
+        const dims = await loadImageDims(await fetchAsDataUrl(url))
+        onUploadComplete({ url, width: dims.width, height: dims.height })
+      } catch {
+        onUploadComplete({ url, width: 0, height: 0 })
+      }
+      return
+    }
+
+    try {
+      const dataUrl = await fetchAsDataUrl(url)
+      setEditorSrc(dataUrl)
+      setInitialRecipe(null)
+      // The picked file is itself the source — a fresh derivative renders
+      // into this field's own bucket, but points back at wherever the
+      // picked file actually lives.
+      setEditSource({ bucket, path })
+      setEditSourceDims(null)
+      setDialogOpen(true)
+    } catch {
+      toast.error("Couldn't load that image — try another", { duration: 5000 })
+    }
+  }
+
+  // ---- Editor save (covers fresh upload, library pick, and re-edit) ----
+
+  async function handleEditorSave(result: {
+    blob: Blob
+    recipe: EditRecipe
+    width: number
+    height: number
+  }) {
+    if (!editorSrc) return
+    setUploading(true)
+    try {
+      if (editSource) {
+        // Re-editing (or cropping a library pick) — the original already
+        // exists somewhere; only upload the new derivative.
+        if (isIdentityRecipe(result.recipe)) {
+          // Nothing changed — point straight at the original, no new file.
+          const url = publicStorageUrl(editSource.bucket, editSource.path)
+          const dims = editSourceDims ?? { width: result.width, height: result.height }
+          setLocalUrl(url)
+          closeDialog()
+          onUploadComplete({ url, width: dims.width, height: dims.height })
+          toast.success("Photo updated", { duration: 5000 })
+          return
+        }
+        const { url, path } = await uploadBlob(result.blob, "crops")
+        const recordResult = await recordImageEdit({
+          bucket: preset.bucket,
+          path,
+          source_bucket: editSource.bucket,
+          source_path: editSource.path,
+          recipe: result.recipe,
+        })
+        if (!recordResult.ok && editEnabled) {
+          // Non-fatal — the derivative is saved either way, but log for the owner.
+          toast.error(recordResult.error, { duration: 5000 })
+        }
+        setLocalUrl(url)
+        closeDialog()
+        onUploadComplete({ url, width: result.width, height: result.height })
+        toast.success("Photo updated", { duration: 5000 })
+      } else {
+        // Fresh upload with a crop — nothing exists in storage yet, so save
+        // both the untouched original (root) and the cropped derivative (crops/).
+        const original = await renderEdit(editorSrc, IDENTITY_RECIPE, preset.maxOutputPx)
+        const orig = await uploadBlob(original.blob)
+        const derivative = await uploadBlob(result.blob, "crops")
+        await recordImageEdit({
+          bucket: preset.bucket,
+          path: derivative.path,
+          source_bucket: preset.bucket,
+          source_path: orig.path,
+          recipe: result.recipe,
+        })
+        setLocalUrl(derivative.url)
+        closeDialog()
+        onUploadComplete({ url: derivative.url, width: result.width, height: result.height })
+        toast.success("Image uploaded", { duration: 5000 })
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed", { duration: 5000 })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // ---- Edit affordance on an already-saved image ----
+
+  async function openEditExisting() {
+    if (!editEnabled || !localUrl || uploading) return
+    const parsed = parsePublicStorageUrl(localUrl)
+    if (!parsed) {
+      toast.error("Can't edit this image — try Replace instead", { duration: 5000 })
+      return
+    }
+
+    const existing = await getImageEdit(parsed.bucket, parsed.path)
+    let source: EditSource
+    let recipe: EditRecipe | null
+    if (existing.ok && existing.data) {
+      source = { bucket: existing.data.source_bucket, path: existing.data.source_path }
+      recipe = existing.data.recipe
+    } else {
+      // No recorded original — treat the current file as the source. One
+      // more lossy hop this time, lossless on every re-edit after.
+      source = parsed
+      recipe = null
+    }
+
+    try {
+      const sourceUrl = publicStorageUrl(source.bucket, source.path)
+      const dataUrl = await fetchAsDataUrl(sourceUrl)
+      const img = new window.Image()
+      img.src = dataUrl
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error("Failed to load image"))
+      })
+      setEditorSrc(dataUrl)
+      setInitialRecipe(recipe)
+      setEditSource(source)
+      setEditSourceDims({ width: img.naturalWidth, height: img.naturalHeight })
+      setDialogOpen(true)
+    } catch {
+      toast.error("Couldn't load that image — try another", { duration: 5000 })
+    }
+  }
+
+  function handleRevert() {
+    if (!editSource || !editSourceDims) return
+    const url = publicStorageUrl(editSource.bucket, editSource.path)
+    setLocalUrl(url)
+    closeDialog()
+    onUploadComplete({ url, width: editSourceDims.width, height: editSourceDims.height })
+    toast.success("Photo updated", { duration: 5000 })
   }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -197,37 +321,6 @@ export function ImageUploadCropper({
     noKeyboard: true,
   })
 
-  async function handleSave() {
-    if (!imageSrc || !croppedAreaPixels) return
-    setUploading(true)
-    setUploadError(null)
-    try {
-      const blob = await compress(imageSrc, croppedAreaPixels)
-      const url = await uploadBlob(blob, croppingFromLibrary ? "crops" : undefined)
-      // Dialog-close-before-callback: clear dialog state before the parent's
-      // callback fires, so an RSC refresh triggered by the caller's server
-      // action doesn't race with this component's own state updates.
-      setLocalUrl(url)
-      setDialogOpen(false)
-      setImageSrc(null)
-      setCroppingFromLibrary(false)
-      toast.success("Image uploaded", { duration: 5000 })
-      onUploadComplete(url)
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : "Upload failed")
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  function handleCancel() {
-    if (uploading) return
-    setDialogOpen(false)
-    setImageSrc(null)
-    setUploadError(null)
-    setCroppingFromLibrary(false)
-  }
-
   function openPicker() {
     fileInputRef.current?.click()
   }
@@ -238,29 +331,31 @@ export function ImageUploadCropper({
     e.target.value = ""
   }
 
-  // Aspect ratio for the existing image preview (padding-bottom trick)
   const previewPaddingBottom =
-    aspectRatio !== "free"
-      ? `${(1 / (aspectRatio as number)) * 100}%`
-      : undefined
+    preset.ratio !== "free" ? `${(1 / preset.ratio) * 100}%` : undefined
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {localUrl ? (
         <div className="flex flex-col gap-2">
-          <div
-            className="relative overflow-hidden bg-muted w-full max-w-[280px]"
+          <button
+            type="button"
+            onClick={editEnabled ? openEditExisting : undefined}
+            className={cn(
+              "relative overflow-hidden bg-muted w-full max-w-[280px] text-left",
+              editEnabled && "cursor-pointer"
+            )}
             style={previewPaddingBottom ? { paddingBottom: previewPaddingBottom } : { height: 160 }}
           >
             <Image
               src={localUrl}
-              alt={label}
+              alt={fieldLabel}
               fill
               className="object-cover"
               sizes="280px"
             />
-          </div>
-          <div className="flex gap-2">
+          </button>
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -271,6 +366,18 @@ export function ImageUploadCropper({
               {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
               Replace
             </Button>
+            {editEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openEditExisting}
+                disabled={uploading}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
+            )}
             {libraryEnabled && (
               <Button
                 type="button"
@@ -359,86 +466,35 @@ export function ImageUploadCropper({
         onChange={onFileInputChange}
       />
 
+      {preset.hint && <p className="text-xs text-muted-foreground max-w-[280px]">{preset.hint}</p>}
+
       {libraryEnabled && (
         <MediaPickerDialog
           open={pickerOpen}
           onOpenChange={setPickerOpen}
-          initialBucket={bucket}
-          onPick={(url) => handlePick(url)}
+          initialBucket={preset.bucket}
+          onPick={(url, bucket, path) => {
+            setPickerOpen(false)
+            handlePick(url, bucket, path)
+          }}
         />
       )}
 
-      <Dialog
+      <ImageEditorDialog
         open={dialogOpen}
         onOpenChange={(open) => {
-          if (!open && !uploading) handleCancel()
+          if (!open && !uploading) closeDialog()
         }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          className="w-full max-w-[calc(100%-2rem)] sm:max-w-2xl p-0 gap-0 h-[100dvh] sm:h-auto flex flex-col overflow-hidden"
-        >
-          <DialogHeader className="px-4 pt-4 pb-3 shrink-0 border-b border-border">
-            <DialogTitle>Crop {label}</DialogTitle>
-          </DialogHeader>
-
-          {/*
-            Fixed explicit height — this is the root fix for Bug B.
-            The previous component used flex-1 inside sm:h-auto which collapsed
-            to 0px, giving a 0×0 canvas and a null toBlob.
-          */}
-          <div className="relative w-full h-[60dvh] sm:h-[400px] bg-black overflow-hidden shrink-0">
-            {imageSrc && (
-              <Cropper
-                image={imageSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={aspectRatio as number}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={(_area, pixels) => setCroppedAreaPixels(pixels)}
-              />
-            )}
-          </div>
-
-          <div className="px-4 py-3 shrink-0 border-t border-border">
-            <label className="text-xs text-muted-foreground mb-1 block">Zoom</label>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.01}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-full accent-foreground"
-            />
-          </div>
-
-          {uploadError && (
-            <p className="px-4 pb-2 text-xs text-destructive shrink-0">{uploadError}</p>
-          )}
-
-          <DialogFooter className="shrink-0 rounded-none border-t px-4 py-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={uploading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={uploading}
-              className="gap-2"
-            >
-              {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {uploading ? "Saving…" : "Save crop"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        src={editorSrc}
+        preset={preset}
+        initialRecipe={initialRecipe}
+        physicalRatio={physicalRatio}
+        physicalDimsLabel={physicalDimsLabel}
+        onSave={handleEditorSave}
+        saving={uploading}
+        onRevert={editSource && initialRecipe ? handleRevert : undefined}
+        title={editSource ? `Edit ${fieldLabel}` : `Crop ${fieldLabel}`}
+      />
     </div>
   )
 }

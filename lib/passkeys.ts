@@ -61,6 +61,25 @@ export function useBrowserSupportsPasskeys(): boolean {
   )
 }
 
+/**
+ * True only if passkey sign-in is actually usable right now: the schema is
+ * migrated AND at least one admin has registered a passkey. Backed by a
+ * public, no-enumeration endpoint (a single boolean, nothing account-
+ * specific) — this is what the login page gates its passkey button on, so
+ * browser support alone can never produce a dead-end button before the
+ * feature is really available.
+ */
+export async function checkPasskeysAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/passkey/availability")
+    if (!res.ok) return false
+    const data = await res.json()
+    return !!data?.available
+  } catch {
+    return false
+  }
+}
+
 /** True if a built-in platform authenticator (Face/Touch ID, Windows Hello) is
  *  available — used only to tailor copy, never to gate the flow. */
 export async function platformAuthenticatorAvailable(): Promise<boolean> {

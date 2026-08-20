@@ -233,7 +233,9 @@ function DetailsForm({ card, sections, onSave }: DetailsFormProps) {
               checked={commissionAvailable}
               onCheckedChange={(v) => setCommissionAvailable(!!v)}
             />
-            <span className="text-sm">Available on commission</span>
+            <span className="text-sm">
+              Offer a similar painting on commission
+            </span>
           </label>
         </div>
       </div>

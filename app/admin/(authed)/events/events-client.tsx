@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { format } from "date-fns"
@@ -8,9 +8,10 @@ import { Plus, Pencil, Trash2, ExternalLink, Calendar } from "lucide-react"
 import { deleteEvent } from "@/lib/actions/events"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Button } from "@/components/ui/button"
 import { EventFormDialog } from "./event-form-dialog"
-import type { Event } from "@/lib/types"
+import type { Event, EventStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -106,14 +107,67 @@ interface EventsClientProps {
   initialAddOpen?: boolean
 }
 
+type StatusFilter = "all" | EventStatus
+type SortKey = "soonest" | "latest"
+
+function buildSortOptions(): { value: string; label: string }[] {
+  return [
+    { value: "soonest", label: "Date, soonest first" },
+    { value: "latest", label: "Date, latest first" },
+  ]
+}
+
 export function EventsClient({ current = [], upcoming, past, allowCurrent = false, showFocal = false, initialAddOpen = false }: EventsClientProps) {
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [sort, setSort] = useState<SortKey>("soonest")
   const router = useRouter()
 
   useEffect(() => {
     if (initialAddOpen) router.replace("/admin/events")
   }, [initialAddOpen, router])
+
+  const all = useMemo(() => [...current, ...upcoming, ...past], [current, upcoming, past])
+  const total = all.length
+  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "all"
+
+  function clearFilters() {
+    setSearch("")
+    setStatusFilter("all")
+  }
+
+  const filterAndSort = useCallback(
+    (list: Event[]) => {
+      const q = search.trim().toLowerCase()
+      const result = list.filter((e) => {
+        if (statusFilter !== "all" && e.status !== statusFilter) return false
+        if (!q) return true
+        return (
+          e.title.toLowerCase().includes(q) ||
+          (e.location ?? "").toLowerCase().includes(q)
+        )
+      })
+      result.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+      return sort === "soonest" ? result : result.reverse()
+    },
+    [search, statusFilter, sort]
+  )
+
+  const filteredCurrent = useMemo(() => filterAndSort(current), [current, filterAndSort])
+  const filteredUpcoming = useMemo(() => filterAndSort(upcoming), [upcoming, filterAndSort])
+  const filteredPast = useMemo(() => filterAndSort(past), [past, filterAndSort])
+  const visibleCount = filteredCurrent.length + filteredUpcoming.length + filteredPast.length
+
+  const statusFilterOptions = useMemo(() => {
+    const opts = [{ value: "all", label: "All statuses" }]
+    if (allowCurrent) opts.push({ value: "current", label: "On view now" })
+    opts.push({ value: "upcoming", label: "Upcoming" })
+    opts.push({ value: "past", label: "Past" })
+    opts.push({ value: "cancelled", label: "Cancelled" })
+    return opts
+  }, [allowCurrent])
 
   return (
     <div className="space-y-8">
@@ -124,52 +178,80 @@ export function EventsClient({ current = [], upcoming, past, allowCurrent = fals
         </Button>
       </div>
 
-      {/* On view now */}
-      {current.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-amber-700 dark:text-amber-400">
-            On View Now
-          </h2>
-          <div className="space-y-2">
-            {current.map((e) => (
-              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
-            ))}
-          </div>
-        </section>
-      )}
+      <ListToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search title or location…"
+        searchLabel="Search events"
+        filterValue={statusFilter}
+        onFilterChange={(v) => setStatusFilter(v as StatusFilter)}
+        filterOptions={statusFilterOptions}
+        filterLabel="Filter by status"
+        sortValue={sort}
+        onSortChange={(v) => setSort(v as SortKey)}
+        sortOptions={buildSortOptions()}
+        sortLabel="Sort events"
+        resultCount={visibleCount}
+        totalCount={total}
+        itemNoun="events"
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      />
 
-      {/* Upcoming */}
-      <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-          Upcoming
-        </h2>
-        {upcoming.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            message="No upcoming events."
-            action={{ label: "Add event", onClick: () => setAddOpen(true) }}
-          />
-        ) : (
-          <div className="space-y-2">
-            {upcoming.map((e) => (
-              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
-            ))}
-          </div>
-        )}
-      </section>
+      {total > 0 && visibleCount === 0 ? (
+        <FilteredEmptyState query={search} itemNoun="events" onClear={clearFilters} />
+      ) : (
+        <>
+          {/* On view now */}
+          {filteredCurrent.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-amber-700 dark:text-amber-400">
+                On View Now
+              </h2>
+              <div className="space-y-2">
+                {filteredCurrent.map((e) => (
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                ))}
+              </div>
+            </section>
+          )}
 
-      {/* Past */}
-      {past.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-            Past
-          </h2>
-          <div className="space-y-2">
-            {past.map((e) => (
-              <EventRow key={e.id} event={e} onEdit={setEditEvent} />
-            ))}
-          </div>
-        </section>
+          {/* Upcoming */}
+          <section className="space-y-3">
+            <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+              Upcoming
+            </h2>
+            {filteredUpcoming.length === 0 ? (
+              total === 0 ? (
+                <EmptyState
+                  icon={Calendar}
+                  message="No upcoming events."
+                  action={{ label: "Add event", onClick: () => setAddOpen(true) }}
+                />
+              ) : null
+            ) : (
+              <div className="space-y-2">
+                {filteredUpcoming.map((e) => (
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Past */}
+          {filteredPast.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+                Past
+              </h2>
+              <div className="space-y-2">
+                {filteredPast.map((e) => (
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       <EventFormDialog

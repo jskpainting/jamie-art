@@ -72,95 +72,99 @@ export function SectionsClient({ initialSections, showFocal }: SectionsClientPro
         renderItem={(section, handle) => {
           const isUncategorized = section.slug === "uncategorized"
           return (
-            <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-              {handle}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {handle}
 
-              {/* Thumbnail */}
-              <div className="relative h-12 w-12 shrink-0 overflow-hidden bg-muted">
-                {section.cover_image_url ? (
-                  <Image
-                    src={section.cover_image_url}
-                    alt={section.title}
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
-                  </div>
-                )}
+                {/* Thumbnail */}
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden bg-muted">
+                  {section.cover_image_url ? (
+                    <Image
+                      src={section.cover_image_url}
+                      alt={section.title}
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Title + slug */}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium break-words">{section.title}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate">
+                    /{section.slug}
+                  </p>
+                </div>
               </div>
 
-              {/* Title + slug */}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{section.title}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate">
-                  /{section.slug}
-                </p>
-              </div>
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:ml-auto">
+                {/* Count */}
+                <Badge variant="secondary" className="shrink-0 text-xs">
+                  {section.painting_count}{" "}
+                  {section.painting_count === 1 ? "painting" : "paintings"}
+                </Badge>
 
-              {/* Count */}
-              <Badge variant="secondary" className="shrink-0 text-xs">
-                {section.painting_count}{" "}
-                {section.painting_count === 1 ? "painting" : "paintings"}
-              </Badge>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditSection(section)}
-                  className="h-8 w-8 p-0"
-                  title="Edit section"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-
-                {isUncategorized ? (
-                  <span
-                    title="This section can't be deleted — paintings move here when a section is removed."
-                    className="inline-flex"
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditSection(section)}
+                    className="h-10 w-10 sm:h-8 sm:w-8 p-0"
+                    title="Edit section"
                   >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled
-                      className="h-8 w-8 p-0 opacity-30 cursor-not-allowed"
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+
+                  {isUncategorized ? (
+                    <span
+                      title="This section can't be deleted — paintings move here when a section is removed."
+                      className="inline-flex"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </span>
-                ) : (
-                  <ConfirmDialog
-                    trigger={
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                        title="Delete section"
+                        disabled
+                        className="h-10 w-10 sm:h-8 sm:w-8 p-0 opacity-30 cursor-not-allowed"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                    }
-                    title={`Delete "${section.title}"?`}
-                    description={
-                      section.painting_count === 0
-                        ? "This section has no paintings. It will be permanently deleted."
-                        : `Its ${section.painting_count} ${section.painting_count === 1 ? "painting" : "paintings"} will move to Uncategorized.`
-                    }
-                    destructive
-                    onConfirm={() => handleDelete(section)}
-                  />
-                )}
+                    </span>
+                  ) : (
+                    <ConfirmDialog
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-10 w-10 sm:h-8 sm:w-8 p-0 text-muted-foreground hover:text-destructive"
+                          title="Delete section"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      }
+                      title={`Delete "${section.title}"?`}
+                      description={
+                        section.painting_count === 0
+                          ? "This section has no paintings. It will be permanently deleted."
+                          : `Its ${section.painting_count} ${section.painting_count === 1 ? "painting" : "paintings"} will move to Uncategorized.`
+                      }
+                      destructive
+                      onConfirm={() => handleDelete(section)}
+                    />
+                  )}
 
-                <Link
-                  href={`/admin/portfolio/${section.slug}`}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-1")}
-                >
-                  Manage →
-                </Link>
+                  <Link
+                    href={`/admin/portfolio/${section.slug}`}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-1")}
+                  >
+                    Manage →
+                  </Link>
+                </div>
               </div>
             </div>
           )

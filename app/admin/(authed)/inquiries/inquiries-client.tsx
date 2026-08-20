@@ -1,12 +1,13 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { Trash2, Mail, ChevronDown, ChevronRight, Inbox, ExternalLink } from "lucide-react"
 import { updateInquiryStatus, deleteInquiry } from "@/lib/actions/inquiries"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Button } from "@/components/ui/button"
 import { buildPaintingReplyMailto } from "@/lib/email-templates"
 import { CommissionInquiriesClient } from "./commission-inquiries-client"
@@ -27,6 +28,12 @@ interface InquiriesClientProps {
 
 type FilterTab = "all" | InquiryStatus
 type TopTab = "painting" | "commission"
+type SortKey = "newest" | "oldest"
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+]
 
 export function InquiriesClient({
   inquiries,
@@ -36,12 +43,36 @@ export function InquiriesClient({
 }: InquiriesClientProps) {
   const [topTab, setTopTab] = useState<TopTab>("painting")
   const [filter, setFilter] = useState<FilterTab>("all")
+  const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<SortKey>("newest")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
-  const filtered = inquiries.filter(
-    (inq) => filter === "all" || inq.status === filter
-  )
+  const hasActiveFilters = search.trim().length > 0 || filter !== "all"
+
+  function clearFilters() {
+    setSearch("")
+    setFilter("all")
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let result = inquiries.filter((inq) => {
+      if (filter !== "all" && inq.status !== filter) return false
+      if (!q) return true
+      return (
+        (inq.from_name ?? "").toLowerCase().includes(q) ||
+        (inq.from_email ?? "").toLowerCase().includes(q) ||
+        (inq.message ?? "").toLowerCase().includes(q) ||
+        (inq.painting_title ?? "").toLowerCase().includes(q)
+      )
+    })
+    result = [...result].sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return sort === "newest" ? diff : -diff
+    })
+    return result
+  }, [inquiries, filter, search, sort])
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -153,16 +184,37 @@ export function InquiriesClient({
             ))}
           </div>
 
+          {/* Search + sort */}
+          <ListToolbar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, email, message, painting…"
+            searchLabel="Search inquiries"
+            sortValue={sort}
+            onSortChange={(v) => setSort(v as SortKey)}
+            sortOptions={SORT_OPTIONS}
+            sortLabel="Sort inquiries"
+            resultCount={filtered.length}
+            totalCount={inquiries.length}
+            itemNoun="inquiries"
+            hasActiveFilters={hasActiveFilters}
+            onClear={clearFilters}
+          />
+
           {/* Table */}
           {filtered.length === 0 ? (
-            <EmptyState
-              icon={Inbox}
-              message={
-                filter === "all"
-                  ? "When someone inquires about a painting it'll show here."
-                  : "No inquiries in this category."
-              }
-            />
+            inquiries.length > 0 && hasActiveFilters ? (
+              <FilteredEmptyState query={search} itemNoun="inquiries" onClear={clearFilters} />
+            ) : (
+              <EmptyState
+                icon={Inbox}
+                message={
+                  filter === "all"
+                    ? "When someone inquires about a painting it'll show here."
+                    : "No inquiries in this category."
+                }
+              />
+            )
           ) : (
             <div className="w-full overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm min-w-[600px]">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { format } from "date-fns"
 import { ImageOff } from "lucide-react"
@@ -8,7 +8,21 @@ import { listMedia, type MediaBucket, type MediaItem } from "@/lib/actions/media
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/admin/empty-state"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { cn } from "@/lib/utils"
+
+type SortKey = "newest" | "oldest" | "largest" | "smallest"
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "largest", label: "Largest" },
+  { value: "smallest", label: "Smallest" },
+]
+
+function filenameOf(item: MediaItem): string {
+  return item.path.split("/").pop() ?? item.path
+}
 
 export type BucketFilter = MediaBucket | "all"
 
@@ -34,6 +48,8 @@ interface MediaGridProps {
   /** Bump this to force a refetch (e.g. after an upload or delete). */
   refreshKey?: number
   className?: string
+  /** Show the search + sort toolbar. Off by default in the compact picker dialog. */
+  showToolbar?: boolean
 }
 
 export function MediaGrid({
@@ -41,9 +57,12 @@ export function MediaGrid({
   initialBucket = "all",
   refreshKey = 0,
   className,
+  showToolbar = false,
 }: MediaGridProps) {
   const [bucket, setBucket] = useState<BucketFilter>(initialBucket)
   const [showCropped, setShowCropped] = useState(false)
+  const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<SortKey>("newest")
 
   // Fetch is keyed so `loading` can be derived from whether the latest
   // result matches the current request — no setState() at the top of the
@@ -74,7 +93,32 @@ export function MediaGrid({
   const items = result && result.key === requestKey ? result.items : []
   const error = result && result.key === requestKey ? result.error : null
 
-  const visible = showCropped ? items : items.filter((i) => !i.isCrop)
+  const croppedFiltered = showCropped ? items : items.filter((i) => !i.isCrop)
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let result = q
+      ? croppedFiltered.filter((i) => filenameOf(i).toLowerCase().includes(q))
+      : croppedFiltered
+    result = [...result].sort((a, b) => {
+      switch (sort) {
+        case "oldest":
+          return (a.createdAt ? new Date(a.createdAt).getTime() : 0) -
+            (b.createdAt ? new Date(b.createdAt).getTime() : 0)
+        case "largest":
+          return b.size - a.size
+        case "smallest":
+          return a.size - b.size
+        case "newest":
+        default:
+          return (b.createdAt ? new Date(b.createdAt).getTime() : 0) -
+            (a.createdAt ? new Date(a.createdAt).getTime() : 0)
+      }
+    })
+    return result
+  }, [croppedFiltered, search, sort])
+
+  const hasActiveFilters = search.trim().length > 0
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
@@ -103,6 +147,24 @@ export function MediaGrid({
         </label>
       </div>
 
+      {showToolbar && (
+        <ListToolbar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search filename…"
+          searchLabel="Search images"
+          sortValue={sort}
+          onSortChange={(v) => setSort(v as SortKey)}
+          sortOptions={SORT_OPTIONS}
+          sortLabel="Sort images"
+          resultCount={visible.length}
+          totalCount={croppedFiltered.length}
+          itemNoun="images"
+          hasActiveFilters={hasActiveFilters}
+          onClear={() => setSearch("")}
+        />
+      )}
+
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {Array.from({ length: 12 }).map((_, i) => (
@@ -111,6 +173,8 @@ export function MediaGrid({
         </div>
       ) : error ? (
         <EmptyState icon={ImageOff} message={error} />
+      ) : visible.length === 0 && croppedFiltered.length > 0 && showToolbar ? (
+        <FilteredEmptyState query={search} itemNoun="images" onClear={() => setSearch("")} />
       ) : visible.length === 0 ? (
         <EmptyState icon={ImageOff} message="No images here yet." />
       ) : (

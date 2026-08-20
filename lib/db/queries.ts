@@ -888,6 +888,89 @@ export async function getNewsletters(): Promise<Newsletter[]> {
   }
 }
 
+/** A painting plus its home section's slug/title — used by the show-cards admin tool. */
+export interface PaintingForCards extends Painting {
+  section_slug: string
+  section_title: string
+}
+
+/**
+ * ALL paintings (including sold — a show can include sold work) with the home
+ * section embedded. Embed is pinned to the FK per the PGRST201 gotcha in
+ * CLAUDE.md: a second sections<->paintings relationship (painting_sections)
+ * makes the implicit embed ambiguous without `!paintings_section_id_fkey`.
+ */
+export async function getPaintingsForCards(): Promise<PaintingForCards[]> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("*, sections!paintings_section_id_fkey(slug, title, sort_order)")
+      .order("sort_order")
+    if (error) throw error
+    return (data ?? [])
+      .map((p) => {
+        const sec = p.sections as { slug: string; title: string; sort_order: number } | null
+        return {
+          ...p,
+          sections: undefined,
+          section_slug: sec?.slug ?? "",
+          section_title: sec?.title ?? "",
+          _section_sort: sec?.sort_order ?? 0,
+        }
+      })
+      .sort((a, b) => a._section_sort - b._section_sort || a.sort_order - b.sort_order)
+      .map((p) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _section_sort, ...rest } = p
+        return rest as PaintingForCards
+      })
+  } catch (err) {
+    console.error("getPaintingsForCards error:", err)
+    return []
+  }
+}
+
+/**
+ * IDs of paintings that have a generated AR model, derived from a single
+ * `ar-models` storage bucket listing (files are named `<painting_id>.glb` —
+ * see scripts/generate-ar-model.mjs). One list() call, not N HEAD requests.
+ * Pages defensively past Supabase's 1000-row default page cap.
+ *
+ * Uses createAdminClient() directly (not the RLS-bound public client):
+ * listing a storage bucket needs a `select` policy on `storage.objects`
+ * that public/anon buckets don't grant by default (confirmed empirically —
+ * the anon key lists 0 objects in `ar-models` even though individual object
+ * URLs are publicly downloadable). This helper is only ever called from
+ * requireUser()-gated admin routes, so bypassing RLS here is safe — same
+ * rationale as submitCommissionInquiry's direct admin-client use.
+ */
+export async function getArModelIds(): Promise<Set<string>> {
+  const ids = new Set<string>()
+  try {
+    const supabase = createAdminClient()
+    const pageSize = 1000
+    let offset = 0
+    for (;;) {
+      const { data, error } = await supabase.storage
+        .from("ar-models")
+        .list("", { limit: pageSize, offset })
+      if (error) throw error
+      for (const entry of data ?? []) {
+        if (entry.name.toLowerCase().endsWith(".glb")) {
+          ids.add(entry.name.replace(/\.glb$/i, ""))
+        }
+      }
+      if (!data || data.length < pageSize) break
+      offset += pageSize
+    }
+    return ids
+  } catch (err) {
+    console.error("getArModelIds error:", err)
+    return ids
+  }
+}
+
 export async function getSubscriberCount(): Promise<number> {
   try {
     const supabase = await db()

@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { MagicLinkForm } from "@/components/admin/magic-link-form"
 import { PasswordLoginForm } from "@/components/admin/password-login-form"
 import { PasskeySignInButton } from "@/components/admin/passkey-sign-in-button"
-import { useBrowserSupportsPasskeys } from "@/lib/passkeys"
+import { checkPasskeysAvailable, useBrowserSupportsPasskeys } from "@/lib/passkeys"
 
 interface LoginMethodSwitcherProps {
   error?: string
@@ -86,12 +86,45 @@ export function LoginMethodSwitcher({ error, next }: LoginMethodSwitcherProps) {
   )
 }
 
-/** Passkey button + its own "or" divider — both hidden together on browsers
- *  without WebAuthn support, feature-detected on mount (no SSR mismatch). */
+/**
+ * Passkey button + its own "or" divider — hidden together on browsers without
+ * WebAuthn support (feature-detected on mount, no SSR mismatch), AND gated on
+ * the passkey feature actually being usable (schema migrated + at least one
+ * passkey registered anywhere). Browser support alone is not enough: before
+ * the migration runs, or before the owner has registered a first passkey,
+ * the button would only ever dead-end, so it stays hidden and a quiet hint
+ * points at the real path (sign in with a password once, then add a passkey
+ * from Account) instead.
+ */
 function PasskeySignInButtonWithDivider({ next }: { next?: string }) {
   const supported = useBrowserSupportsPasskeys()
+  const [available, setAvailable] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!supported) return
+    let cancelled = false
+    checkPasskeysAvailable().then((ok) => {
+      if (!cancelled) setAvailable(ok)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [supported])
 
   if (!supported) return null
+
+  // Still resolving the availability check — say nothing rather than flash a
+  // button that might immediately disappear.
+  if (available === null) return null
+
+  if (!available) {
+    return (
+      <p className="text-xs text-muted-foreground text-center leading-relaxed">
+        New here? Sign in with your password once, then turn on Face ID or
+        your fingerprint in Account.
+      </p>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">

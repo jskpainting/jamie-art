@@ -122,3 +122,25 @@
     animation: none;
   }
 }
+
+/* AR arrival ("?ar=1" QR-card flow) — a single slow pulse on the promoted
+   AR button to draw the eye, then still. */
+.ar-pulse {
+  animation: arPulse 1.6s ease-in-out 2;
+}
+@keyframes arPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.035);
+    opacity: 0.92;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ar-pulse {
+    animation: none;
+  }
+}

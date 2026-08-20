@@ -5,7 +5,14 @@ import { z } from "zod"
 import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { SettingsSchema, type SettingsInput, FocalSchema, GalleryLayoutSchema } from "@/lib/schemas"
+import {
+  SettingsSchema,
+  type SettingsInput,
+  FocalSchema,
+  GalleryLayoutSchema,
+  QuickInquireSettingsSchema,
+  type QuickInquireSettingsInput,
+} from "@/lib/schemas"
 import { isSchemaSetupError, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 import type { GalleryLayout } from "@/lib/types"
@@ -268,6 +275,48 @@ export async function updateSettingFocal(field: ImageField, x: number, y: number
   } catch (e) {
     if (isSchemaSetupError(e)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
     return { ok: false, error: e instanceof Error ? e.message : "Failed to update focal point" }
+  }
+}
+
+export async function updateQuickInquireSettings(input: QuickInquireSettingsInput) {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  const parsed = QuickInquireSettingsSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message }
+  }
+
+  // Same "storing null lets the default kick in" normalization as updateSiteCopy.
+  const payload: Record<string, unknown> = { ...parsed.data }
+  if (typeof payload.inquiry_message_template === "string") {
+    const trimmed = payload.inquiry_message_template.trim()
+    payload.inquiry_message_template =
+      trimmed === "" || trimmed === SITE_COPY_DEFAULTS.inquiry_message_template
+        ? null
+        : payload.inquiry_message_template
+  }
+
+  try {
+    const supabase = await db()
+    const { data: existing } = await supabase.from("settings").select("id").single()
+    if (existing) {
+      const { error } = await supabase
+        .from("settings")
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from("settings").insert(payload)
+      if (error) throw error
+    }
+
+    revalidatePath("/admin/settings")
+    revalidatePath("/portfolio/[section]/[slug]", "page")
+    return { ok: true }
+  } catch (e) {
+    if (isSchemaSetupError(e)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to update inquiry settings" }
   }
 }
 

@@ -2,7 +2,9 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Sparkles } from "lucide-react"
+import { Loader2, Sparkles, ChevronDown, ChevronRight } from "lucide-react"
+import { parsePhysical } from "@/lib/mosaic-layout"
+import { WallFitPreview } from "@/components/admin/wall-fit-preview"
 import {
   createPainting,
   updatePainting,
@@ -30,7 +32,7 @@ import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { TagInput } from "@/components/admin/tag-input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { slugify } from "@/lib/utils"
-import type { PaintingWithImages, Section } from "@/lib/types"
+import type { Painting, PaintingWithImages, Section } from "@/lib/types"
 
 interface MultiImageItem {
   id: string
@@ -46,6 +48,8 @@ interface PaintingFormDialogProps {
   sections?: Section[]
   /** Whether the story_public/story_notes migration is applied (enables the AI story writer). */
   storyToolsEnabled?: boolean
+  /** Other paintings already in this section — scale reference for the wall preview. */
+  neighbors?: Painting[]
 }
 
 export function PaintingFormDialog({
@@ -56,6 +60,7 @@ export function PaintingFormDialog({
   defaultTags = [],
   sections = [],
   storyToolsEnabled = false,
+  neighbors = [],
 }: PaintingFormDialogProps) {
   const isEdit = !!painting
 
@@ -81,6 +86,8 @@ export function PaintingFormDialog({
   const [primaryUrl, setPrimaryUrl] = useState<string | null>(
     painting?.primary_image_url ?? null
   )
+  const [primaryWidth, setPrimaryWidth] = useState<number | null>(painting?.width ?? null)
+  const [primaryHeight, setPrimaryHeight] = useState<number | null>(painting?.height ?? null)
   const [additionalImages, setAdditionalImages] = useState<MultiImageItem[]>(
     (painting?.painting_images ?? []).map((img) => ({
       id: img.id,
@@ -92,6 +99,15 @@ export function PaintingFormDialog({
   const [commissionAvailable, setCommissionAvailable] = useState(painting?.commission_available ?? false)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [wallPreviewOpen, setWallPreviewOpen] = useState(false)
+
+  // Live-derived from `dimensions` so typing dimensions after uploading a
+  // photo immediately lights up the shape check on re-edit (A1).
+  const physicalDims = parsePhysical(dimensions)
+  const physicalRatio = physicalDims ? physicalDims[0] / physicalDims[1] : null
+  const physicalDimsLabel = physicalDims ? `${physicalDims[0]} × ${physicalDims[1]} in` : null
+  const primaryImageAspect =
+    primaryWidth && primaryHeight ? primaryWidth / primaryHeight : null
 
   function handleTitleChange(value: string) {
     setTitle(value)
@@ -156,6 +172,8 @@ export function PaintingFormDialog({
         primary_image_url: primaryUrl,
         print_available: printAvailable,
         commission_available: commissionAvailable,
+        width: primaryWidth,
+        height: primaryHeight,
       }
 
       if (isEdit) {
@@ -434,17 +452,48 @@ export function PaintingFormDialog({
 
           <FormField label="Primary image">
             <ImageUploadCropper
-              bucket="paintings"
+              preset="painting"
               currentImageUrl={primaryUrl}
-              aspectRatio="free"
               label="Primary image"
-              onUploadComplete={(url) => setPrimaryUrl(url)}
+              physicalRatio={physicalRatio}
+              physicalDimsLabel={physicalDimsLabel}
+              onUploadComplete={(result) => {
+                setPrimaryUrl(result?.url ?? null)
+                setPrimaryWidth(result?.width || null)
+                setPrimaryHeight(result?.height || null)
+              }}
             />
           </FormField>
 
+          {primaryUrl && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setWallPreviewOpen((v) => !v)}
+                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {wallPreviewOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+                See it on the wall
+              </button>
+              {wallPreviewOpen && (
+                <WallFitPreview
+                  imageUrl={primaryUrl}
+                  imageAspect={primaryImageAspect}
+                  dimensions={dimensions}
+                  neighbors={neighbors}
+                  excludeId={painting?.id ?? null}
+                />
+              )}
+            </div>
+          )}
+
           <FormField label="Additional images">
             <MultiImageUpload
-              bucket="paintings"
+              preset="paintingExtra"
               value={additionalImages}
               onChange={setAdditionalImages}
             />
@@ -467,7 +516,9 @@ export function PaintingFormDialog({
                 checked={commissionAvailable}
                 onCheckedChange={(v) => setCommissionAvailable(!!v)}
               />
-              <span className="text-sm">Available on commission</span>
+              <span className="text-sm">
+                Offer a similar painting on commission
+              </span>
             </label>
           </div>
         </div>

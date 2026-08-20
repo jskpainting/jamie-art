@@ -100,6 +100,64 @@ alter table settings add column if not exists commission_heading text;
 Unlocks: **Sign in with Face ID / fingerprint** (Account → Passkeys) and the
 **label + heading** fields on Admin → Commission page.
 
+---
+
+# Round 3 — AI stories + one-tap "ask about this painting"
+
+Same steps (SQL Editor → New query → paste → **Run**).
+
+```sql
+-- 1) STORIES — lets the AI turn your rough notes into a short story, and lets
+--    you keep a story private (saved, but hidden from the website).
+alter table paintings add column if not exists story_public boolean not null default true;
+alter table paintings add column if not exists story_notes text;
+
+-- 2) ASK ABOUT THIS PAINTING — the pre-written message visitors send you, and
+--    whether they can send it as a text message to your phone.
+alter table settings add column if not exists inquiry_message_template text;
+alter table settings add column if not exists inquiry_sms_enabled boolean not null default true;
+```
+
+Unlocks: the **"Write it for me"** button and **"Show this story on the website"**
+switch in the painting form, plus the **"When someone asks about a painting"**
+card in Settings (edit the pre-written message, turn texting on/off).
+
+> Printable **Show cards** need no SQL at all — they work as soon as the code is live.
+
+---
+
+# Round 4 — Non-destructive image editing
+
+Same steps (SQL Editor → New query → paste → **Run**).
+
+```sql
+-- Non-destructive image editing: remembers, for every edited photo, the
+-- untouched original it came from and what was done to it (crop +
+-- brightness/contrast), so re-opening the editor never loses quality and
+-- "Revert to original" always works.
+create table if not exists image_edits (
+  id            uuid primary key default gen_random_uuid(),
+  bucket        text not null,
+  path          text not null,
+  source_bucket text not null,
+  source_path   text not null,
+  recipe        jsonb not null default '{}',
+  created_at    timestamptz default now(),
+  unique (bucket, path)
+);
+
+alter table image_edits enable row level security;
+
+drop policy if exists "auth all image_edits" on image_edits;
+create policy "auth all image_edits"
+  on image_edits for all using (auth.role() = 'authenticated');
+```
+
+Unlocks: the **Edit** (pencil) button and **"Revert to original"** on every
+saved photo across the admin — paintings, headshot, events, gallery covers,
+home/commission photos, and the media library. Everything else (upload, crop,
+brightness/contrast) already works without this.
+
 ## What you unlock
 
 | Feature | Where it shows up |
@@ -108,6 +166,7 @@ Unlocks: **Sign in with Face ID / fingerprint** (Account → Passkeys) and the
 | Gallery layout switcher | Admin → Gallery layout ("Make this the site layout") |
 | "On View Now" current-show status | Admin → Events (status dropdown) |
 | Show a painting in several galleries | Admin → Portfolio → the Move button → "Also show in" |
+| Re-edit a saved photo losslessly / revert to original | Anywhere you upload an image |
 
 ## Already done
 

@@ -22,6 +22,10 @@ export interface SchemaCapabilities {
   passkeys: boolean
   /** paintings.story_public / story_notes → the AI story writer + visibility toggle. */
   storyTools: boolean
+  /** settings.inquiry_message_template / inquiry_sms_enabled → the "Ask about this painting" admin controls. */
+  quickInquire: boolean
+  /** image_edits table → the "Edit" affordance + "Revert to original" on saved images. */
+  imageEdits: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -57,13 +61,15 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc, fp, al, pk, st] = await Promise.all([
+    const [ps, sc, fp, al, pk, st, qi, ie] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
       supabase.from("settings").select("home_hero_focal_x").limit(1),
       supabase.from("settings").select("active_layout").limit(1),
       supabase.from("webauthn_credentials").select("id").limit(1),
       supabase.from("paintings").select("story_public").limit(1),
+      supabase.from("settings").select("inquiry_sms_enabled").limit(1),
+      supabase.from("image_edits").select("id").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
@@ -71,6 +77,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
     const activeLayout = !al.error
     const passkeys = !pk.error
     const storyTools = !st.error
+    const quickInquire = !qi.error
+    const imageEdits = !ie.error
     return {
       paintingSections,
       siteCopy,
@@ -81,6 +89,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       activeLayout,
       passkeys,
       storyTools,
+      quickInquire,
+      imageEdits,
     }
   } catch {
     return {
@@ -91,6 +101,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       activeLayout: false,
       passkeys: false,
       storyTools: false,
+      quickInquire: false,
+      imageEdits: false,
     }
   }
 }
