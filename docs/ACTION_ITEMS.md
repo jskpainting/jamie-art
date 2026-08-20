@@ -37,9 +37,34 @@ went out.
 - The "Send as a text" button on a real device.
 Claude must never claim these are verified.
 
+### 5. Decide what to do with leftover test / spam enquiries
+The dashboard now correctly counts commission enquiries, and that count
+includes some junk. Claude did not delete any of these — say the word.
+
+`inquiries`:
+- "Test User" <test+claude@example.com> (status new) — test data
+- "basu" <jsdjs@gmail.com> (status new) — is this real?
+
+`commission_inquiries`:
+- "Test User" <test+claude@example.com> (new) — test data
+- "HeENkMFOpUUarqGzlqlGV" <iv.u.s.u.q.en.0.8.1@gmail.com> (new) — spam
+- "Test jamie" <jsk0078@gmail.com> (new) — your own test
+
+Deleting the three obvious ones would take the dashboard from 5 new to 2.
+
+### 6. Optional: enforce one-row-only in the database
+`settings` and `bio` are meant to hold exactly one row and nothing in the
+database enforces it. The code no longer creates or trips over a duplicate,
+so this is defence in depth only, not a fix that is needed. Say so if you
+want the SQL and Claude will write it for you to paste into Supabase.
+
+
 ## Done
 
 - 2026-08-20 — Deleted the five leftover QA contacts (`test+newsletter@`,
   `qa-test@`, `ratelimit-test@`, `verify-newcode@`, `www-verify@`, all
   `@example.com`). Two real contacts remain. Live painting counts re-verified
   unchanged (51/14/8/12 = 85).
+- 2026-08-20 — Backfilled the one painting with no pixel dimensions
+  ("Untitled 69", measured 2484 x 2457 from its stored photo). All 85
+  paintings now have true dimensions, so no gallery card is guessed at 4:3.

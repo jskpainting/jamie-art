@@ -22,6 +22,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<SettingsFormValues, unknown, SettingsInput>({
     resolver: zodResolver(SettingsSchema),
@@ -36,6 +37,11 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
   async function onSubmit(values: SettingsInput) {
     const result = await updateSettings(values)
     if (result.ok) {
+      // Re-baseline the form on what was just saved. Without this, "Save" is
+      // compared against the values from page load, so typing a field back to
+      // what it said before a save leaves the button greyed out even though
+      // the saved settings now differ.
+      reset(values)
       toast.success("Settings saved.", { duration: 5000 })
     } else {
       toast.error(result.error ?? "Failed to save settings.", { duration: 5000 })
