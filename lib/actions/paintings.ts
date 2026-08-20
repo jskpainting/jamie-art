@@ -30,6 +30,10 @@ export interface BulkCreateItem {
   print_available: boolean
   commission_available: boolean
   tags: string[]
+  // Pixel dimensions of the uploaded photo. Without them the galleries fall
+  // back to a 4:3 guess, so a tall or square painting is laid out wrongly.
+  width?: number | null
+  height?: number | null
 }
 
 async function db() {

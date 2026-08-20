@@ -46,6 +46,10 @@ interface BulkCard {
   status: CardStatus
   uploadUrl: string | null
   uploadPath: string | null
+  // Natural pixel size of the chosen file, measured in the browser. Saved with
+  // the painting so the gallery lays the card out at its true shape.
+  width: number | null
+  height: number | null
   error: string | null
   title: string
   sectionId: string
@@ -68,6 +72,8 @@ function makeCard(file: File, defaultSectionId: string): BulkCard {
     status: "queued",
     uploadUrl: null,
     uploadPath: null,
+    width: null,
+    height: null,
     error: null,
     title: cleanFilename(file.name),
     sectionId: defaultSectionId,
@@ -389,6 +395,30 @@ export function BulkUploadClient({
   const folderInputRef = useRef<HTMLInputElement>(null)
 
   // Upload queue
+// Reads the photo's natural pixel size in the browser. The bulk uploader sends
+// the file untouched, so these are the dimensions of the stored image. Failure
+// is not fatal — the gallery just falls back to its 4:3 guess, exactly as
+// before.
+async function measureImage(
+  file: File
+): Promise<{ width: number; height: number } | null> {
+  const url = URL.createObjectURL(file)
+  try {
+    const dims = await new Promise<{ width: number; height: number } | null>(
+      (resolve) => {
+        const img = new window.Image()
+        img.onload = () =>
+          resolve({ width: img.naturalWidth, height: img.naturalHeight })
+        img.onerror = () => resolve(null)
+        img.src = url
+      }
+    )
+    return dims && dims.width > 0 && dims.height > 0 ? dims : null
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
   const uploadQueueRef = useRef<Array<{ cardId: string; file: File }>>([])
   const activeCountRef = useRef(0)
   // Ref so async uploadOneFile can call drain without a stale closure
@@ -402,7 +432,10 @@ export function BulkUploadClient({
       )
     )
     try {
-      const result = await uploadImage("paintings", file)
+      const [result, dims] = await Promise.all([
+        uploadImage("paintings", file),
+        measureImage(file),
+      ])
       setCards((prev) =>
         prev.map((c) =>
           c.id === cardId
@@ -411,6 +444,8 @@ export function BulkUploadClient({
                 status: "ready" as const,
                 uploadUrl: result.url,
                 uploadPath: result.path,
+                width: dims?.width ?? null,
+                height: dims?.height ?? null,
               }
             : c
         )
@@ -536,6 +571,8 @@ export function BulkUploadClient({
       print_available: c.printAvailable,
       commission_available: c.commissionAvailable,
       tags: c.tags,
+      width: c.width,
+      height: c.height,
     }))
 
     const result = await bulkCreatePaintings(items)
