@@ -1,11 +1,28 @@
 "use client"
 
-import { useState, useOptimistic, useTransition, useEffect } from "react"
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useOptimistic,
+  useTransition,
+  useEffect,
+} from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import Image from "next/image"
-import { Pencil, Trash2, Plus, ImageIcon, Tag, X, Upload, FolderInput } from "lucide-react"
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  ImageIcon,
+  Tag,
+  X,
+  Upload,
+  FolderInput,
+  GripVertical,
+} from "lucide-react"
 import {
   reorderPaintings,
   deletePainting,
@@ -17,6 +34,7 @@ import {
   setPaintingSectionMembership,
 } from "@/lib/actions/paintings"
 import { SortableList } from "@/components/admin/sortable-list"
+import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -67,6 +85,8 @@ interface PaintingListClientProps {
 // ─── Bulk action bar ─────────────────────────────────────────────────────────
 
 interface BulkActionBarProps {
+  hiddenCount?: number
+  onShowAll?: () => void
   selectedIds: Set<string>
   selectedPaintings: PaintingWithImagesAndTags[]
   sections: Section[]
@@ -74,6 +94,8 @@ interface BulkActionBarProps {
 }
 
 function BulkActionBar({
+  hiddenCount = 0,
+  onShowAll,
   selectedIds,
   selectedPaintings,
   sections,
@@ -147,6 +169,18 @@ function BulkActionBar({
           {/* Count + clear */}
           <span className="text-sm font-medium text-foreground mr-1">
             {count} selected
+            {hiddenCount > 0 && onShowAll && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={onShowAll}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  ({hiddenCount} hidden right now — show all)
+                </button>
+              </>
+            )}
           </span>
           <Button
             variant="ghost"
@@ -490,6 +524,47 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+type PaintingFilter =
+  | "all"
+  | "available"
+  | "sold"
+  | "reserved"
+  | "nfs"
+  | "no-photo"
+  | "no-price"
+type PaintingSort = "owner" | "newest" | "oldest" | "title" | "year-new" | "year-old"
+
+const PAINTING_FILTER_OPTIONS = [
+  { value: "all", label: "All paintings" },
+  { value: "available", label: "Available" },
+  { value: "sold", label: "Sold" },
+  { value: "reserved", label: "Reserved" },
+  { value: "nfs", label: "Not for sale" },
+  { value: "no-photo", label: "Needs a photo" },
+  { value: "no-price", label: "For sale but no price" },
+]
+
+const PAINTING_SORT_OPTIONS = [
+  { value: "owner", label: "My order (drag to rearrange)" },
+  { value: "newest", label: "Newest added first" },
+  { value: "oldest", label: "Oldest added first" },
+  { value: "title", label: "Title A–Z" },
+  { value: "year-new", label: "Year painted, newest first" },
+  { value: "year-old", label: "Year painted, oldest first" },
+]
+
+/** Same footprint as the real drag handle, but visibly inert. */
+function LockedHandle() {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex h-8 w-8 items-center justify-center opacity-25"
+    >
+      <GripVertical className="h-4 w-4" />
+    </span>
+  )
+}
+
 export function PaintingListClient({
   section,
   initialPaintings,
@@ -503,6 +578,9 @@ export function PaintingListClient({
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editPainting, setEditPainting] = useState<PaintingWithImagesAndTags | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState<PaintingFilter>("all")
+  const [sort, setSort] = useState<PaintingSort>("owner")
   const router = useRouter()
 
   useEffect(() => {
@@ -512,18 +590,77 @@ export function PaintingListClient({
   // The query still returns active-by-sort_order then sold-by-date (twoTierSort)
   // so the very first render preserves today's on-screen order exactly — it's
   // just rendered as one freely-orderable list now instead of two frozen groups.
-  const allIds = paintings.map((p) => p.id)
   const selectedPaintings = paintings.filter((p) => selectedIds.has(p.id))
 
+  // Dragging renumbers sort_order for exactly the ids it is handed, so it is
+  // only safe when every painting is on screen in the owner's own order. Any
+  // search, filter or sort turns it off; the stored order is never touched.
+  const isOwnerView =
+    sort === "owner" && filter === "all" && search.trim() === ""
+
+  const resetView = useCallback(() => {
+    setSearch("")
+    setFilter("all")
+    setSort("owner")
+  }, [])
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let rows = paintings.filter((p) => {
+      if (filter === "no-photo") {
+        if (p.primary_image_url) return false
+      } else if (filter === "no-price") {
+        if (p.status !== "available" || p.price_cents != null) return false
+      } else if (filter !== "all") {
+        if (p.status !== filter) return false
+      }
+      if (!q) return true
+      return (
+        p.title.toLowerCase().includes(q) ||
+        (p.medium ?? "").toLowerCase().includes(q) ||
+        (p.tags ?? []).some((t) => t.toLowerCase().includes(q))
+      )
+    })
+    if (sort === "title") {
+      rows = [...rows].sort((a, b) => a.title.localeCompare(b.title))
+    } else if (sort === "newest") {
+      rows = [...rows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    } else if (sort === "oldest") {
+      rows = [...rows].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    } else if (sort === "year-new") {
+      rows = [...rows].sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+    } else if (sort === "year-old") {
+      rows = [...rows].sort((a, b) => (a.year ?? 0) - (b.year ?? 0))
+    }
+    return rows
+  }, [paintings, search, filter, sort])
+
+  const visibleIds = visible.map((p) => p.id)
+  const visibleIdSet = useMemo(() => new Set(visibleIds), [visibleIds])
+  // Selection survives a filter change on purpose, so anything it is hiding has
+  // to be disclosed — a bulk action about to hit rows the owner cannot see is
+  // the most dangerous state on this page.
+  const hiddenSelectedCount = [...selectedIds].filter(
+    (id) => !visibleIdSet.has(id)
+  ).length
+
   // Select all/none
-  const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id))
-  const someSelected = !allSelected && allIds.some((id) => selectedIds.has(id))
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someSelected =
+    !allSelected && visibleIds.some((id) => selectedIds.has(id))
 
   function toggleAll() {
     if (allSelected) {
+      // Clear everything, including rows the current view is hiding, so there
+      // is never invisible residue left selected.
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(allIds))
+      setSelectedIds((prev) => new Set([...prev, ...visibleIds]))
     }
   }
 
@@ -537,6 +674,10 @@ export function PaintingListClient({
   }
 
   function handleLocalReorder(newIds: string[]) {
+    // Third line of defence: a reorder computed from anything other than the
+    // complete owner-ordered list would renumber a subset and collide with the
+    // untouched sort_order of every hidden painting.
+    if (!isOwnerView || newIds.length !== paintings.length) return
     const reordered = newIds
       .map((id) => paintings.find((p) => p.id === id))
       .filter((p): p is PaintingWithImagesAndTags => !!p)
@@ -546,8 +687,9 @@ export function PaintingListClient({
       setOptimistic(reordered)
       // reorderPaintings sets sort_order = index for every id passed in, sold
       // included — this also normalises sort_order across the whole list on
-      // the very first save. Public ordering is unaffected: the public query
-      // still ignores sort_order for sold paintings and sorts them by sold_at.
+      // the very first save. The public gallery honours this: sold paintings
+      // are ordered by sold_at when it is set and by sort_order otherwise,
+      // which is the case for 71 of the 74 sold works.
       const result = await reorderPaintings(section.id, newIds)
       if (!result.ok) toast.error(result.error)
       else toast.success("Order saved", { duration: 1500 })
@@ -601,7 +743,13 @@ export function PaintingListClient({
               aria-label="Select all paintings"
             />
             <span className="text-xs text-muted-foreground">
-              {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+              {selectedIds.size > 0
+                ? hiddenSelectedCount > 0
+                  ? `${selectedIds.size} selected · ${hiddenSelectedCount} hidden right now`
+                  : `${selectedIds.size} selected`
+                : isOwnerView
+                  ? "Select all"
+                  : `Select all ${visibleIds.length} shown`}
             </span>
           </div>
         )}
@@ -628,18 +776,82 @@ export function PaintingListClient({
         />
       ) : (
         <>
+          <ListToolbar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by title, medium or tag…"
+            searchLabel="Search paintings"
+            filterValue={filter}
+            onFilterChange={(v) => setFilter(v as PaintingFilter)}
+            filterOptions={PAINTING_FILTER_OPTIONS}
+            filterLabel="Show only"
+            sortValue={sort}
+            onSortChange={(v) => setSort(v as PaintingSort)}
+            sortOptions={PAINTING_SORT_OPTIONS}
+            sortLabel="Order this list by"
+            resultCount={visible.length}
+            totalCount={paintings.length}
+            itemNoun="paintings"
+            hasActiveFilters={!isOwnerView}
+            onClear={resetView}
+          />
+
+          {!isOwnerView && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed border-border px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                {search.trim() !== "" || filter !== "all"
+                  ? "Some paintings are hidden right now, so dragging is switched off."
+                  : "You're viewing these in a different order, so dragging is switched off."}{" "}
+                Your website still shows your own order — nothing has changed.
+              </p>
+              <Button size="sm" variant="outline" onClick={resetView}>
+                Back to my order
+              </Button>
+            </div>
+          )}
+
           {/* Admin-only ordering aid — visitors never see this, it's purely
               about where things sit in this list. */}
-          <div className="space-y-0.5 pb-1">
-            <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-              Featured — shown first in your admin list
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Drag any painting anywhere. Visitors always see available work
-              first and sold work last.
-            </p>
-          </div>
+          {isOwnerView && (
+            <div className="space-y-0.5 pb-1">
+              <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+                Featured — shown first in your admin list
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Drag any painting anywhere. Visitors always see available work
+                first and sold work last.
+              </p>
+            </div>
+          )}
 
+          {visible.length === 0 ? (
+            <FilteredEmptyState
+              query={search}
+              itemNoun="paintings"
+              onClear={resetView}
+            />
+          ) : !isOwnerView ? (
+            <div className="space-y-2">
+              {visible.map((painting) => (
+                <PaintingRow
+                  key={painting.id}
+                  painting={painting}
+                  handle={<LockedHandle />}
+                  checked={selectedIds.has(painting.id)}
+                  onCheckedChange={(v) => toggleOne(painting.id, v)}
+                  onEdit={() => setEditPainting(painting)}
+                  onDeleted={clearSelection}
+                  sections={sections}
+                  currentSectionId={section.id}
+                  onMove={(target) => handleMoveOne(painting.id, target)}
+                  onToggleSection={(target, on) =>
+                    handleToggleSection(painting.id, target, on)
+                  }
+                  showAlsoShowIn={showAlsoShowIn}
+                />
+              ))}
+            </div>
+          ) : (
           <SortableList
             items={paintings}
             onReorder={handleLocalReorder}
@@ -675,12 +887,15 @@ export function PaintingListClient({
               )
             }}
           />
+          )}
         </>
       )}
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
         <BulkActionBar
+          hiddenCount={hiddenSelectedCount}
+          onShowAll={resetView}
           selectedIds={selectedIds}
           selectedPaintings={selectedPaintings}
           sections={sections}
