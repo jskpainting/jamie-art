@@ -11,6 +11,7 @@ import {
   getRecentContacts,
   getUpcomingEvents,
   getUncategorizedPaintingCount,
+  getCommissionInquiriesStats,
 } from "@/lib/db/queries"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -25,17 +26,32 @@ const QUICK_LINKS = [
 ]
 
 export default async function DashboardPage() {
-  const [user, paintings, events, inquiries, recentInquiries, recentContacts, upcomingEvents, orphanCount] =
-    await Promise.all([
-      requireUser(),
-      getPaintingsCount(),
-      getEventsCount(),
-      getNewInquiriesCount(),
-      getRecentInquiries(5),
-      getRecentContacts(5),
-      getUpcomingEvents(),
-      getUncategorizedPaintingCount(),
-    ])
+  const [
+    user,
+    paintings,
+    events,
+    inquiries,
+    commissionStats,
+    recentInquiries,
+    recentContacts,
+    upcomingEvents,
+    orphanCount,
+  ] = await Promise.all([
+    requireUser(),
+    getPaintingsCount(),
+    getEventsCount(),
+    getNewInquiriesCount(),
+    getCommissionInquiriesStats(),
+    getRecentInquiries(5),
+    getRecentContacts(5),
+    getUpcomingEvents(),
+    getUncategorizedPaintingCount(),
+  ])
+
+  // Commission enquiries live in their own table and are shown on the same
+  // /admin/inquiries page. Counting only `inquiries` here hid three unread
+  // commission messages behind a dashboard that said there were none.
+  const newInquiries = inquiries + commissionStats.new_count
 
   const nextEvents = upcomingEvents.slice(0, 3)
 
@@ -70,7 +86,7 @@ export default async function DashboardPage() {
         {[
           { label: "Paintings", value: paintings },
           { label: "Events", value: events },
-          { label: "New inquiries", value: inquiries },
+          { label: "New inquiries", value: newInquiries },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-border bg-card p-6">
             <p className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground mb-2">
