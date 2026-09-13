@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ChevronDown, ChevronUp, Send, MailCheck } from "lucide-react"
 import { format } from "date-fns"
@@ -69,10 +70,12 @@ export function NewslettersClient({
   inviteEvent,
   inviteRequest,
 }: Props) {
+  const router = useRouter()
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [newsletters] = useState(initialNewsletters)
+  // Read straight from props so router.refresh() after a send updates the list.
+  const newsletters = initialNewsletters
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortKey>("newest")
   const [sendingTest, setSendingTest] = useState(false)
@@ -125,6 +128,7 @@ export function NewslettersClient({
     }
     setSubject("")
     setBody("")
+    router.refresh()
   }
 
   async function handleSendTest() {
