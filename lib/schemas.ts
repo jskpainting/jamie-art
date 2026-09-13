@@ -98,6 +98,12 @@ export const EventWriteSchema = z.object({
   status: z.enum(["upcoming", "current", "past", "cancelled"]).default("upcoming"),
   image_focal_x: FocalSchema.optional(),
   image_focal_y: FocalSchema.optional(),
+  // Optional — added by the RSVP migration (lib/schema-capabilities.ts `rsvp`).
+  // Stripped by lib/actions/events.ts before the query when that migration
+  // hasn't run yet.
+  rsvp_enabled: z.boolean().optional(),
+  rsvp_note: z.string().trim().max(500).nullable().optional(),
+  rsvp_limit: z.coerce.number().int().positive().nullable().optional(),
 })
 
 export type EventWriteInput = z.infer<typeof EventWriteSchema>

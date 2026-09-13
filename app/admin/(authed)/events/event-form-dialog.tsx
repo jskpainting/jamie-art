@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import { FormField } from "@/components/admin/form-field"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { FocalPointPicker } from "@/components/admin/focal-point-picker"
@@ -32,6 +34,8 @@ interface EventFormDialogProps {
   allowCurrent?: boolean
   /** Whether the focal-point columns migration is applied. */
   showFocal?: boolean
+  /** Whether the event_rsvps migration is applied — shows the RSVP controls. */
+  showRsvp?: boolean
 }
 
 export function EventFormDialog({
@@ -40,6 +44,7 @@ export function EventFormDialog({
   event,
   allowCurrent = false,
   showFocal = false,
+  showRsvp = false,
 }: EventFormDialogProps) {
   const isEdit = !!event
 
@@ -63,6 +68,11 @@ export function EventFormDialog({
     x: event?.image_focal_x ?? 50,
     y: event?.image_focal_y ?? 50,
   })
+  const [rsvpEnabled, setRsvpEnabled] = useState(event?.rsvp_enabled ?? false)
+  const [rsvpNote, setRsvpNote] = useState(event?.rsvp_note ?? "")
+  const [rsvpLimit, setRsvpLimit] = useState(
+    event?.rsvp_limit != null ? String(event.rsvp_limit) : ""
+  )
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -89,6 +99,9 @@ export function EventFormDialog({
         status: status as "upcoming" | "current" | "past" | "cancelled",
         image_focal_x: focal.x,
         image_focal_y: focal.y,
+        rsvp_enabled: rsvpEnabled,
+        rsvp_note: rsvpNote.trim() || null,
+        rsvp_limit: rsvpLimit.trim() ? Number(rsvpLimit) : null,
       }
 
       const result = isEdit
@@ -203,6 +216,41 @@ export function EventFormDialog({
                 onChange={(x, y) => setFocal({ x, y })}
               />
             </FormField>
+          )}
+
+          {showRsvp && (
+            <div className="space-y-3 rounded-lg border border-border p-3">
+              <label className="flex items-start gap-2.5">
+                <Checkbox
+                  checked={rsvpEnabled}
+                  onCheckedChange={(checked) => setRsvpEnabled(checked === true)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm font-medium">Let people RSVP</span>
+              </label>
+
+              {rsvpEnabled && (
+                <div className="space-y-3 pl-6">
+                  <FormField label="Note shown on the RSVP page">
+                    <Textarea
+                      value={rsvpNote}
+                      onChange={(e) => setRsvpNote(e.target.value)}
+                      placeholder="Optional — extra details shown above the RSVP buttons"
+                      rows={2}
+                    />
+                  </FormField>
+                  <FormField label="Limit spots">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={rsvpLimit}
+                      onChange={(e) => setRsvpLimit(e.target.value)}
+                      placeholder="Optional — no limit"
+                    />
+                  </FormField>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

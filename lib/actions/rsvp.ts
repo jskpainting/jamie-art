@@ -11,7 +11,6 @@ import {
   RsvpStatusSchema,
 } from "@/lib/schemas"
 import { logActivity, findOrCreateContact } from "@/lib/actions/crm"
-import type { RsvpStatus } from "@/lib/types"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -391,4 +390,8 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
   }
 }
 
-export type { RsvpStatus }
+// Note: no `export type { RsvpStatus }` here — a bare type re-export from a
+// "use server" file confuses Next's server-actions compiler (it tries to
+// proxy every export as a callable action, including type-only ones, and
+// fails at runtime with "Export RsvpStatus doesn't exist"). Import RsvpStatus
+// from "@/lib/types" directly instead.

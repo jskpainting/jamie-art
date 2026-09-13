@@ -1,5 +1,6 @@
 import { MapPin } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import type { Event } from "@/lib/types"
 import type { EventBucket } from "@/lib/event-bucket"
 import { cn, formatEventDateRange } from "@/lib/utils"
@@ -31,6 +32,7 @@ export function EventCard({ event, variant }: EventCardProps) {
   const isPast = resolved === "past"
   const isCurrent = resolved === "current"
   const showLink = !isPast
+  const showRsvp = !isPast && event.rsvp_enabled
 
   return (
     <div
@@ -93,15 +95,27 @@ export function EventCard({ event, variant }: EventCardProps) {
         </p>
       )}
 
-      {event.link && showLink && (
-        <a
-          href={normalizeUrl(event.link)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:underline underline-offset-4 transition-colors"
-        >
-          More info →
-        </a>
+      {(showRsvp || (event.link && showLink)) && (
+        <div className="flex items-center gap-4 flex-wrap">
+          {showRsvp && (
+            <Link
+              href={`/rsvp/${event.id}`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline underline-offset-4 transition-colors"
+            >
+              RSVP →
+            </Link>
+          )}
+          {event.link && showLink && (
+            <a
+              href={normalizeUrl(event.link)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:underline underline-offset-4 transition-colors"
+            >
+              More info →
+            </a>
+          )}
+        </div>
       )}
     </div>
   )

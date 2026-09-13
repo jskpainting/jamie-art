@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Plus, Pencil, Trash2, ExternalLink, Calendar } from "lucide-react"
+import { Plus, Pencil, Trash2, ExternalLink, Calendar, Users } from "lucide-react"
 import { deleteEvent } from "@/lib/actions/events"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { EmptyState } from "@/components/admin/empty-state"
@@ -28,13 +29,26 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "cancelled",
 }
 
+interface RsvpCounts {
+  yes: number
+  no: number
+  maybe: number
+  invited: number
+}
+
 function EventRow({
   event,
   onEdit,
+  rsvpCounts,
+  showRsvpChip,
 }: {
   event: Event
   onEdit: (e: Event) => void
+  rsvpCounts?: RsvpCounts
+  showRsvpChip: boolean
 }) {
+  const counts = rsvpCounts ?? { yes: 0, no: 0, maybe: 0, invited: 0 }
+
   return (
     <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex-1 min-w-0 space-y-1">
@@ -55,6 +69,15 @@ function EventRow({
             ` — ${format(new Date(event.ends_at), "MMM d, yyyy")}`}
           {event.location ? ` · ${event.location}` : ""}
         </p>
+        {showRsvpChip && event.rsvp_enabled && (
+          <Link
+            href={`/admin/events/${event.id}/rsvps`}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+          >
+            <Users className="h-3 w-3" />
+            {counts.yes} yes · {counts.no} no · {counts.invited} invited
+          </Link>
+        )}
         {event.link && (
           <a
             href={event.link}
@@ -105,6 +128,8 @@ interface EventsClientProps {
   cancelled?: Event[]
   allowCurrent?: boolean
   showFocal?: boolean
+  showRsvp?: boolean
+  rsvpCounts?: Record<string, RsvpCounts>
   initialAddOpen?: boolean
 }
 
@@ -118,7 +143,17 @@ function buildSortOptions(): { value: string; label: string }[] {
   ]
 }
 
-export function EventsClient({ current = [], upcoming, past, cancelled = [], allowCurrent = false, showFocal = false, initialAddOpen = false }: EventsClientProps) {
+export function EventsClient({
+  current = [],
+  upcoming,
+  past,
+  cancelled = [],
+  allowCurrent = false,
+  showFocal = false,
+  showRsvp = false,
+  rsvpCounts = {},
+  initialAddOpen = false,
+}: EventsClientProps) {
   const [addOpen, setAddOpen] = useState(initialAddOpen)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
   const [search, setSearch] = useState("")
@@ -222,7 +257,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
               </h2>
               <div className="space-y-2">
                 {filteredCurrent.map((e) => (
-                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} rsvpCounts={rsvpCounts[e.id]} showRsvpChip={showRsvp} />
                 ))}
               </div>
             </section>
@@ -244,7 +279,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
             ) : (
               <div className="space-y-2">
                 {filteredUpcoming.map((e) => (
-                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} rsvpCounts={rsvpCounts[e.id]} showRsvpChip={showRsvp} />
                 ))}
               </div>
             )}
@@ -258,7 +293,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
               </h2>
               <div className="space-y-2">
                 {filteredPast.map((e) => (
-                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} rsvpCounts={rsvpCounts[e.id]} showRsvpChip={showRsvp} />
                 ))}
               </div>
             </section>
@@ -277,7 +312,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
               </p>
               <div className="space-y-2">
                 {filteredCancelled.map((e) => (
-                  <EventRow key={e.id} event={e} onEdit={setEditEvent} />
+                  <EventRow key={e.id} event={e} onEdit={setEditEvent} rsvpCounts={rsvpCounts[e.id]} showRsvpChip={showRsvp} />
                 ))}
               </div>
             </section>
@@ -290,6 +325,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
         onOpenChange={setAddOpen}
         allowCurrent={allowCurrent}
         showFocal={showFocal}
+        showRsvp={showRsvp}
       />
       {editEvent && (
         <EventFormDialog
@@ -298,6 +334,7 @@ export function EventsClient({ current = [], upcoming, past, cancelled = [], all
           event={editEvent}
           allowCurrent={allowCurrent}
           showFocal={showFocal}
+          showRsvp={showRsvp}
         />
       )}
     </div>

@@ -12,7 +12,9 @@ import {
   getUpcomingEvents,
   getUncategorizedPaintingCount,
   getCommissionInquiriesStats,
+  getEventRsvpCounts,
 } from "@/lib/db/queries"
+import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +38,8 @@ export default async function DashboardPage() {
     recentContacts,
     upcomingEvents,
     orphanCount,
+    capabilities,
+    rsvpCounts,
   ] = await Promise.all([
     requireUser(),
     getPaintingsCount(),
@@ -46,6 +50,8 @@ export default async function DashboardPage() {
     getRecentContacts(5),
     getUpcomingEvents(),
     getUncategorizedPaintingCount(),
+    getSchemaCapabilities(),
+    getEventRsvpCounts(),
   ])
 
   // Commission enquiries live in their own table and are shown on the same
@@ -55,6 +61,15 @@ export default async function DashboardPage() {
 
   const nextEvents = upcomingEvents.slice(0, 3)
 
+  // "Upcoming: <event> — N yes" — the first upcoming, RSVP-enabled event
+  // that has at least one "yes" so far.
+  const rsvpHighlight = capabilities.rsvp
+    ? upcomingEvents
+        .filter((e) => e.rsvp_enabled)
+        .map((e) => ({ event: e, yes: rsvpCounts.get(e.id)?.yes ?? 0 }))
+        .find(({ yes }) => yes > 0)
+    : undefined
+
   return (
     <div>
       <PageHeader eyebrow="Dashboard" title="Overview" />
@@ -63,6 +78,20 @@ export default async function DashboardPage() {
         Welcome back,{" "}
         <span className="text-foreground font-medium">{user.email}</span>
       </p>
+
+      {rsvpHighlight && (
+        <Link
+          href={`/admin/events/${rsvpHighlight.event.id}/rsvps`}
+          className="flex items-center gap-3 rounded-xl px-5 py-4 mb-6 border transition-opacity hover:opacity-90
+                     bg-green-50 text-green-900 border-green-200
+                     dark:bg-green-950/40 dark:text-green-200 dark:border-green-900/50"
+        >
+          <span className="text-sm font-medium">
+            Upcoming: {rsvpHighlight.event.title} — {rsvpHighlight.yes} yes
+          </span>
+          <span className="ml-auto text-xs opacity-70">→</span>
+        </Link>
+      )}
 
       {/* Orphan banner */}
       {orphanCount > 0 && (
