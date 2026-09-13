@@ -54,8 +54,9 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     displayName: "Google Gemini",
     apiKeyEnv: "GEMINI_API_KEY",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    // Gemini's free-tier flash model.
-    defaultModel: "gemini-2.0-flash",
+    // Rolling alias for the current free-tier Flash model — fixed names
+    // (gemini-2.0-flash) get retired and start returning 404.
+    defaultModel: "gemini-flash-latest",
     modelEnv: "GEMINI_MODEL",
   },
   cerebras: {
