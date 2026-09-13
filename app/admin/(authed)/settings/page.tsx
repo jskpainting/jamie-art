@@ -3,6 +3,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { getSettings, getAllPaintingsForPicker, getBio } from "@/lib/db/queries"
 import { getSchemaCapabilities, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
+import { getFieldOptions } from "@/lib/actions/field-options"
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 import { SettingsForm } from "./settings-form"
 import { SiteCopyFieldForm } from "./site-copy-form"
@@ -10,6 +11,7 @@ import { QuickInquireForm } from "./quick-inquire-form"
 import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
 import { SettingsImageField } from "./settings-image-field"
 import { PageCard } from "./page-card"
+import { FieldOptionsCard } from "./field-options-card"
 
 export const metadata: Metadata = {
   title: "Settings — Admin",
@@ -17,12 +19,17 @@ export const metadata: Metadata = {
 }
 
 export default async function SettingsPage() {
-  const [settings, paintings, capabilities, bio] = await Promise.all([
+  const [settings, paintings, capabilities, bio, fieldOptionsResult] = await Promise.all([
     getSettings(),
     getAllPaintingsForPicker(),
     getSchemaCapabilities(),
     getBio(),
+    getFieldOptions(),
   ])
+
+  const fieldOptions = fieldOptionsResult.ok
+    ? fieldOptionsResult.options
+    : { medium: [], dimensions: [] }
 
   const aboutImageUrl = bio?.headshot_url ?? settings?.about_image_url ?? null
 
@@ -77,6 +84,14 @@ export default async function SettingsPage() {
             focalX={settings?.home_hero_focal_x ?? 50}
             focalY={settings?.home_hero_focal_y ?? 50}
             showFocal={capabilities.focalPoints}
+          />
+        </PageCard>
+
+        {/* Painting details lists */}
+        <PageCard title="Painting details lists">
+          <FieldOptionsCard
+            enabled={capabilities.fieldOptions}
+            initialOptions={fieldOptions}
           />
         </PageCard>
 

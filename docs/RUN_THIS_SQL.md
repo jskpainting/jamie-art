@@ -131,10 +131,10 @@ card in Settings (edit the pre-written message, turn texting on/off).
 Same steps (SQL Editor → New query → paste → **Run**).
 
 ```sql
--- Non-destructive image editing: remembers, for every edited photo, the
--- untouched original it came from and what was done to it (crop +
--- brightness/contrast), so re-opening the editor never loses quality and
--- "Revert to original" always works.
+-- 1) NON-DESTRUCTIVE IMAGE EDITING — remembers, for every edited photo, the
+--    untouched original it came from and what was done to it (crop +
+--    brightness/contrast), so re-opening the editor never loses quality and
+--    "Revert to original" always works.
 create table if not exists image_edits (
   id            uuid primary key default gen_random_uuid(),
   bucket        text not null,
@@ -151,12 +151,47 @@ alter table image_edits enable row level security;
 drop policy if exists "auth all image_edits" on image_edits;
 create policy "auth all image_edits"
   on image_edits for all using (auth.role() = 'authenticated');
+
+-- 2) PAINTING DETAILS LISTS — remembers your mediums and sizes for the dropdowns
+create table if not exists field_options (
+  id uuid primary key default gen_random_uuid(),
+  field text not null check (field in ('medium', 'dimensions')),
+  value text not null,
+  last_used_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (field, value)
+);
+
+alter table field_options enable row level security;
+
+drop policy if exists "auth all field_options" on field_options;
+create policy "auth all field_options"
+  on field_options for all using (auth.role() = 'authenticated');
+
+insert into field_options (field, value, last_used_at)
+select 'medium', trim(regexp_replace(medium, '\s+', ' ', 'g')), max(created_at)
+from paintings
+where coalesce(trim(medium), '') <> ''
+group by 2
+on conflict (field, value) do nothing;
+
+insert into field_options (field, value, last_used_at)
+select 'dimensions',
+       replace(replace(regexp_replace(trim(dimensions), '\s+', '', 'g'), '×', 'x'), 'X', 'x'),
+       max(created_at)
+from paintings
+where coalesce(trim(dimensions), '') <> ''
+group by 2
+on conflict (field, value) do nothing;
 ```
 
 Unlocks: the **Edit** (pencil) button and **"Revert to original"** on every
 saved photo across the admin — paintings, headshot, events, gallery covers,
 home/commission photos, and the media library. Everything else (upload, crop,
-brightness/contrast) already works without this.
+brightness/contrast) already works without this. Also unlocks the **remembered
+Medium and Size choices** (recent-first dropdowns with "Other…") on the
+painting form, bulk upload, and the new "Painting details lists" card in
+Admin → Settings.
 
 ## What you unlock
 

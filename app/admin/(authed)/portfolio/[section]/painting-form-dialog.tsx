@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Loader2, Sparkles, ChevronDown, ChevronRight } from "lucide-react"
 import { parsePhysical } from "@/lib/mosaic-layout"
@@ -14,6 +14,8 @@ import {
 } from "@/lib/actions/paintings"
 import { generatePaintingStory } from "@/lib/actions/ai"
 import { updatePaintingTags } from "@/lib/actions/tags"
+import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
+import type { FieldOptionField } from "@/lib/field-options"
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,7 @@ import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MultiImageUpload } from "@/components/admin/multi-image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { TagInput } from "@/components/admin/tag-input"
+import { OptionSelect } from "@/components/admin/option-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { slugify } from "@/lib/utils"
 import type { Painting, PaintingWithImages, Section } from "@/lib/types"
@@ -100,6 +103,25 @@ export function PaintingFormDialog({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [wallPreviewOpen, setWallPreviewOpen] = useState(false)
+  const [fieldOptions, setFieldOptions] = useState<Record<FieldOptionField, string[]>>({
+    medium: [],
+    dimensions: [],
+  })
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    getFieldOptions().then((result) => {
+      if (cancelled || !result.ok) return
+      setFieldOptions({
+        medium: result.options.medium.map((o) => o.value),
+        dimensions: result.options.dimensions.map((o) => o.value),
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   // Live-derived from `dimensions` so typing dimensions after uploading a
   // photo immediately lights up the shape check on re-edit (A1).
@@ -192,14 +214,26 @@ export function PaintingFormDialog({
         // Delete removed images
         for (const img of painting.painting_images) {
           if (!newImageIds.has(img.id)) {
-            await deletePaintingImage(img.id)
+            const delResult = await deletePaintingImage(img.id)
+            if (!delResult.ok) {
+              toast.error(delResult.error ?? "Couldn't save part of this painting", {
+                duration: 5000,
+              })
+              return
+            }
           }
         }
 
         // Add new images (those whose id doesn't exist in DB)
         for (const img of additionalImages) {
           if (!existingIds.has(img.id)) {
-            await addPaintingImage(painting.id, { url: img.url })
+            const addResult = await addPaintingImage(painting.id, { url: img.url })
+            if (!addResult.ok) {
+              toast.error(addResult.error ?? "Couldn't save part of this painting", {
+                duration: 5000,
+              })
+              return
+            }
           }
         }
 
@@ -208,11 +242,25 @@ export function PaintingFormDialog({
           .filter((img) => existingIds.has(img.id))
           .map((img) => img.id)
         if (existingInOrder.length > 0) {
-          await reorderPaintingImages(painting.id, existingInOrder)
+          const reorderResult = await reorderPaintingImages(painting.id, existingInOrder)
+          if (!reorderResult.ok) {
+            toast.error(reorderResult.error ?? "Couldn't save part of this painting", {
+              duration: 5000,
+            })
+            return
+          }
         }
 
         // Sync tags
-        await updatePaintingTags(painting.id, tags)
+        const tagsResult = await updatePaintingTags(painting.id, tags)
+        if (!tagsResult.ok) {
+          toast.error(tagsResult.error ?? "Couldn't save part of this painting", {
+            duration: 5000,
+          })
+          return
+        }
+
+        await touchFieldOptions({ medium, dimensions })
 
         toast.success("Painting saved")
         onOpenChange(false)
@@ -226,13 +274,28 @@ export function PaintingFormDialog({
         if (newId) {
           if (additionalImages.length > 0) {
             for (const img of additionalImages) {
-              await addPaintingImage(newId, { url: img.url })
+              const addResult = await addPaintingImage(newId, { url: img.url })
+              if (!addResult.ok) {
+                toast.error(addResult.error ?? "Couldn't save part of this painting", {
+                  duration: 5000,
+                })
+                return
+              }
             }
           }
           if (tags.length > 0) {
-            await updatePaintingTags(newId, tags)
+            const tagsResult = await updatePaintingTags(newId, tags)
+            if (!tagsResult.ok) {
+              toast.error(tagsResult.error ?? "Couldn't save part of this painting", {
+                duration: 5000,
+              })
+              return
+            }
           }
         }
+
+        await touchFieldOptions({ medium, dimensions })
+
         toast.success("Painting created")
         onOpenChange(false)
       }
@@ -243,7 +306,7 @@ export function PaintingFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit painting" : "Add painting"}</DialogTitle>
         </DialogHeader>
@@ -309,17 +372,19 @@ export function PaintingFormDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Medium">
-              <Input
+              <OptionSelect
                 value={medium}
-                onChange={(e) => setMedium(e.target.value)}
+                onChange={setMedium}
+                options={fieldOptions.medium}
                 placeholder="Oil on canvas"
               />
             </FormField>
-            <FormField label="Dimensions">
-              <Input
+            <FormField label="Size">
+              <OptionSelect
                 value={dimensions}
-                onChange={(e) => setDimensions(e.target.value)}
-                placeholder='24" × 36"'
+                onChange={setDimensions}
+                options={fieldOptions.dimensions}
+                placeholder='24"x36"'
               />
             </FormField>
           </div>

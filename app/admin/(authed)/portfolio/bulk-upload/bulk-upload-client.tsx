@@ -18,11 +18,14 @@ import {
   bulkCreatePaintings,
   type BulkCreateItem,
 } from "@/lib/actions/paintings"
+import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
+import type { FieldOptionField } from "@/lib/field-options"
 import { cleanFilename, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
 import { TagInput } from "@/components/admin/tag-input"
+import { OptionSelect } from "@/components/admin/option-select"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -97,10 +100,12 @@ const MAX_CONCURRENT = 4
 interface DetailsFormProps {
   card: BulkCard
   sections: Section[]
+  fieldOptions: Record<FieldOptionField, string[]>
   onSave: (updates: Partial<BulkCard>) => void
+  onApplyToAll: (field: FieldOptionField, value: string) => void
 }
 
-function DetailsForm({ card, sections, onSave }: DetailsFormProps) {
+function DetailsForm({ card, sections, fieldOptions, onSave, onApplyToAll }: DetailsFormProps) {
   const [title, setTitle] = useState(card.title)
   const [paintingStatus, setPaintingStatus] = useState(card.paintingStatus)
   const [sectionId, setSectionId] = useState(card.sectionId)
@@ -187,18 +192,38 @@ function DetailsForm({ card, sections, onSave }: DetailsFormProps) {
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Medium">
-            <Input
+            <OptionSelect
               value={medium}
-              onChange={(e) => setMedium(e.target.value)}
+              onChange={setMedium}
+              options={fieldOptions.medium}
               placeholder="Oil on canvas"
             />
+            {medium.trim() && (
+              <button
+                type="button"
+                onClick={() => onApplyToAll("medium", medium)}
+                className="mt-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                Apply to all cards
+              </button>
+            )}
           </FormField>
-          <FormField label="Dimensions">
-            <Input
+          <FormField label="Size">
+            <OptionSelect
               value={dimensions}
-              onChange={(e) => setDimensions(e.target.value)}
-              placeholder='24" × 36"'
+              onChange={setDimensions}
+              options={fieldOptions.dimensions}
+              placeholder='24"x36"'
             />
+            {dimensions.trim() && (
+              <button
+                type="button"
+                onClick={() => onApplyToAll("dimensions", dimensions)}
+                className="mt-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                Apply to all cards
+              </button>
+            )}
           </FormField>
         </div>
 
@@ -393,6 +418,24 @@ export function BulkUploadClient({
   const [saving, setSaving] = useState(false)
   const [detailsCardId, setDetailsCardId] = useState<string | null>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const [fieldOptions, setFieldOptions] = useState<Record<FieldOptionField, string[]>>({
+    medium: [],
+    dimensions: [],
+  })
+
+  useEffect(() => {
+    getFieldOptions().then((result) => {
+      if (!result.ok) return
+      setFieldOptions({
+        medium: result.options.medium.map((o) => o.value),
+        dimensions: result.options.dimensions.map((o) => o.value),
+      })
+    })
+  }, [])
+
+  function applyToAllCards(field: FieldOptionField, value: string) {
+    setCards((prev) => prev.map((c) => ({ ...c, [field]: value })))
+  }
 
   // Upload queue
 // Reads the photo's natural pixel size in the browser. The bulk uploader sends
@@ -585,12 +628,47 @@ async function measureImage(
       return
     }
 
-    toast.success(
-      `${result.count} painting${result.count !== 1 ? "s" : ""} added.`,
-      { id: "bulk-save" }
-    )
+    // Another agent adds `failed` to bulkCreatePaintings's return alongside
+    // `count`. Consume it defensively in case it isn't shipped yet.
+    const failed =
+      (result as { failed?: { title: string; error: string }[] }).failed ?? []
+    const failedTitles = new Set(failed.map((f) => f.title))
 
-    cards.forEach((c) => URL.revokeObjectURL(c.previewUrl))
+    const savedCards = readyCards.filter((c) => !failedTitles.has(c.title))
+
+    // Remember each distinct medium/size pair actually saved, recent-first.
+    const seenPairs = new Set<string>()
+    for (const c of savedCards) {
+      const key = `${c.medium}|||${c.dimensions}`
+      if (seenPairs.has(key)) continue
+      seenPairs.add(key)
+      if (c.medium || c.dimensions) {
+        void touchFieldOptions({ medium: c.medium || undefined, dimensions: c.dimensions || undefined })
+      }
+    }
+
+    if (failed.length > 0) {
+      const names = failed.slice(0, 5).map((f) => f.title).join(", ")
+      const suffix = failed.length > 5 ? `, and ${failed.length - 5} more` : ""
+      toast.error(
+        `${failed.length} photo${failed.length !== 1 ? "s" : ""} couldn't be saved: ${names}${suffix}`,
+        { id: "bulk-save", duration: 8000 }
+      )
+    } else {
+      toast.success(
+        `${result.count} painting${result.count !== 1 ? "s" : ""} added.`,
+        { id: "bulk-save" }
+      )
+    }
+
+    savedCards.forEach((c) => URL.revokeObjectURL(c.previewUrl))
+
+    if (failed.length > 0) {
+      // Keep the failed cards on screen so the owner can retry/fix them.
+      setCards((prev) => prev.filter((c) => failedTitles.has(c.title)))
+      setSaving(false)
+      return
+    }
 
     const target = result.sectionSlug
       ? `/admin/portfolio/${result.sectionSlug}`
@@ -734,7 +812,7 @@ async function measureImage(
           if (!open) setDetailsCardId(null)
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Painting details</DialogTitle>
           </DialogHeader>
@@ -743,6 +821,8 @@ async function measureImage(
               key={detailsCard.id}
               card={detailsCard}
               sections={sections}
+              fieldOptions={fieldOptions}
+              onApplyToAll={applyToAllCards}
               onSave={(updates) => {
                 updateCard(detailsCard.id, updates)
                 setDetailsCardId(null)

@@ -26,6 +26,8 @@ export interface SchemaCapabilities {
   quickInquire: boolean
   /** image_edits table → the "Edit" affordance + "Revert to original" on saved images. */
   imageEdits: boolean
+  /** field_options table → the remembered Medium/Size dropdown lists + "Painting details lists" settings card. */
+  fieldOptions: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -61,7 +63,7 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc, fp, al, pk, st, qi, ie] = await Promise.all([
+    const [ps, sc, fp, al, pk, st, qi, ie, fo] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
       supabase.from("settings").select("home_hero_focal_x").limit(1),
@@ -70,6 +72,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       supabase.from("paintings").select("story_public").limit(1),
       supabase.from("settings").select("inquiry_sms_enabled").limit(1),
       supabase.from("image_edits").select("id").limit(1),
+      supabase.from("field_options").select("id").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
@@ -79,6 +82,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
     const storyTools = !st.error
     const quickInquire = !qi.error
     const imageEdits = !ie.error
+    const fieldOptions = !fo.error
     return {
       paintingSections,
       siteCopy,
@@ -91,6 +95,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       storyTools,
       quickInquire,
       imageEdits,
+      fieldOptions,
     }
   } catch {
     return {
@@ -103,6 +108,7 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       storyTools: false,
       quickInquire: false,
       imageEdits: false,
+      fieldOptions: false,
     }
   }
 }
