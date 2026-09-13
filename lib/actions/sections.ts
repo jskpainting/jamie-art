@@ -73,17 +73,14 @@ export async function updateSection(id: string, input: SectionWriteInput) {
   try {
     const supabase = await db()
 
-    // Fetch current section to enforce slug lock on uncategorized
+    // Fetch current section so we know the old slug (needed to revalidate
+    // both old and new paths if the slug changes).
     const { data: current, error: fetchError } = await supabase
       .from("sections")
       .select("slug")
       .eq("id", id)
       .single()
     if (fetchError || !current) return { ok: false as const, error: "Section not found" }
-
-    if (current.slug === "uncategorized" && parsed.data.slug !== "uncategorized") {
-      return { ok: false as const, error: "The Uncategorized section slug cannot be changed" }
-    }
 
     const payload: Record<string, unknown> = {
       title: parsed.data.title,
@@ -109,6 +106,14 @@ export async function updateSection(id: string, input: SectionWriteInput) {
     }
 
     revalidate()
+    if (current.slug !== parsed.data.slug) {
+      revalidatePath(`/portfolio/${current.slug}`)
+      revalidatePath(`/admin/portfolio/${current.slug}`)
+      revalidatePath(`/portfolio/${parsed.data.slug}`)
+      revalidatePath(`/admin/portfolio/${parsed.data.slug}`)
+      revalidatePath("/sitemap.xml")
+      revalidatePath("/admin")
+    }
     return { ok: true as const }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update section"
@@ -124,6 +129,31 @@ export async function deleteSection(
 
   try {
     const supabase = await db()
+
+    // `delete_section_safe` moves the deleted section's paintings into the
+    // `uncategorized` holding bucket and raises if that slug doesn't exist.
+    // Since the slug is now editable (owners can rename it into a real,
+    // public gallery — e.g. "archives"), the bucket may no longer be there
+    // by the time a different section gets deleted. Re-create it on demand
+    // so the RPC always has somewhere to put orphaned paintings. If the
+    // section being deleted IS the current `uncategorized` slug, leave this
+    // alone and let the RPC's own "can't delete uncategorized" error surface
+    // as before.
+    const { data: existing, error: existingError } = await supabase
+      .from("sections")
+      .select("id")
+      .eq("slug", "uncategorized")
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (!existing) {
+      const { error: insertError } = await supabase.from("sections").insert({
+        slug: "uncategorized",
+        title: "Uncategorized",
+        sort_order: 999,
+      })
+      if (insertError) return { ok: false, error: insertError.message }
+    }
+
     const { data, error } = await supabase.rpc("delete_section_safe", {
       p_section_id: id,
     })

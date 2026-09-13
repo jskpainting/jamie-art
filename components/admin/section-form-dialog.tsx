@@ -127,18 +127,16 @@ function SectionFormInner({ section, onOpenChange, showFocal }: SectionFormInner
             value={slug}
             onChange={(e) => handleSlugChange(e.target.value)}
             placeholder="section-slug"
-            disabled={isUncategorized}
-            className={
-              isUncategorized
-                ? "opacity-50 cursor-not-allowed"
-                : slugError
-                  ? "border-destructive"
-                  : ""
-            }
+            className={slugError ? "border-destructive" : ""}
           />
+          {isEdit && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Changing this changes the gallery&apos;s web address.
+            </p>
+          )}
           {isUncategorized && (
             <p className="text-xs text-muted-foreground mt-1">
-              Slug can&apos;t be changed for this section.
+              Once the address is no longer &quot;uncategorized&quot;, this gallery becomes visible on the public site.
             </p>
           )}
         </FormField>

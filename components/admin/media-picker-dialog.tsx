@@ -25,7 +25,7 @@ export function MediaPickerDialog({
 }: MediaPickerDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[calc(100%-2rem)] sm:max-w-3xl max-h-[85dvh] overflow-y-auto">
+      <DialogContent className="w-full max-w-[calc(100%-2rem)] sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Choose an image</DialogTitle>
         </DialogHeader>
