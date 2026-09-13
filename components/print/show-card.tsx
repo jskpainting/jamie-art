@@ -14,6 +14,7 @@
 //    Used for wide paintings, where a side-by-side image box would be tiny.
 
 import { physicalOf } from "@/lib/mosaic-layout"
+import { captionDetailsFor } from "@/lib/painting-caption"
 
 export const CARD_WIDTH_MM = 88.9
 export const CARD_HEIGHT_MM = 50.8
@@ -34,6 +35,8 @@ export interface ShowCardPainting {
   year: number | null
   width: number | null
   height: number | null
+  price_cents: number | null
+  status: "available" | "sold" | "nfs" | "reserved" | string
 }
 
 /**
@@ -47,9 +50,7 @@ function thumbSrc(url: string): string {
 }
 
 function metadataLine(p: ShowCardPainting): string {
-  return [p.medium, p.dimensions, p.year ? String(p.year) : null]
-    .filter((v): v is string => !!v && v.trim().length > 0)
-    .join(" · ")
+  return captionDetailsFor(p)
 }
 
 export type CardLayout = "side" | "stack"
@@ -135,6 +136,10 @@ function Meta({ meta, marginTopMm }: { meta: string; marginTopMm: number }) {
         color: MUTED_COLOR,
         marginTop: `${marginTopMm}mm`,
         lineHeight: 1.3,
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden",
       }}
     >
       {meta}

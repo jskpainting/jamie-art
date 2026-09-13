@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Sparkles, ChevronDown, ChevronRight } from "lucide-react"
+import { Loader2, Sparkles, ChevronDown, ChevronRight, Box } from "lucide-react"
 import { parsePhysical } from "@/lib/mosaic-layout"
 import { WallFitPreview } from "@/components/admin/wall-fit-preview"
 import {
@@ -11,6 +11,7 @@ import {
   addPaintingImage,
   deletePaintingImage,
   reorderPaintingImages,
+  regenerateArModel,
 } from "@/lib/actions/paintings"
 import { generatePaintingStory } from "@/lib/actions/ai"
 import { updatePaintingTags, getAllTags } from "@/lib/actions/tags"
@@ -103,6 +104,7 @@ export function PaintingFormDialog({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [wallPreviewOpen, setWallPreviewOpen] = useState(false)
+  const [rebuildingAr, setRebuildingAr] = useState(false)
   const [fieldOptions, setFieldOptions] = useState<Record<FieldOptionField, string[]>>({
     medium: [],
     dimensions: [],
@@ -160,6 +162,21 @@ export function PaintingFormDialog({
       setStoryDraft(result.story ?? null)
     } finally {
       setStoryGenerating(false)
+    }
+  }
+
+  async function handleRebuildArModel() {
+    if (!painting) return
+    setRebuildingAr(true)
+    try {
+      const result = await regenerateArModel(painting.id)
+      if (!result.ok) {
+        toast.error(result.error ?? "Couldn't rebuild the 3D model", { duration: 5000 })
+        return
+      }
+      toast.success("3D model rebuilt", { duration: 5000 })
+    } finally {
+      setRebuildingAr(false)
     }
   }
 
@@ -490,6 +507,10 @@ export function PaintingFormDialog({
                   rows={6}
                 />
               </FormField>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Leave this as is and it&rsquo;s filled in automatically from
+                the title, year, size, medium and price.
+              </p>
 
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <Checkbox
@@ -514,6 +535,10 @@ export function PaintingFormDialog({
                 />
               </FormField>
               <p className="text-xs text-muted-foreground">
+                Leave this as is and it&rsquo;s filled in automatically from
+                the title, year, size, medium and price.
+              </p>
+              <p className="text-xs text-muted-foreground">
                 This feature needs a quick one-time setup that hasn&rsquo;t
                 run yet — everything else works normally.
               </p>
@@ -537,18 +562,36 @@ export function PaintingFormDialog({
 
           {primaryUrl && (
             <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setWallPreviewOpen((v) => !v)}
-                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                {wallPreviewOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWallPreviewOpen((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  {wallPreviewOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  See it on the wall
+                </button>
+                {isEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rebuildingAr}
+                    onClick={handleRebuildArModel}
+                  >
+                    {rebuildingAr ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <Box className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Rebuild 3D model
+                  </Button>
                 )}
-                See it on the wall
-              </button>
+              </div>
               {wallPreviewOpen && (
                 <WallFitPreview
                   imageUrl={primaryUrl}

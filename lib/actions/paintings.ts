@@ -12,6 +12,7 @@ import {
   type PaintingImageInput,
 } from "@/lib/schemas"
 import { slugify } from "@/lib/utils"
+import { captionFor, looksLikeCaption, normalizeDimensions } from "@/lib/painting-caption"
 import {
   isSchemaSetupError,
   SCHEMA_SETUP_MESSAGE,
@@ -123,9 +124,21 @@ export async function createPainting(input: unknown) {
   try {
     const supabase = await db()
     const { price_dollars: price_cents, ...rest } = parsed.data
+    const dimensions = normalizeDimensions(rest.dimensions)
+    const story =
+      rest.story && rest.story.trim()
+        ? rest.story
+        : captionFor({
+            title: rest.title,
+            year: rest.year ?? null,
+            dimensions,
+            medium: rest.medium ?? null,
+            price_cents,
+            status: rest.status,
+          })
     const { data, error } = await supabase
       .from("paintings")
-      .insert(await withoutUnmigratedStoryFields({ ...rest, price_cents }))
+      .insert(await withoutUnmigratedStoryFields({ ...rest, price_cents, dimensions, story }))
       .select("id")
       .single()
     if (error) throw error
@@ -158,13 +171,29 @@ export async function updatePainting(id: string, input: unknown) {
     // real regeneration or just a cheap fill-in-if-missing check).
     const { data: prev } = await supabase
       .from("paintings")
-      .select("section_id, primary_image_url, dimensions")
+      .select("section_id, primary_image_url, dimensions, story")
       .eq("id", id)
       .single()
 
+    const dimensions = normalizeDimensions(rest.dimensions)
+    const prevStory = prev?.story ?? null
+    const incomingStory = rest.story ?? null
+    const story =
+      (!prevStory || !prevStory.trim() || looksLikeCaption(prevStory)) &&
+      incomingStory === prevStory
+        ? captionFor({
+            title: rest.title,
+            year: rest.year ?? null,
+            dimensions,
+            medium: rest.medium ?? null,
+            price_cents,
+            status: rest.status,
+          })
+        : incomingStory
+
     const { error } = await supabase
       .from("paintings")
-      .update(await withoutUnmigratedStoryFields({ ...rest, price_cents }))
+      .update(await withoutUnmigratedStoryFields({ ...rest, price_cents, dimensions, story }))
       .eq("id", id)
     if (error) throw error
 
@@ -581,7 +610,25 @@ export async function bulkCreatePaintings(
       }
 
       const { price_dollars: price_cents, ...rest } = parsed.data
-      const payload = await withoutUnmigratedStoryFields({ ...rest, price_cents, sort_order })
+      const dimensions = normalizeDimensions(rest.dimensions)
+      const story =
+        rest.story && rest.story.trim()
+          ? rest.story
+          : captionFor({
+              title: rest.title,
+              year: rest.year ?? null,
+              dimensions,
+              medium: rest.medium ?? null,
+              price_cents,
+              status: rest.status,
+            })
+      const payload = await withoutUnmigratedStoryFields({
+        ...rest,
+        price_cents,
+        dimensions,
+        story,
+        sort_order,
+      })
 
       let data: { id: string } | null = null
       let error: { code?: string; message: string } | null = null

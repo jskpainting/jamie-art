@@ -214,6 +214,23 @@ button on a real device.
 8. **Backlog**: replace the placeholder `public/og-image.png` with a real
    painting; submit the sitemap in Search Console.
 
+## Captions
+
+Every painting's `story` field is meant to hold the owner's one-line caption —
+e.g. `What Remains Standing (2026). 12"x36" Acrylic on canvas. $875 (+tax)` or
+`Vortex (2023). 36"x36" Acrylic on canvas. SOLD` — built from title, year,
+dimensions, medium, price and status. The format lives in
+`lib/painting-caption.ts` (`captionFor`, `captionDetailsFor` for the part after
+the title, `normalizeDimensions`, `looksLikeCaption`), and both the show card
+(`components/print/show-card.tsx`) and the painting save path read from it so
+the card, the site, and the stored `story` never drift apart. `createPainting`
+and `bulkCreatePaintings` (`lib/actions/paintings.ts`) auto-fill `story` from
+`captionFor` when the incoming value is empty; `updatePainting` refreshes it on
+save only when the previous story was empty or still looked like a
+machine-generated caption *and* the owner didn't hand-edit the story text in
+that same save — real hand-written prose is never touched. `dimensions` is
+normalized (e.g. `12” x 12”` → `12"x12"`) on every write.
+
 ## Operational facts
 
 - **GitHub**: `jskpainting/jamie-art` (`main`). **Supabase**: project ref
