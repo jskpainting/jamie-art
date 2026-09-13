@@ -1,9 +1,9 @@
-# AI story writer — setup
+# AI newsletter writer — setup
 
-This adds a "Write it for me" button to a painting's Story field in the admin.
-You type rough notes — words, feelings, a phrase — and it turns them into a
-short 1–3 sentence description you can use as the painting's Story, or edit
-by hand.
+This powers the "Write it for me" box on the Newsletters page in the admin.
+You type a one-line request ("announce the three new fall pieces and the
+October show") and it drafts the subject and body from your newest paintings
+and upcoming events. You can edit everything before sending.
 
 **It costs nothing.** It only uses free AI providers that don't require a
 credit card. If no key is set, the button explains that and nothing breaks —
@@ -86,6 +86,6 @@ new value.
 ## That's it
 
 Once at least one key is set (locally or in production), the "Write it for
-me" button in a painting's Story section starts working. Nothing else on the
+me" box on the Newsletters page starts working. Nothing else on the
 site changes, and there's nothing to turn on or configure beyond adding the
 key.
