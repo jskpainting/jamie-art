@@ -33,7 +33,7 @@ const navItems = [
   { href: "/admin/media", label: "Images", Icon: Images, exact: false },
   { href: "/admin/events", label: "Events", Icon: Calendar, exact: false },
   { href: "/admin/show-cards", label: "Show cards", Icon: QrCode, exact: false },
-  { href: "/admin/contacts", label: "Contacts", Icon: Users, exact: false },
+  { href: "/admin/contacts", label: "People", Icon: Users, exact: false },
   { href: "/admin/inquiries", label: "Inquiries", Icon: Mail, exact: false },
   { href: "/admin/newsletters", label: "Newsletters", Icon: Send, exact: false },
   {

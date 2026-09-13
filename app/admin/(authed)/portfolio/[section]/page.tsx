@@ -42,6 +42,7 @@ export default async function SectionDetailPage({ params, searchParams }: Props)
         sections={sections}
         showAlsoShowIn={capabilities.paintingSections}
         storyToolsEnabled={capabilities.storyTools}
+        crmEnabled={capabilities.crm}
       />
     </div>
   )

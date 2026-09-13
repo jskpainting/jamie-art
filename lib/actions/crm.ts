@@ -766,3 +766,41 @@ export async function countAudience(
   if (!resolved.ok) return resolved
   return { ok: true, count: resolved.ids.length }
 }
+
+// --- Search ------------------------------------------------------------
+
+export interface ContactSearchResult {
+  id: string
+  email: string
+  first_name: string | null
+  last_name: string | null
+}
+
+/**
+ * Small name/email search for the "Sold to" picker on the painting dialog.
+ * Returns at most 8 matches. Empty/blank query returns no results (the
+ * picker shouldn't dump the whole list open).
+ */
+export async function searchContacts(
+  q: string
+): Promise<{ ok: true; results: ContactSearchResult[] } | { ok: false; error: string }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  const query = q.trim()
+  if (query.length < 2) return { ok: true, results: [] }
+
+  try {
+    const supabase = await db()
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("id, email, first_name, last_name")
+      .or(`email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+      .limit(8)
+    if (error) throw error
+    return { ok: true, results: (data ?? []) as ContactSearchResult[] }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to search people"
+    return { ok: false, error: message }
+  }
+}

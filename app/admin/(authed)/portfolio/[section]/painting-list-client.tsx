@@ -83,6 +83,8 @@ interface PaintingListClientProps {
   showAlsoShowIn?: boolean
   /** Whether the story_public/story_notes migration is applied (enables the AI story writer). */
   storyToolsEnabled?: boolean
+  /** Whether the contact_groups (CRM) migration is applied (enables "Sold to"). */
+  crmEnabled?: boolean
 }
 
 // ─── Bulk action bar ─────────────────────────────────────────────────────────
@@ -625,6 +627,7 @@ export function PaintingListClient({
   sections,
   showAlsoShowIn = false,
   storyToolsEnabled = false,
+  crmEnabled = false,
 }: PaintingListClientProps) {
   const [paintings, setOptimistic] = useOptimistic(initialPaintings)
   const [, startTransition] = useTransition()
@@ -995,6 +998,7 @@ export function PaintingListClient({
         sections={sections}
         storyToolsEnabled={storyToolsEnabled}
         neighbors={paintings}
+        crmEnabled={crmEnabled}
       />
 
       {/* Edit dialog */}
@@ -1008,6 +1012,7 @@ export function PaintingListClient({
           sections={sections}
           storyToolsEnabled={storyToolsEnabled}
           neighbors={paintings}
+          crmEnabled={crmEnabled}
         />
       )}
     </div>

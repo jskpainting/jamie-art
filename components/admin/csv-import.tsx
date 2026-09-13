@@ -12,12 +12,31 @@ interface ParsedRow {
   email?: string
   first_name?: string
   last_name?: string
+  phone?: string
+  city?: string
+  tags?: string
+  group?: string
+  notes?: string
   [key: string]: string | undefined
 }
 
 interface CsvImportProps {
   existingEmails: string[]
   className?: string
+}
+
+const TEMPLATE_HEADER = "email,first_name,last_name,phone,city,tags,group,notes"
+
+function downloadTemplate() {
+  const blob = new Blob([TEMPLATE_HEADER + "\n"], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = "people-template.csv"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 export function CsvImport({ existingEmails, className }: CsvImportProps) {
@@ -74,6 +93,11 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
           email: r.email!,
           first_name: r.first_name,
           last_name: r.last_name,
+          phone: r.phone,
+          city: r.city,
+          tags: r.tags,
+          group: r.group,
+          notes: r.notes,
         }))
       )
       if (!result.ok) {
@@ -91,7 +115,7 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="outline"
@@ -108,6 +132,13 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
           className="hidden"
           onChange={handleChange}
         />
+        <button
+          type="button"
+          onClick={downloadTemplate}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+        >
+          Download template
+        </button>
         {rows.length > 0 && (
           <span className="text-sm text-muted-foreground flex items-center gap-1.5">
             <FileText className="h-4 w-4" />

@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Sparkles, ChevronDown, ChevronRight, Box } from "lucide-react"
+import { Loader2, Sparkles, ChevronDown, ChevronRight, Box, Search, X } from "lucide-react"
 import { parsePhysical } from "@/lib/mosaic-layout"
 import { WallFitPreview } from "@/components/admin/wall-fit-preview"
 import {
@@ -16,6 +16,12 @@ import {
 import { generatePaintingStory } from "@/lib/actions/ai"
 import { updatePaintingTags, getAllTags } from "@/lib/actions/tags"
 import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
+import {
+  searchContacts,
+  findOrCreateContact,
+  addPurchase,
+  type ContactSearchResult,
+} from "@/lib/actions/crm"
 import type { FieldOptionField } from "@/lib/field-options"
 import {
   Dialog,
@@ -54,6 +60,8 @@ interface PaintingFormDialogProps {
   storyToolsEnabled?: boolean
   /** Other paintings already in this section — scale reference for the wall preview. */
   neighbors?: Painting[]
+  /** Whether the contact_groups (CRM) migration is applied (enables "Sold to"). */
+  crmEnabled?: boolean
 }
 
 export function PaintingFormDialog({
@@ -65,6 +73,7 @@ export function PaintingFormDialog({
   sections = [],
   storyToolsEnabled = false,
   neighbors = [],
+  crmEnabled = false,
 }: PaintingFormDialogProps) {
   const isEdit = !!painting
 
@@ -110,6 +119,45 @@ export function PaintingFormDialog({
     dimensions: [],
   })
   const [allTags, setAllTags] = useState<string[]>([])
+
+  // "Sold to" — optional, only shown when Status = Sold and the CRM migration is live.
+  const [soldToContact, setSoldToContact] = useState<ContactSearchResult | null>(null)
+  const [soldToQuery, setSoldToQuery] = useState("")
+  const [soldToResults, setSoldToResults] = useState<ContactSearchResult[]>([])
+  const [soldToOpen, setSoldToOpen] = useState(false)
+  const [soldToAddNew, setSoldToAddNew] = useState(false)
+  const [newPersonEmail, setNewPersonEmail] = useState("")
+  const [newPersonName, setNewPersonName] = useState("")
+  const soldToRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!soldToOpen) return
+    const q = soldToQuery.trim()
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      if (q.length < 2) {
+        if (!cancelled) setSoldToResults([])
+        return
+      }
+      const result = await searchContacts(q)
+      if (!cancelled && result.ok) setSoldToResults(result.results)
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [soldToQuery, soldToOpen])
+
+  useEffect(() => {
+    if (!soldToOpen) return
+    function handleClick(e: MouseEvent) {
+      if (soldToRef.current && !soldToRef.current.contains(e.target as Node)) {
+        setSoldToOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [soldToOpen])
 
   useEffect(() => {
     if (!open) return
@@ -195,6 +243,40 @@ export function PaintingFormDialog({
       errs.slug = "Lowercase letters, numbers, and hyphens only"
     setErrors(errs)
     return Object.keys(errs).length === 0
+  }
+
+  /**
+   * Records the sale on the People side when "Sold to" was filled in.
+   * Never blocks the painting save on failure — the painting itself already
+   * saved successfully by the time this runs.
+   */
+  async function recordSoldTo(paintingId: string) {
+    if (status !== "sold") return
+    let contactId = soldToContact?.id ?? null
+
+    if (!contactId && soldToAddNew && newPersonEmail.trim()) {
+      const [first, ...rest] = newPersonName.trim().split(/\s+/)
+      const created = await findOrCreateContact({
+        email: newPersonEmail.trim(),
+        first_name: newPersonName.trim() ? first : null,
+        last_name: newPersonName.trim() && rest.length ? rest.join(" ") : null,
+        source: "sale",
+      })
+      if (!created.ok) {
+        toast.error(created.error, { duration: 5000 })
+        return
+      }
+      contactId = created.id
+    }
+
+    if (!contactId) return
+
+    const result = await addPurchase(contactId, { painting_id: paintingId, markSold: false })
+    if (!result.ok) {
+      toast.error(`Painting saved, but couldn't record the sale: ${result.error}`, {
+        duration: 5000,
+      })
+    }
   }
 
   async function handleSave() {
@@ -284,6 +366,8 @@ export function PaintingFormDialog({
 
         await touchFieldOptions({ medium, dimensions })
 
+        if (crmEnabled) await recordSoldTo(painting.id)
+
         toast.success("Painting saved")
         onOpenChange(false)
       } else {
@@ -317,6 +401,8 @@ export function PaintingFormDialog({
         }
 
         await touchFieldOptions({ medium, dimensions })
+
+        if (crmEnabled && newId) await recordSoldTo(newId)
 
         toast.success("Painting created")
         onOpenChange(false)
@@ -377,6 +463,103 @@ export function PaintingFormDialog({
               </select>
             </FormField>
           </div>
+
+          {status === "sold" && crmEnabled && (
+            <FormField label="Sold to (optional)">
+              {soldToContact ? (
+                <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm">
+                  <span className="flex-1 truncate">
+                    {[soldToContact.first_name, soldToContact.last_name].filter(Boolean).join(" ") ||
+                      soldToContact.email}
+                    {soldToContact.first_name || soldToContact.last_name ? (
+                      <span className="text-xs text-muted-foreground ml-1.5">{soldToContact.email}</span>
+                    ) : null}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSoldToContact(null)}
+                    aria-label="Clear selection"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : soldToAddNew ? (
+                <div className="space-y-2 rounded-lg border border-input p-2.5">
+                  <Input
+                    value={newPersonEmail}
+                    onChange={(e) => setNewPersonEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    type="email"
+                  />
+                  <Input
+                    value={newPersonName}
+                    onChange={(e) => setNewPersonName(e.target.value)}
+                    placeholder="Full name (optional)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSoldToAddNew(false)
+                      setNewPersonEmail("")
+                      setNewPersonName("")
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Search existing people instead
+                  </button>
+                </div>
+              ) : (
+                <div ref={soldToRef} className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      value={soldToQuery}
+                      onChange={(e) => {
+                        setSoldToQuery(e.target.value)
+                        setSoldToOpen(true)
+                      }}
+                      onFocus={() => setSoldToOpen(true)}
+                      placeholder="Search people by name or email…"
+                      className="pl-8"
+                    />
+                  </div>
+                  {soldToOpen && soldToQuery.trim().length >= 2 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-popover shadow-md max-h-56 overflow-y-auto">
+                      {soldToResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSoldToContact(c)
+                            setSoldToOpen(false)
+                            setSoldToQuery("")
+                          }}
+                          className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted"
+                        >
+                          <span>{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email}</span>
+                          <span className="text-xs text-muted-foreground">{c.email}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSoldToAddNew(true)
+                          setSoldToOpen(false)
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-muted border-t border-border"
+                      >
+                        + Add new person
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Records this as a purchase on their People page.
+              </p>
+            </FormField>
+          )}
 
           {sections.length > 0 && (
             <FormField label="Section">
