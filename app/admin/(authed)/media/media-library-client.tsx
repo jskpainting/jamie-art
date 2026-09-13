@@ -19,6 +19,7 @@ import { MediaGrid, formatBytes } from "@/components/admin/media-grid"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { ImageEditorDialog } from "@/components/admin/image-editor-dialog"
+import { MultiFileUploader } from "@/components/admin/multi-file-uploader"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -64,14 +65,28 @@ export function MediaLibraryClient() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [uploadOpen, setUploadOpen] = useState(0) // remount key; 0 = closed
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [singleUploadOpen, setSingleUploadOpen] = useState(false)
+  const [bulkBucket, setBulkBucket] = useState<MediaBucket>("paintings")
+  const [bulkUploaderKey, setBulkUploaderKey] = useState(0)
   const [selected, setSelected] = useState<MediaItem | null>(null)
   const [followUp, setFollowUp] = useState<FollowUp | null>(null)
   const [applyingFollowUp, setApplyingFollowUp] = useState(false)
 
   function handleUploaded() {
-    setUploadDialogOpen(false)
     setUploadOpen((k) => k + 1)
     setRefreshKey((k) => k + 1)
+  }
+
+  function handleBulkDone(results: { url: string; path: string }[]) {
+    setUploadDialogOpen(false)
+    setBulkUploaderKey((k) => k + 1)
+    setRefreshKey((k) => k + 1)
+    if (results.length > 0) {
+      toast.success(
+        `${results.length} photo${results.length !== 1 ? "s" : ""} added to your library`,
+        { duration: 5000 }
+      )
+    }
   }
 
   function handleEdited(info: FollowUp) {
@@ -104,20 +119,53 @@ export function MediaLibraryClient() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setSingleUploadOpen(true)}
+        >
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          Upload &amp; crop one
+        </Button>
         <Button size="sm" onClick={() => setUploadDialogOpen(true)}>
           <Upload className="h-3.5 w-3.5 mr-1" />
-          Upload new
+          Upload photos
         </Button>
       </div>
 
       <MediaGrid onSelect={setSelected} refreshKey={refreshKey} showToolbar />
 
-      {/* Upload dialog */}
+      {/* Bulk upload dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload photos</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Where do these photos go?
+              <select
+                value={bulkBucket}
+                onChange={(e) => setBulkBucket(e.target.value as MediaBucket)}
+                className="w-full h-9 rounded-lg border border-input bg-background px-2.5 text-base md:text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="paintings">Painting photos</option>
+                <option value="site-images">Site images</option>
+                <option value="events">Event images</option>
+                <option value="headshots">Headshots</option>
+              </select>
+            </label>
+            <MultiFileUploader key={bulkUploaderKey} bucket={bulkBucket} onDone={handleBulkDone} />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single upload + crop dialog */}
+      <Dialog open={singleUploadOpen} onOpenChange={setSingleUploadOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Upload a new image</DialogTitle>
+            <DialogTitle>Upload &amp; crop one</DialogTitle>
           </DialogHeader>
           <ImageUploadCropper
             key={uploadOpen}
@@ -125,7 +173,10 @@ export function MediaLibraryClient() {
             label="Image"
             libraryEnabled={false}
             onUploadComplete={(result) => {
-              if (result) handleUploaded()
+              if (result) {
+                setSingleUploadOpen(false)
+                handleUploaded()
+              }
             }}
           />
         </DialogContent>
