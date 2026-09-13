@@ -14,9 +14,13 @@ interface Props {
 export default async function BulkUploadPage({ searchParams }: Props) {
   const [sp, sections] = await Promise.all([searchParams, getSections()])
 
+  // Default to the gallery the owner came from, else the first real gallery.
+  // (The old fallback was the hidden "uncategorized" bucket, which the owner
+  // has since renamed into a real gallery — so it is no longer a sensible
+  // place to drop new work by default.)
   const defaultSection =
     sections.find((s) => s.slug === sp.section) ??
-    sections.find((s) => s.slug === "uncategorized") ??
+    sections.find((s) => s.slug !== "uncategorized") ??
     sections[0]
 
   return (
