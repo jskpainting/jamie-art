@@ -4,6 +4,7 @@ import Link from "next/link"
 import { getSettings, getAllPaintingsForPicker, getBio } from "@/lib/db/queries"
 import { getSchemaCapabilities, SCHEMA_SETUP_MESSAGE } from "@/lib/schema-capabilities"
 import { getFieldOptions } from "@/lib/actions/field-options"
+import { getAllTags } from "@/lib/actions/tags"
 import { SITE_COPY_DEFAULTS } from "@/lib/site-copy"
 import { SettingsForm } from "./settings-form"
 import { SiteCopyFieldForm } from "./site-copy-form"
@@ -12,6 +13,7 @@ import { FeaturedPaintingPickerForm } from "./featured-painting-picker-form"
 import { SettingsImageField } from "./settings-image-field"
 import { PageCard } from "./page-card"
 import { FieldOptionsCard } from "./field-options-card"
+import { TagsCard } from "./tags-card"
 
 export const metadata: Metadata = {
   title: "Settings — Admin",
@@ -19,17 +21,21 @@ export const metadata: Metadata = {
 }
 
 export default async function SettingsPage() {
-  const [settings, paintings, capabilities, bio, fieldOptionsResult] = await Promise.all([
-    getSettings(),
-    getAllPaintingsForPicker(),
-    getSchemaCapabilities(),
-    getBio(),
-    getFieldOptions(),
-  ])
+  const [settings, paintings, capabilities, bio, fieldOptionsResult, tagsResult] =
+    await Promise.all([
+      getSettings(),
+      getAllPaintingsForPicker(),
+      getSchemaCapabilities(),
+      getBio(),
+      getFieldOptions(),
+      getAllTags(),
+    ])
 
   const fieldOptions = fieldOptionsResult.ok
     ? fieldOptionsResult.options
     : { medium: [], dimensions: [] }
+
+  const tags = tagsResult.ok ? tagsResult.tags : []
 
   const aboutImageUrl = bio?.headshot_url ?? settings?.about_image_url ?? null
 
@@ -93,6 +99,11 @@ export default async function SettingsPage() {
             enabled={capabilities.fieldOptions}
             initialOptions={fieldOptions}
           />
+        </PageCard>
+
+        {/* Tags */}
+        <PageCard title="Tags">
+          <TagsCard initialTags={tags} />
         </PageCard>
 
         {/* Quick inquire — the "Ask about this painting" sheet on every painting page */}

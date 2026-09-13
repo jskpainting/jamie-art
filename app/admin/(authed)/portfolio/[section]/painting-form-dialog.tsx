@@ -13,7 +13,7 @@ import {
   reorderPaintingImages,
 } from "@/lib/actions/paintings"
 import { generatePaintingStory } from "@/lib/actions/ai"
-import { updatePaintingTags } from "@/lib/actions/tags"
+import { updatePaintingTags, getAllTags } from "@/lib/actions/tags"
 import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
 import type { FieldOptionField } from "@/lib/field-options"
 import {
@@ -31,7 +31,7 @@ import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { ImageUploadCropper } from "@/components/admin/image-upload-cropper"
 import { MultiImageUpload } from "@/components/admin/multi-image-upload"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
-import { TagInput } from "@/components/admin/tag-input"
+import { TagPicker } from "@/components/admin/tag-picker"
 import { OptionSelect } from "@/components/admin/option-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { slugify } from "@/lib/utils"
@@ -107,6 +107,7 @@ export function PaintingFormDialog({
     medium: [],
     dimensions: [],
   })
+  const [allTags, setAllTags] = useState<string[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -117,6 +118,10 @@ export function PaintingFormDialog({
         medium: result.options.medium.map((o) => o.value),
         dimensions: result.options.dimensions.map((o) => o.value),
       })
+    })
+    getAllTags().then((result) => {
+      if (cancelled || !result.ok) return
+      setAllTags(result.tags.map((t) => t.name))
     })
     return () => {
       cancelled = true
@@ -565,7 +570,11 @@ export function PaintingFormDialog({
           </FormField>
 
           <FormField label="Tags">
-            <TagInput value={tags} onChange={setTags} />
+            <TagPicker value={tags} onChange={setTags} allTags={allTags} />
+            <p className="text-xs text-muted-foreground">
+              Paintings that share tags appear under &ldquo;Related
+              work&rdquo; on each other&rsquo;s pages.
+            </p>
           </FormField>
 
           <div className="flex flex-col gap-3">

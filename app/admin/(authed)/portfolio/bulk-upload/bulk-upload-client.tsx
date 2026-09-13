@@ -23,12 +23,13 @@ import {
   type BulkCreateItem,
 } from "@/lib/actions/paintings"
 import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
+import { getAllTags } from "@/lib/actions/tags"
 import type { FieldOptionField } from "@/lib/field-options"
 import { cleanFilename, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FormField } from "@/components/admin/form-field"
-import { TagInput } from "@/components/admin/tag-input"
+import { TagPicker } from "@/components/admin/tag-picker"
 import { OptionSelect } from "@/components/admin/option-select"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
@@ -89,6 +90,7 @@ interface BulkDefaults {
   medium: string
   dimensions: string
   price: string
+  tags: string[]
 }
 
 function needsTitleAttention(title: string): boolean {
@@ -123,7 +125,7 @@ function makeCard(file: File, defaults: BulkDefaults): BulkCard {
     dimensions: defaults.dimensions,
     price: defaults.price,
     story: "",
-    tags: [],
+    tags: defaults.tags,
     printAvailable: false,
     commissionAvailable: false,
   }
@@ -139,13 +141,19 @@ function loadDefaults(fallbackSectionId: string): BulkDefaults {
     medium: "",
     dimensions: "",
     price: "",
+    tags: [],
   }
   if (typeof window === "undefined") return base
   try {
     const raw = window.localStorage.getItem(DEFAULTS_STORAGE_KEY)
     if (!raw) return base
     const parsed = JSON.parse(raw) as Partial<BulkDefaults>
-    return { ...base, ...parsed, sectionId: parsed.sectionId || fallbackSectionId }
+    return {
+      ...base,
+      ...parsed,
+      sectionId: parsed.sectionId || fallbackSectionId,
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+    }
   } catch {
     return base
   }
@@ -250,11 +258,12 @@ interface DetailsFormProps {
   card: BulkCard
   sections: Section[]
   fieldOptions: Record<FieldOptionField, string[]>
+  allTags: string[]
   onSave: (updates: Partial<BulkCard>) => void
   onApplyToAll: (field: FieldOptionField, value: string) => void
 }
 
-function DetailsForm({ card, sections, fieldOptions, onSave, onApplyToAll }: DetailsFormProps) {
+function DetailsForm({ card, sections, fieldOptions, allTags, onSave, onApplyToAll }: DetailsFormProps) {
   const [title, setTitle] = useState(card.title)
   const [paintingStatus, setPaintingStatus] = useState(card.paintingStatus)
   const [sectionId, setSectionId] = useState(card.sectionId)
@@ -397,7 +406,7 @@ function DetailsForm({ card, sections, fieldOptions, onSave, onApplyToAll }: Det
         </FormField>
 
         <FormField label="Tags">
-          <TagInput value={tags} onChange={setTags} />
+          <TagPicker value={tags} onChange={setTags} allTags={allTags} />
         </FormField>
 
         <div className="flex flex-col gap-3">
@@ -588,6 +597,7 @@ export function BulkUploadClient({
     medium: [],
     dimensions: [],
   })
+  const [allTags, setAllTags] = useState<string[]>([])
 
   const [defaults, setDefaults] = useState<BulkDefaults>(() => loadDefaults(defaultSectionId))
   const [defaultsDirty, setDefaultsDirty] = useState(false)
@@ -610,6 +620,10 @@ export function BulkUploadClient({
         medium: result.options.medium.map((o) => o.value),
         dimensions: result.options.dimensions.map((o) => o.value),
       })
+    })
+    getAllTags().then((result) => {
+      if (!result.ok) return
+      setAllTags(result.tags.map((t) => t.name))
     })
   }, [])
 
@@ -1095,6 +1109,13 @@ export function BulkUploadClient({
               placeholder="1500.00"
             />
           </FormField>
+          <FormField label="Tags" className="col-span-2 sm:col-span-3 lg:col-span-6">
+            <TagPicker
+              value={defaults.tags}
+              onChange={(tags) => updateDefaults({ tags })}
+              allTags={allTags}
+            />
+          </FormField>
         </div>
       </div>
 
@@ -1240,6 +1261,7 @@ export function BulkUploadClient({
               card={detailsCard}
               sections={sections}
               fieldOptions={fieldOptions}
+              allTags={allTags}
               onApplyToAll={applyToAllCards}
               onSave={(updates) => {
                 updateCard(detailsCard.id, updates)
