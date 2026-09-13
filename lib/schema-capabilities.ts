@@ -28,6 +28,10 @@ export interface SchemaCapabilities {
   imageEdits: boolean
   /** field_options table → the remembered Medium/Size dropdown lists + "Painting details lists" settings card. */
   fieldOptions: boolean
+  /** contact_groups table → groups, purchases, activity timeline on the People admin. */
+  crm: boolean
+  /** event_rsvps table → the RSVP switch on events + the public /rsvp page. */
+  rsvp: boolean
 }
 
 /** Shown when an action hits schema that isn't migrated yet. Friendly, not scary. */
@@ -63,7 +67,7 @@ async function db() {
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
   try {
     const supabase = await db()
-    const [ps, sc, fp, al, pk, st, qi, ie, fo] = await Promise.all([
+    const [ps, sc, fp, al, pk, st, qi, ie, fo, crm, rsvp] = await Promise.all([
       supabase.from("painting_sections").select("painting_id").limit(1),
       supabase.from("settings").select("tagline").limit(1),
       supabase.from("settings").select("home_hero_focal_x").limit(1),
@@ -73,6 +77,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       supabase.from("settings").select("inquiry_sms_enabled").limit(1),
       supabase.from("image_edits").select("id").limit(1),
       supabase.from("field_options").select("id").limit(1),
+      supabase.from("contact_groups").select("id").limit(1),
+      supabase.from("event_rsvps").select("id").limit(1),
     ])
     const paintingSections = !ps.error
     const siteCopy = !sc.error
@@ -96,6 +102,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       quickInquire,
       imageEdits,
       fieldOptions,
+      crm: !crm.error,
+      rsvp: !rsvp.error,
     }
   } catch {
     return {
@@ -109,6 +117,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
       quickInquire: false,
       imageEdits: false,
       fieldOptions: false,
+      crm: false,
+      rsvp: false,
     }
   }
 }

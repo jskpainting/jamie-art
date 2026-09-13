@@ -71,6 +71,10 @@ export interface Event {
   created_at: string
   image_focal_x: number
   image_focal_y: number
+  // Optional — added by the RSVP migration (lib/schema-capabilities.ts `rsvp`).
+  rsvp_enabled?: boolean
+  rsvp_note?: string | null
+  rsvp_limit?: number | null
 }
 
 export interface Contact {
@@ -83,6 +87,12 @@ export interface Contact {
   subscribed: boolean
   unsubscribe_token: string
   created_at: string
+  // Optional — added by the CRM migration (lib/schema-capabilities.ts `crm`).
+  // Nullable/optional so existing code compiles before it runs.
+  phone?: string | null
+  city?: string | null
+  notes?: string | null
+  updated_at?: string | null
 }
 
 export type NewsletterStatus = "sending" | "completed" | "failed"
@@ -97,7 +107,17 @@ export interface Newsletter {
   recipient_count: number
   status: NewsletterStatus
   error_message: string | null
+  // Optional — added by the CRM/RSVP migration.
+  event_id?: string | null
+  audience?: NewsletterAudience | null
 }
+
+/** Who a newsletter send targeted — stored as jsonb on `newsletters.audience`. */
+export type NewsletterAudience =
+  | { type: "all" }
+  | { type: "groups"; ids: string[]; label?: string }
+  | { type: "tags"; names: string[]; label?: string }
+  | { type: "people"; ids: string[]; label?: string }
 
 export interface Inquiry {
   id: string
@@ -203,4 +223,95 @@ export interface CommissionInquiriesStats {
   new_count: number
   replied_count: number
   closed_count: number
+}
+
+// ---------------------------------------------------------------------------
+// CRM + RSVP (lib/schema-capabilities.ts `crm` / `rsvp`) — hand-written to
+// mirror supabase/migrations/20260913150000_crm_rsvp.sql exactly.
+// ---------------------------------------------------------------------------
+
+export interface ContactGroup {
+  id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
+export interface Purchase {
+  id: string
+  contact_id: string
+  painting_id: string | null
+  title: string | null
+  price_cents: number | null
+  purchased_on: string | null
+  notes: string | null
+  created_at: string
+}
+
+export type ActivityKind =
+  | "note"
+  | "purchase"
+  | "rsvp"
+  | "newsletter"
+  | "inquiry"
+  | "signup"
+  | "import"
+  | "group"
+  | "tag"
+
+export interface ContactActivity {
+  id: string
+  contact_id: string
+  kind: ActivityKind
+  summary: string
+  ref_id: string | null
+  created_at: string
+}
+
+export type RsvpStatus = "invited" | "yes" | "no" | "maybe"
+
+export interface EventRsvp {
+  id: string
+  event_id: string
+  contact_id: string | null
+  email: string
+  name: string | null
+  status: RsvpStatus
+  guests: number
+  source: "site" | "email" | "admin"
+  token: string
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A purchase with the referenced painting's display fields joined in. */
+export interface PurchaseWithPainting extends Purchase {
+  painting_title: string | null
+  painting_slug: string | null
+  painting_section_slug: string | null
+}
+
+/** An RSVP with the referenced event's display fields joined in. */
+export interface RsvpWithEvent extends EventRsvp {
+  event_title: string
+  event_starts_at: string
+}
+
+/** Full detail view for `/admin/contacts/[id]`. */
+export interface ContactDetail extends Contact {
+  groups: ContactGroup[]
+  purchases: PurchaseWithPainting[]
+  rsvps: RsvpWithEvent[]
+  inquiries: InquiryWithPainting[]
+  commissionInquiries: CommissionInquiry[]
+  newsletters: { id: string; subject: string; sent_at: string }[]
+  activities: ContactActivity[]
+}
+
+/** Row shape for the People list table. */
+export interface ContactRow extends Contact {
+  group_names: string[]
+  purchase_count: number
+  last_activity_at: string | null
 }

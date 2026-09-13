@@ -1,13 +1,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { isAuthBypassed } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { isSchemaSetupError } from "@/lib/schema-capabilities"
 import type {
   Bio,
   CommissionInquiry,
   CommissionInquiriesStats,
   Contact,
+  ContactActivity,
+  ContactDetail,
+  ContactGroup,
+  ContactRow,
   ContactsStats,
   Event,
+  EventRsvp,
   Inquiry,
   InquiriesStats,
   InquiryWithPainting,
@@ -15,6 +21,8 @@ import type {
   Painting,
   PaintingWithImages,
   PaintingWithImagesAndTags,
+  PurchaseWithPainting,
+  RsvpWithEvent,
   Section,
   Settings,
   SectionWithCount,
@@ -1037,5 +1045,297 @@ export async function getSubscriberCount(): Promise<number> {
   } catch (err) {
     console.error("getSubscriberCount error:", err)
     return 0
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CRM + RSVP (lib/schema-capabilities.ts `crm` / `rsvp`).
+//
+// Same try/catch/return-empty contract as every helper above, with one
+// difference: a missing table/column here just means the migration hasn't
+// run yet (an expected, common state before the owner applies it by hand),
+// so those failures return an empty structure WITHOUT a console.error — only
+// a genuinely unexpected error is logged.
+// ---------------------------------------------------------------------------
+
+/** People list for /admin/contacts — group names + purchase count, joined in memory. */
+export async function getContactRows(): Promise<ContactRow[]> {
+  try {
+    const supabase = await db()
+    const { data: contacts, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .order("created_at", { ascending: false })
+    if (error) throw error
+
+    const rows = (contacts ?? []) as Contact[]
+    if (rows.length === 0) return []
+
+    const ids = rows.map((c) => c.id)
+
+    const [groupsRes, purchasesRes, activitiesRes] = await Promise.all([
+      supabase
+        .from("contact_group_members")
+        .select("contact_id, contact_groups(name)")
+        .in("contact_id", ids),
+      supabase.from("purchases").select("contact_id").in("contact_id", ids),
+      supabase
+        .from("contact_activities")
+        .select("contact_id, created_at")
+        .in("contact_id", ids)
+        .order("created_at", { ascending: false }),
+    ])
+
+    // Any of these three can legitimately fail pre-migration — fall back to
+    // plain contact rows rather than throwing the whole list away.
+    const groupNames = new Map<string, string[]>()
+    if (!groupsRes.error) {
+      for (const row of groupsRes.data ?? []) {
+        const name = (row.contact_groups as unknown as { name: string } | null)?.name
+        if (!name) continue
+        const contactId = row.contact_id as string
+        const list = groupNames.get(contactId) ?? []
+        list.push(name)
+        groupNames.set(contactId, list)
+      }
+    }
+
+    const purchaseCounts = new Map<string, number>()
+    if (!purchasesRes.error) {
+      for (const row of purchasesRes.data ?? []) {
+        const contactId = row.contact_id as string
+        purchaseCounts.set(contactId, (purchaseCounts.get(contactId) ?? 0) + 1)
+      }
+    }
+
+    const lastActivity = new Map<string, string>()
+    if (!activitiesRes.error) {
+      for (const row of activitiesRes.data ?? []) {
+        const contactId = row.contact_id as string
+        if (!lastActivity.has(contactId)) lastActivity.set(contactId, row.created_at as string)
+      }
+    }
+
+    return rows.map((c) => ({
+      ...c,
+      group_names: groupNames.get(c.id) ?? [],
+      purchase_count: purchaseCounts.get(c.id) ?? 0,
+      last_activity_at: lastActivity.get(c.id) ?? null,
+    }))
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getContactRows error:", err)
+    return []
+  }
+}
+
+/** Full detail view for /admin/contacts/[id]. */
+export async function getContactDetail(id: string): Promise<ContactDetail | null> {
+  try {
+    const supabase = await db()
+    const { data: contact, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle()
+    if (error) throw error
+    if (!contact) return null
+
+    const email = contact.email as string
+
+    const [
+      groupsRes,
+      purchasesRes,
+      rsvpsRes,
+      inquiriesRes,
+      commissionRes,
+      newslettersRes,
+      activitiesRes,
+    ] = await Promise.all([
+      supabase
+        .from("contact_group_members")
+        .select("contact_groups(id, name, description, created_at)")
+        .eq("contact_id", id),
+      supabase
+        .from("purchases")
+        .select("*, paintings(title, slug, sections!paintings_section_id_fkey(slug))")
+        .eq("contact_id", id)
+        .order("purchased_on", { ascending: false, nullsFirst: false }),
+      supabase
+        .from("event_rsvps")
+        .select("*, events(title, starts_at)")
+        .eq("contact_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("inquiries")
+        .select("*, paintings(title, slug, sections!paintings_section_id_fkey(slug))")
+        .eq("from_email", email)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("commission_inquiries")
+        .select("*")
+        .eq("from_email", email)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("newsletter_recipients")
+        .select("newsletters(id, subject, sent_at)")
+        .eq("contact_id", id),
+      supabase
+        .from("contact_activities")
+        .select("*")
+        .eq("contact_id", id)
+        .order("created_at", { ascending: false }),
+    ])
+
+    const groups: ContactGroup[] = groupsRes.error
+      ? []
+      : (groupsRes.data ?? [])
+          .map((r) => r.contact_groups as unknown as ContactGroup | null)
+          .filter((g): g is ContactGroup => g != null)
+
+    const purchases: PurchaseWithPainting[] = purchasesRes.error
+      ? []
+      : (purchasesRes.data ?? []).map((p) => {
+          const painting = p.paintings as {
+            title: string
+            slug: string
+            sections: { slug: string } | null
+          } | null
+          return {
+            ...p,
+            paintings: undefined,
+            painting_title: painting?.title ?? null,
+            painting_slug: painting?.slug ?? null,
+            painting_section_slug: painting?.sections?.slug ?? null,
+          } as PurchaseWithPainting
+        })
+
+    const rsvps: RsvpWithEvent[] = rsvpsRes.error
+      ? []
+      : (rsvpsRes.data ?? []).map((r) => {
+          const event = r.events as { title: string; starts_at: string } | null
+          return {
+            ...r,
+            events: undefined,
+            event_title: event?.title ?? "",
+            event_starts_at: event?.starts_at ?? "",
+          } as RsvpWithEvent
+        })
+
+    const inquiries: InquiryWithPainting[] = inquiriesRes.error
+      ? []
+      : (inquiriesRes.data ?? []).map((inq) => {
+          const painting = inq.paintings as {
+            title: string
+            slug: string
+            sections: { slug: string } | null
+          } | null
+          return {
+            ...inq,
+            paintings: undefined,
+            painting_title: painting?.title ?? null,
+            painting_slug: painting?.slug ?? null,
+            painting_section_slug: painting?.sections?.slug ?? null,
+          } as InquiryWithPainting
+        })
+
+    const commissionInquiries: CommissionInquiry[] = commissionRes.error
+      ? []
+      : ((commissionRes.data ?? []) as CommissionInquiry[])
+
+    const newsletters = newslettersRes.error
+      ? []
+      : (newslettersRes.data ?? [])
+          .map(
+            (r) =>
+              r.newsletters as unknown as { id: string; subject: string; sent_at: string } | null
+          )
+          .filter((n): n is { id: string; subject: string; sent_at: string } => n != null)
+
+    const activities: ContactActivity[] = activitiesRes.error
+      ? []
+      : ((activitiesRes.data ?? []) as ContactActivity[])
+
+    return {
+      ...(contact as Contact),
+      groups,
+      purchases,
+      rsvps,
+      inquiries,
+      commissionInquiries,
+      newsletters,
+      activities,
+    }
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getContactDetail error:", err)
+    return null
+  }
+}
+
+/** eventId -> {yes,no,maybe,invited} counts, one query for every event's RSVPs. */
+export async function getEventRsvpCounts(): Promise<
+  Map<string, { yes: number; no: number; maybe: number; invited: number }>
+> {
+  const counts = new Map<string, { yes: number; no: number; maybe: number; invited: number }>()
+  try {
+    const supabase = await db()
+    const { data, error } = await supabase.from("event_rsvps").select("event_id, status")
+    if (error) throw error
+
+    for (const row of data ?? []) {
+      const eventId = row.event_id as string
+      const status = row.status as EventRsvp["status"]
+      const existing = counts.get(eventId) ?? { yes: 0, no: 0, maybe: 0, invited: 0 }
+      existing[status] += 1
+      counts.set(eventId, existing)
+    }
+    return counts
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getEventRsvpCounts error:", err)
+    return counts
+  }
+}
+
+/** Public — the event an RSVP page renders. Uses the admin client (no session on this route). */
+export async function getEventForRsvp(id: string): Promise<Event | null> {
+  try {
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle()
+    if (error) throw error
+    return (data as Event) ?? null
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getEventForRsvp error:", err)
+    return null
+  }
+}
+
+/** Groups with member counts, for filters/pickers. */
+export async function getGroups(): Promise<(ContactGroup & { member_count: number })[]> {
+  try {
+    const supabase = await db()
+    const [groupsRes, membersRes] = await Promise.all([
+      supabase.from("contact_groups").select("*").order("name"),
+      supabase.from("contact_group_members").select("group_id"),
+    ])
+    if (groupsRes.error) throw groupsRes.error
+
+    const counts = new Map<string, number>()
+    if (!membersRes.error) {
+      for (const row of membersRes.data ?? []) {
+        const groupId = row.group_id as string
+        counts.set(groupId, (counts.get(groupId) ?? 0) + 1)
+      }
+    }
+
+    return ((groupsRes.data ?? []) as ContactGroup[]).map((g) => ({
+      ...g,
+      member_count: counts.get(g.id) ?? 0,
+    }))
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getGroups error:", err)
+    return []
   }
 }

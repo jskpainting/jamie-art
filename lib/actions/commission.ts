@@ -8,6 +8,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server"
 import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { CommissionInquiryWriteSchema } from "@/lib/schemas"
 import { rateLimit, clientIpFromHeaders } from "@/lib/rate-limit"
+import { findOrCreateContact, logActivity } from "@/lib/actions/crm"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -38,6 +39,23 @@ export async function submitCommissionInquiry(data: unknown) {
       reference_painting_id: parsed.data.reference_painting_id ?? null,
     })
     if (error) throw error
+
+    // Best-effort — every enquirer becomes a person you can see, without
+    // subscribing them and without ever flipping an existing contact's
+    // subscribed flag. A CRM hiccup here must never fail the public form.
+    try {
+      const found = await findOrCreateContact({
+        email: parsed.data.from_email,
+        first_name: parsed.data.from_name ?? null,
+        source: "inquiry",
+        subscribed: false,
+      })
+      if (found.ok) {
+        await logActivity(found.id, "inquiry", "Sent a commission enquiry")
+      }
+    } catch (crmErr) {
+      console.error("commission CRM hook error:", crmErr)
+    }
 
     revalidatePath("/admin/inquiries")
     return { ok: true }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
+import { logActivity } from "@/lib/actions/crm"
 
 const schema = z.object({
   email: z.string().email().max(320),
@@ -45,11 +46,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const { error } = await supabase.from("contacts").insert({
-      email: parsed.data.email,
-      source: "newsletter_form",
-      subscribed: true,
-    })
+    const { data: created, error } = await supabase
+      .from("contacts")
+      .insert({
+        email: parsed.data.email,
+        source: "newsletter_form",
+        subscribed: true,
+      })
+      .select("id")
+      .single()
 
     // 23505 = someone signed up between the lookup and the insert. That is a
     // known contact, not a failure.
@@ -57,6 +62,11 @@ export async function POST(request: Request) {
       console.error("newsletter insert error:", error)
       // Still return 200 to prevent enumeration
       return NextResponse.json({ ok: true })
+    }
+
+    // Best-effort — a CRM hiccup must never break the public signup form.
+    if (!error && created) {
+      await logActivity(created.id as string, "signup", "Signed up for the newsletter")
     }
 
     return NextResponse.json({ ok: true }, { status: 201 })

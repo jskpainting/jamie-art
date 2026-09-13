@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
+import { findOrCreateContact, logActivity } from "@/lib/actions/crm"
 
 const schema = z.object({
   painting_id: z.string().uuid().optional().nullable(),
@@ -40,6 +41,23 @@ export async function POST(request: Request) {
     if (error) {
       console.error("inquiry insert error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
+    }
+
+    // Best-effort — every enquirer becomes a person you can see, without
+    // subscribing them and without ever flipping an existing contact's
+    // subscribed flag. A CRM hiccup here must never fail the public form.
+    try {
+      const found = await findOrCreateContact({
+        email: parsed.data.from_email,
+        first_name: parsed.data.from_name ?? null,
+        source: "inquiry",
+        subscribed: false,
+      })
+      if (found.ok) {
+        await logActivity(found.id, "inquiry", "Sent a painting enquiry")
+      }
+    } catch (crmErr) {
+      console.error("inquiry CRM hook error:", crmErr)
     }
 
     return NextResponse.json({ ok: true }, { status: 201 })

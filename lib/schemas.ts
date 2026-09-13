@@ -233,3 +233,123 @@ export const ImageEditSchema = z.object({
 })
 
 export type ImageEditInput = z.infer<typeof ImageEditSchema>
+
+// ---------------------------------------------------------------------------
+// CRM + RSVP schemas.
+//
+// IMPORTANT (see CLAUDE.md handoff): never `.default()` a column that may not
+// exist yet on `contacts`/`events`/`newsletters` pre-migration — a payload
+// naming a column PostgREST doesn't know rejects the whole statement. Every
+// field below that maps to a migration-only column stays `.optional()`, and
+// the actions that write them strip absent/undefined keys rather than let
+// Zod inject a default.
+// ---------------------------------------------------------------------------
+
+export const GroupWriteSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100, "Too long"),
+  description: z.string().trim().max(500).nullable().optional(),
+})
+
+export type GroupWriteInput = z.infer<typeof GroupWriteSchema>
+
+export const PurchaseWriteSchema = z.object({
+  painting_id: z.string().uuid().nullable().optional(),
+  title: z.string().trim().max(300).nullable().optional(),
+  price_cents: z.coerce.number().int().min(0).nullable().optional(),
+  purchased_on: z.string().nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+  markSold: z.boolean().optional(),
+})
+
+export type PurchaseWriteInput = z.infer<typeof PurchaseWriteSchema>
+
+export const NoteSchema = z.object({
+  text: z.string().trim().min(1, "Note can't be empty").max(2000, "Too long"),
+})
+
+export type NoteInput = z.infer<typeof NoteSchema>
+
+/** Who a newsletter/invite goes to — mirrors `NewsletterAudience` in lib/types.ts. */
+export const AudienceSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("all") }),
+  z.object({
+    type: z.literal("groups"),
+    ids: z.array(z.string().uuid()),
+    label: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("tags"),
+    names: z.array(z.string()),
+    label: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("people"),
+    ids: z.array(z.string().uuid()),
+    label: z.string().optional(),
+  }),
+])
+
+export type AudienceInput = z.infer<typeof AudienceSchema>
+
+export const ContactDetailsUpdateSchema = z.object({
+  first_name: z.string().trim().nullable().optional(),
+  last_name: z.string().trim().nullable().optional(),
+  phone: z.string().trim().max(50).nullable().optional(),
+  city: z.string().trim().max(200).nullable().optional(),
+  notes: z.string().trim().max(4000).nullable().optional(),
+  subscribed: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+export type ContactDetailsUpdateInput = z.infer<typeof ContactDetailsUpdateSchema>
+
+/** Extended CSV row — old 3-column imports (email, first_name, last_name) still parse fine. */
+export const ContactImportRowExtendedSchema = z.object({
+  email: z.string().email(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  phone: z.string().optional(),
+  city: z.string().optional(),
+  tags: z.string().optional(), // split on ";" or ","
+  group: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+export type ContactImportRowExtended = z.infer<typeof ContactImportRowExtendedSchema>
+
+// --- RSVP (public) --------------------------------------------------------
+
+export const RsvpStatusSchema = z.enum(["invited", "yes", "no", "maybe"])
+
+/** Answering via an emailed invite link — no name/email required. */
+export const RsvpRespondByTokenSchema = z.object({
+  token: z.string().uuid(),
+  status: z.enum(["yes", "no", "maybe"]),
+  guests: z.coerce.number().int().min(1).max(10).default(1),
+  note: z.string().trim().max(1000).nullable().optional(),
+})
+
+export type RsvpRespondByTokenInput = z.infer<typeof RsvpRespondByTokenSchema>
+
+/** Answering from the public event page with no invite — name + email required. */
+export const RsvpRespondPublicSchema = z.object({
+  eventId: z.string().uuid(),
+  name: z.string().trim().min(1, "Name is required").max(200),
+  email: z.string().email("Valid email required").max(320),
+  status: z.enum(["yes", "no", "maybe"]),
+  guests: z.coerce.number().int().min(1).max(10).default(1),
+  keepMePosted: z.boolean().default(false),
+  note: z.string().trim().max(1000).nullable().optional(),
+  // Honeypot — the route handler rejects silently (200 ok) when filled.
+  website: z.string().max(0).optional().or(z.literal("")),
+})
+
+export type RsvpRespondPublicInput = z.infer<typeof RsvpRespondPublicSchema>
+
+export const EventRsvpSettingsSchema = z.object({
+  rsvp_enabled: z.boolean().optional(),
+  rsvp_note: z.string().trim().max(500).nullable().optional(),
+  rsvp_limit: z.coerce.number().int().positive().nullable().optional(),
+})
+
+export type EventRsvpSettingsInput = z.infer<typeof EventRsvpSettingsSchema>
