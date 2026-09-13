@@ -24,13 +24,29 @@ Next.js 15 App Router · TypeScript · Tailwind v4 · shadcn/ui · Supabase (Pos
 - `app/(public)/` — public site (home, portfolio, about, events, commission, contact)
 - `app/admin/(authed)/` — admin panel, gated by `requireUser()` in layout
 - `app/admin/auth/` and `app/admin/login/` — magic-link auth flow
-- `app/api/admin/` — two upload endpoints: `upload/` and `delete-upload/`
+- `app/api/admin/` — upload endpoints: `upload/` (server-side, e.g. crop
+  saves), `upload-url/` (signed-URL uploads straight to Supabase Storage,
+  bypasses the Vercel 4.5 MB body limit) and `delete-upload/`
+- `app/api/rsvp/` — public event RSVP endpoint (rate-limited, honeypot field)
 
 ### Auth
 `lib/supabase/auth.ts` exports `getUser()` and `requireUser()`. In development, set `ADMIN_AUTH_BYPASS=true` in `.env.local` to skip auth entirely (a fake dev user is substituted). Server actions must call `getUser()` first and return `{ ok: false, error: "Unauthorized" }` if null.
 
 ### Data layer
 All DB reads/writes go through `lib/actions/*.ts` (Next.js server actions, each file `"use server"`). Pattern: `db()` helper returns an admin client in bypass mode or a cookie-based server client in prod. Actions validate with Zod schemas from `lib/schemas.ts`, mutate, then call `revalidatePath()` on affected routes. Types in `lib/types.ts` mirror the DB schema exactly — do not drift from them.
+
+### Other key modules
+- `lib/painting-caption.ts` — the one caption format used everywhere (title,
+  year, dimensions, medium, price/status), so the site and show cards never
+  drift apart.
+- `lib/ar/` — AR GLB generation (`build-glb.ts`, `generate.ts`); triggered via
+  `after()` hooks in `lib/actions/paintings.ts` after a successful painting
+  write, so saving stays fast.
+- `lib/storage/upload.ts` — client-side image shrinking + signed-URL uploads
+  straight to Supabase Storage (works around Vercel's 4.5 MB body limit).
+- `lib/actions/crm.ts` + `lib/actions/rsvp.ts` — People (groups, tags,
+  purchases, activity timeline) and event RSVPs (admin + public token/form
+  flows).
 
 ### Image uploads
 `components/admin/image-upload-cropper.tsx` is the single unified upload component used across all admin image fields.
@@ -80,6 +96,21 @@ so nothing errors before it runs.
 
 ## Recent shipped phases
 
+- 2026-09-13: Admin dialogs scroll on small screens + editable Uncategorized slug
+- 2026-09-13: Medium/Size dropdowns (recent-first, "Other…", managed in Settings)
+- 2026-09-13: AR 3D wall models auto-generate on every painting save
+- 2026-09-13: Show cards redesigned painting-first, two shape-aware layouts
+- 2026-09-13: Fixed height-first entered sizes mis-scaling/rotating AR models
+- 2026-09-13: Bulk upload rebuilt phone-first (signed-URL uploads, honest errors)
+- 2026-09-13: Captions unified into one format across site + show cards
+- 2026-09-13: Tags — Settings management + pick-from-list on paintings/bulk upload
+- 2026-09-13: General Images bulk upload flow
+- 2026-09-13: "View on my wall" opens AR directly on supporting phones
+- 2026-09-13: Newsletter AI drafter, formatting toolbar, insert-painting, send-test
+- 2026-09-13: Newsletter audience targeting (all/groups/tags/people) + event invites
+- 2026-09-13: People CRM — groups, tags, purchases, activity timeline, richer CSV import
+- 2026-09-13: Events — RSVP switch, one-tap + public RSVP, admin RSVP list
+- 2026-09-13: AI story writer removed — painting descriptions are human-written
 - Focal points, image library, gallery-layout switcher, AR "View on my wall",
   per-page Settings ("Edit your site"), About portrait redesign
 - 6D-2: Featured painting picker + mobile menu redesign

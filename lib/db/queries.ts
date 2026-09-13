@@ -1295,6 +1295,28 @@ export async function getEventRsvpCounts(): Promise<
   }
 }
 
+/**
+ * Public — total guests currently RSVP'd "yes" for an event. Used by the
+ * RSVP page to show the "this event is full" line up front (the actual
+ * write-time enforcement lives in lib/actions/rsvp.ts respondByToken /
+ * respondPublic; this is a read-only display check, not a security gate).
+ */
+export async function getEventRsvpYesGuestCount(eventId: string): Promise<number> {
+  try {
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from("event_rsvps")
+      .select("guests")
+      .eq("event_id", eventId)
+      .eq("status", "yes")
+    if (error) throw error
+    return (data ?? []).reduce((sum, r) => sum + ((r.guests as number) ?? 1), 0)
+  } catch (err) {
+    if (!isSchemaSetupError(err)) console.error("getEventRsvpYesGuestCount error:", err)
+    return 0
+  }
+}
+
 /** Public — the event an RSVP page renders. Uses the admin client (no session on this route). */
 export async function getEventForRsvp(id: string): Promise<Event | null> {
   try {

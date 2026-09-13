@@ -2,9 +2,11 @@
 
 Live site: **https://www.jamiekendrioski.com** · Admin: **/admin** (magic-link, allowlisted)
 
-An editorial portfolio + self-serve admin for a Boston painter. Next.js 15 (App
-Router) · TypeScript · Tailwind v4 · shadcn/ui · Supabase (Postgres, Auth,
-Storage) · Resend · Vercel.
+An editorial portfolio + self-serve admin for a Boston painter — portfolio
+galleries, bulk image upload, an AI-assisted newsletter, a People CRM
+(groups, tags, purchases), and event RSVPs. Next.js 15 (App Router) ·
+TypeScript · Tailwind v4 · shadcn/ui · Supabase (Postgres, Auth, Storage) ·
+Resend · Vercel.
 
 ---
 

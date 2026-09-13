@@ -1,17 +1,24 @@
 # Action items for Jamie
 
 Things only the owner can do. Claude adds to this list instead of blocking.
-Last updated: 2026-08-20
+Last updated: 2026-09-13
 
 ## Open
 
-### 1. Measure three paintings (AR "View on my wall")
-`globe-2`, `cityscape`, and one `untitled` have no usable dimensions, so the
-AR button never appears for them. Measure height x width in inches and tell
-Claude. **Do not guess** — a wrongly scaled true-scale model is worse than
-none, so no placeholder is used here.
+### 1. Measure two paintings (AR "View on my wall")
+`cityscape` and the untitled Florals painting (`untitled-2`) have no usable
+dimensions, so the AR button never appears for them. Measure height x width
+in inches and tell Claude. **Do not guess** — a wrongly scaled true-scale
+model is worse than none, so no placeholder is used here. (Globe 2 was
+measured and its model generated on 2026-09-13 — done.)
 
-### 2. Verify the sending domain with Resend
+### 2. Add a free AI key for the newsletter writer
+The Newsletters page's "Write it for me" drafter needs a `GEMINI_API_KEY` or
+`GROQ_API_KEY` — both are free to get. See `docs/AI_SETUP.md` for the
+step-by-step. Until one is set, the button shows a plain-English explanation
+instead of drafting.
+
+### 3. Verify the sending domain with Resend
 `jamiekendrioski.com` is registered in Resend but its status is **failed** —
 all three required DNS records are missing (confirmed against live DNS).
 DNS is hosted at **Register.com**. Add:
@@ -24,7 +31,7 @@ DNS is hosted at **Register.com**. Add:
 
 Then Resend -> Domains -> Verify.
 
-### 3. Set RESEND_FROM_EMAIL in Vercel (after step 2 verifies)
+### 4. Set RESEND_FROM_EMAIL in Vercel (after step 3 verifies)
 Vercel -> jamie-art -> Settings -> Environment Variables -> Add New.
 Key `RESEND_FROM_EMAIL`, value e.g. `Jamie Kendrioski <hello@jamiekendrioski.com>`,
 tick Production + Preview + Development, Save, then **Redeploy** the latest
@@ -32,12 +39,15 @@ deployment (Vercel does not apply new variables until a redeploy).
 Until this is set, the Send button correctly refuses and reports that nothing
 went out.
 
-### 4. Test on a real device (only the owner can)
+### 5. Test on a real device (only the owner can)
+- Bulk upload (the new phone-first flow) on a real phone.
+- An RSVP link — both the one-tap invited-person link and the public
+  name/email form.
 - AR "View on my wall" on a real phone.
 - The "Send as a text" button on a real device.
 Claude must never claim these are verified.
 
-### 5. Decide what to do with leftover test / spam enquiries
+### 6. Decide what to do with leftover test / spam enquiries
 The dashboard now correctly counts commission enquiries, and that count
 includes some junk. Claude did not delete any of these — say the word.
 
@@ -52,7 +62,7 @@ includes some junk. Claude did not delete any of these — say the word.
 
 Deleting the three obvious ones would take the dashboard from 5 new to 2.
 
-### 6. Optional: enforce one-row-only in the database
+### 7. Optional: enforce one-row-only in the database
 `settings` and `bio` are meant to hold exactly one row and nothing in the
 database enforces it. The code no longer creates or trips over a duplicate,
 so this is defence in depth only, not a fix that is needed. Say so if you
@@ -61,6 +71,12 @@ want the SQL and Claude will write it for you to paste into Supabase.
 
 ## Done
 
+- 2026-09-13 — Applied SQL round 5 (`crm_rsvp`: contact details, groups,
+  purchases, activity timeline, event RSVPs, newsletter audiences/recipients)
+  and confirmed rounds 1-4 are all applied too — nothing pending in
+  `docs/RUN_THIS_SQL.md`.
+- 2026-09-13 — Measured Globe 2 and generated its AR model; 101 of 103
+  paintings now have one.
 - 2026-08-20 — Deleted the five leftover QA contacts (`test+newsletter@`,
   `qa-test@`, `ratelimit-test@`, `verify-newcode@`, `www-verify@`, all
   `@example.com`). Two real contacts remain. Live painting counts re-verified

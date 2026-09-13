@@ -3,7 +3,7 @@
 > **Read this first**, then `README.md`, `docs/BUILD_SPEC.md`, and `CLAUDE.md`.
 > A new chat can start from here by saying "continue".
 
-_Last updated: 2026-08-20._
+_Last updated: 2026-09-13._
 
 ---
 
@@ -14,23 +14,29 @@ _Last updated: 2026-08-20._
   the Vercel CLI from this Mac — it's signed into a different account than the
   live project.
 - `main` is green: `npm run build && npm run lint` both pass.
-- ⚠️ **SQL rounds 2, 3 and 4 are NOT applied.** Verified missing on production:
-  `webauthn_credentials`, `image_edits`, `settings.commission_heading`,
-  `settings.inquiry_sms_enabled`, `paintings.story_public`. Passkeys, AI
-  stories, quick-inquire settings and image editing are therefore correctly
-  hidden behind `lib/schema-capabilities.ts` — that is not a bug. The
-  copy-paste SQL is in `docs/RUN_THIS_SQL.md`.
+- ✅ **All SQL rounds are applied**, including Round 4 (`field_options`,
+  `image_edits`) and Round 5 (`crm_rsvp`: groups, purchases, activities,
+  `event_rsvps`, `newsletter_recipients`). Verified against
+  `docs/RUN_THIS_SQL.md` — nothing is pending. `lib/schema-capabilities.ts`
+  still gates each feature's UI defensively, but there is no known-missing
+  column left.
 - **103 paintings**: abstracts 50 · cityscapes-seascapes 17 · florals 8 ·
-  pixels-rainbows 12 · uncategorized/Archives 16. Use these counts as a
-  data-integrity check.
-- Other live counts: sections 5 · events 2 · contacts 7 · inquiries 4 ·
-  commission_inquiries 3. **Zero rows** in `newsletters`, `painting_sections`,
-  `painting_images`, `tags` and `painting_tags` — multi-gallery, per-painting
-  extra images, tags and newsletters have never run with real data, so their
-  first-row and empty-state paths are unexercised.
+  pixels-rainbows 12 · uncategorized/"Archives (2018-2021)" 16. Use these
+  counts as a data-integrity check.
+- **AR "View on my wall" models: 101 of 103.** `cityscape` and `untitled-2`
+  (in Florals) still have no usable `dimensions`, so they have no model —
+  only the owner can supply the real sizes (`docs/ACTION_ITEMS.md` #1). Globe
+  2 is done — it was measured and its model generated on 2026-09-13.
 - The `uncategorized` slug is now editable; the holding bucket is re-created
   automatically when a gallery is deleted (`lib/actions/sections.ts`
   `deleteSection`).
+- **Newsletter AI drafting needs a key.** Neither `GEMINI_API_KEY` nor
+  `GROQ_API_KEY` is set, so "Write it for me" on the Newsletters page shows
+  the setup sentence instead of drafting. See `docs/AI_SETUP.md` and
+  `docs/ACTION_ITEMS.md` #2.
+- **The AI story writer was removed at the owner's request.** Painting
+  descriptions are human-written again; the `storyTools` capability now only
+  gates the "show this story on the website" toggle, not any AI generation.
 
 ## The owner
 
@@ -89,6 +95,46 @@ library, gallery layout, settings.
   several galleries ("Also show in" in the Move dialog). Table is applied but
   **still has 0 rows — the feature has never run with real data.**
 
+**Session 2026-09-13** (large multi-agent phase, see `docs/PLAN_2026-09-13.md`,
+`docs/PLAN_BULK_UPLOAD.md`, `docs/PLAN_TAGS.md`, `docs/PLAN_NEWSLETTER_AI.md`,
+`docs/PLAN_CRM_EVENTS.md`)
+- Admin dialogs now all scroll on small screens; the "Uncategorized" gallery's
+  slug is editable (becomes public the moment it's renamed).
+- Medium and Size are dropdowns with recent-first ordering and "Other…",
+  backed by `field_options` and managed from a new Settings card.
+- AR 3D wall models now generate automatically after every painting save
+  (`after()` hook in `lib/actions/paintings.ts`) — no manual script run
+  needed. `sharp` pinned as a direct dependency so this works on Vercel.
+- Show cards redesigned painting-first with two shape-aware layouts (A:
+  side-by-side for square/tall, B: stacked for wide).
+- Fixed height-first entered sizes (e.g. `36"x24"` meant as height×width)
+  rotating the AR model or mis-scaling it on the wall — `orientPhysical` in
+  `lib/mosaic-layout.ts` now lets the photo's own aspect ratio decide.
+- Bulk upload rebuilt phone-first: uploads go straight to Supabase Storage via
+  a signed URL (`lib/storage/upload.ts`, `app/api/admin/upload-url/`),
+  client-side shrinking, honest per-file error messages, progress, retries,
+  and a proper default gallery (no longer the hidden "uncategorized" bucket).
+- Captions unified into one format (`lib/painting-caption.ts`) shown with
+  price on show cards and the public site.
+- Tags: a Settings card to manage the tag list, and a pick-from-list-or-"Other"
+  picker on each painting and in bulk upload; "Related work" uses tags when
+  two paintings share one.
+- Images: a general bulk "Upload photos" flow (progress, retries, plain
+  English errors) alongside the painting-specific one.
+- Painting pages: "View on my wall" now opens AR directly, gated to phones
+  that actually support it.
+- Newsletters: an AI "Write it for me" drafter (needs a key — see TL;DR), a
+  formatting toolbar, inserting a painting into the body, and "send a test to
+  me"; plus choosing who a newsletter goes to (all subscribers, a group, a
+  tag, or hand-picked people) with per-recipient event-invite RSVP buttons.
+- People (renamed from Contacts): groups, tags, purchase history, an activity
+  timeline per person, a richer CSV import, and a "Sold to" picker on the
+  painting dialog that logs a purchase.
+- Events: an RSVP switch, one-tap RSVP links for invited people, a public RSVP
+  page/form for everyone else, and an admin RSVP list per event.
+- The AI story writer was **removed** at the owner's request — painting
+  descriptions are written by hand again.
+
 ---
 
 ## 🔴 Hard-won gotchas (read before touching the data layer)
@@ -132,6 +178,19 @@ library, gallery layout, settings.
    is never in the byte path. `/api/admin/upload` still exists for the
    cropper's internal "crops" folder writes made server-side elsewhere — don't
    remove it.
+8. **Sizes are often entered height×width, not width×height.** Don't assume a
+   fixed order when parsing `dimensions` — let the photo's own pixel aspect
+   ratio decide which number is which. `orientPhysical` in
+   `lib/mosaic-layout.ts` does this; reuse it rather than re-deriving
+   orientation from the typed string.
+9. **Never put `export type` re-exports in a `"use server"` file.** Next
+   treats every export of such a file as a server action, including type
+   re-exports, and this 500'd the RSVP routes. Keep type-only exports in a
+   separate non-`"use server"` module and import from there.
+10. **Client components must not import `lib/schema-capabilities.ts`** — it's
+    server-only (uses the admin DB client). A client component that needs the
+    setup message should duplicate `SCHEMA_SETUP_MESSAGE` locally rather than
+    importing it.
 
 ---
 
@@ -183,35 +242,37 @@ button on a real device.
 
 ## Next steps (nothing is blocking)
 
-1. **3 paintings still have no AR model** — `globe-2`, `cityscape` and one
-   `untitled`, because their `dimensions` are blank or unparseable.
-   `node scripts/generate-all-ar-models.mjs` regenerates everything and skips
-   these. Ask the owner for the real sizes rather than guessing — a wrongly
-   sized true-scale model is worse than none.
-2. **Exercise multi-gallery for real** — add a painting to a second gallery via
-   the Move dialog's "Also show in", then verify it renders in both galleries and
-   that its canonical URL still points at its home gallery.
-3. **Soft-404**: `/portfolio/<bogus>` returns HTTP 200 (correct "not found" UI,
+1. **2 paintings still have no AR model** — `cityscape` and `untitled-2` (in
+   Florals), because their `dimensions` are blank or unparseable. Ask the
+   owner for the real sizes rather than guessing — a wrongly sized true-scale
+   model is worse than none. `node scripts/generate-all-ar-models.mjs`
+   regenerates everything and skips these.
+2. **Add a free AI key for the newsletter drafter** — neither
+   `GEMINI_API_KEY` nor `GROQ_API_KEY` is set. See `docs/AI_SETUP.md`.
+3. 🔴 **`RESEND_FROM_EMAIL` is not set / domain not verified**, so newsletter
+   sending falls back to Resend's `onboarding@resend.dev` sandbox sender,
+   which only delivers to the Resend account owner. Sending refuses up front
+   with a plain-English message rather than firing every email into the void,
+   but the owner must verify the domain and set this env var before any real
+   campaign. Details in `docs/ACTION_ITEMS.md` #3.
+4. **Test on a real phone** — bulk upload (the new phone-first flow), an RSVP
+   link (both the one-tap invited-person link and the public form), and "View
+   on my wall" AR. Only the owner can verify these.
+5. **Exercise multi-gallery, People/CRM and RSVP for real** — `painting_sections`,
+   `contact_groups`, `purchases`, `event_rsvps` etc. are applied but largely
+   unexercised with real data; verify each end-to-end once real usage starts.
+6. **Soft-404**: `/portfolio/<bogus>` returns HTTP 200 (correct "not found" UI,
    wrong status). Root cause: `app/(public)/loading.tsx` flushes the Suspense
    shell before `notFound()` runs. SEO-only, user-invisible — deliberately
    deprioritized.
-4. **Set `NEXT_PUBLIC_SITE_URL`** in the Vercel dashboard. Origins are now
+7. **Set `NEXT_PUBLIC_SITE_URL`** in the Vercel dashboard. Origins are now
    unified on `lib/site.ts` (`SITE_URL`), but the env var should still be set
    explicitly in production.
-5. **Login rate limit.** Magic-link OTP is public, so an attacker who knows the
+8. **Login rate limit.** Magic-link OTP is public, so an attacker who knows the
    admin email can burn the send quota (Supabase-side fix: enable CAPTCHA in
    Auth). Password login has since shipped, so email is no longer the only way
    in.
-6. 🔴 **`RESEND_FROM_EMAIL` is not set**, so newsletter sending falls back to
-   Resend's `onboarding@resend.dev` sandbox sender, which only delivers to the
-   Resend account owner. Sending now refuses up front with a plain-English
-   message rather than firing every email into the void, but the owner must set
-   this to an address on a verified domain before any real campaign.
-7. **Contacts contain QA pollution** — 5 of the 7 rows are `@example.com` test
-   addresses (`test+newsletter@`, `qa-test@`, `ratelimit-test@`,
-   `verify-newcode@`, `www-verify@`), 4 of them marked subscribed. Only 2 are
-   real people. The owner should decide what to delete.
-8. **Backlog**: replace the placeholder `public/og-image.png` with a real
+9. **Backlog**: replace the placeholder `public/og-image.png` with a real
    painting; submit the sitemap in Search Console.
 
 ## Captions

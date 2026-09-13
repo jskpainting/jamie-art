@@ -51,7 +51,8 @@ export async function POST(request: Request) {
 
   if (!result.ok) {
     if ("reason" in result) {
-      const httpStatus = result.reason === "invalid" ? 400 : 200
+      const httpStatus =
+        result.reason === "invalid" ? 400 : result.reason === "not_found" ? 404 : 200
       return NextResponse.json({ ok: false, reason: result.reason }, { status: httpStatus })
     }
     return NextResponse.json({ ok: false, error: result.error }, { status: 200 })

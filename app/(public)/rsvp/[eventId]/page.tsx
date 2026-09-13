@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import { MapPin } from "lucide-react"
-import { getEventForRsvp } from "@/lib/db/queries"
+import { getEventForRsvp, getEventRsvpYesGuestCount } from "@/lib/db/queries"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { bucketOf } from "@/lib/event-bucket"
 import { formatEventDateRange } from "@/lib/utils"
@@ -78,6 +78,16 @@ export default async function RsvpPage({ params, searchParams }: RsvpPageProps) 
   }
 
   const bucket = currentBucket(event)
+  const invite = token ? await findInviteByToken(eventId, token) : null
+
+  // Someone who already answered "yes" is already counted in the total, so
+  // a full event shouldn't lock them out of viewing/changing their own reply.
+  const alreadyYes = invite?.status === "yes"
+  const isFull =
+    !alreadyYes && event.rsvp_limit != null
+      ? (await getEventRsvpYesGuestCount(eventId)) >= event.rsvp_limit
+      : false
+
   const friendlyLine =
     event.status === "cancelled"
       ? "This event has been cancelled."
@@ -85,9 +95,9 @@ export default async function RsvpPage({ params, searchParams }: RsvpPageProps) 
         ? "This event has already taken place."
         : !event.rsvp_enabled
           ? "RSVP isn't open for this event."
-          : null
-
-  const invite = token ? await findInviteByToken(eventId, token) : null
+          : isFull
+            ? "This event is full — we'll let you know if a spot opens."
+            : null
 
   return (
     <RsvpShell>
@@ -124,7 +134,11 @@ export default async function RsvpPage({ params, searchParams }: RsvpPageProps) 
       ) : (
         <RsvpForm
           eventId={eventId}
-          token={token ?? null}
+          // Only treat this as the token path when the token actually
+          // matched an invite row — an unrecognized/expired `?t=` must fall
+          // back to the public name+email form, not hide those fields while
+          // having nothing to greet the visitor with.
+          token={invite ? token ?? null : null}
           rsvpNote={event.rsvp_note ?? null}
           invite={invite}
         />
