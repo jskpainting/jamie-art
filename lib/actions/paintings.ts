@@ -1,9 +1,11 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 import { isAuthBypassed, getUser } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { generateArModel } from "@/lib/ar/generate"
 import {
   PaintingWriteSchema,
   PaintingImageSchema,
@@ -130,6 +132,7 @@ export async function createPainting(input: unknown) {
 
     const slug = await getSectionSlug(parsed.data.section_id)
     revalidateSectionPaths(slug)
+    after(() => generateArModel(data.id, { force: true }))
     return { ok: true, data: { id: data.id } }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to create painting"
@@ -150,10 +153,12 @@ export async function updatePainting(id: string, input: unknown) {
     const supabase = await db()
     const { price_dollars: price_cents, ...rest } = parsed.data
 
-    // Capture the previous section so we can also refresh it if the painting moved.
+    // Capture the previous section (to refresh it if the painting moved) and
+    // the previous image/dimensions (to know whether the AR model needs a
+    // real regeneration or just a cheap fill-in-if-missing check).
     const { data: prev } = await supabase
       .from("paintings")
-      .select("section_id")
+      .select("section_id, primary_image_url, dimensions")
       .eq("id", id)
       .single()
 
@@ -177,6 +182,17 @@ export async function updatePainting(id: string, input: unknown) {
     if (painting && slug) {
       revalidatePath(`/portfolio/${slug}/${painting.slug}`)
     }
+
+    const imageChanged =
+      (prev?.primary_image_url ?? "").trim() !== (rest.primary_image_url ?? "").trim()
+    const dimensionsChanged =
+      (prev?.dimensions ?? "").trim() !== (rest.dimensions ?? "").trim()
+    if (imageChanged || dimensionsChanged) {
+      after(() => generateArModel(id, { force: true }))
+    } else {
+      after(() => generateArModel(id))
+    }
+
     return { ok: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update painting"
@@ -204,6 +220,12 @@ export async function deletePainting(id: string) {
       revalidateSectionPaths(slug)
       if (slug) revalidatePath(`/portfolio/${slug}/${painting.slug}`)
     }
+    after(() =>
+      createAdminClient()
+        .storage.from("ar-models")
+        .remove([`${id}.glb`])
+        .catch(() => {})
+    )
     return { ok: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete painting"
@@ -488,7 +510,13 @@ export async function bulkDelete(
 
 export async function bulkCreatePaintings(
   items: BulkCreateItem[]
-): Promise<{ ok: boolean; error?: string; count?: number; sectionSlug?: string }> {
+): Promise<{
+  ok: boolean
+  error?: string
+  count?: number
+  sectionSlug?: string
+  failed?: { title: string; error: string }[]
+}> {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
   if (items.length === 0) return { ok: true, count: 0 }
@@ -524,6 +552,8 @@ export async function bulkCreatePaintings(
     const sectionCounters = new Map<string, number>(sectionIds.map((id) => [id, 0]))
 
     let savedCount = 0
+    const createdIds: string[] = []
+    const failed: { title: string; error: string }[] = []
 
     for (const item of items) {
       // Derive unique slug within section
@@ -542,7 +572,13 @@ export async function bulkCreatePaintings(
       const sort_order = (sortOffsets.get(item.section_id) ?? 0) + counter
 
       const parsed = PaintingWriteSchema.safeParse({ ...item, slug })
-      if (!parsed.success) continue
+      if (!parsed.success) {
+        failed.push({
+          title: item.title || "(untitled)",
+          error: parsed.error.issues[0]?.message ?? "Invalid painting data",
+        })
+        continue
+      }
 
       const { price_dollars: price_cents, ...rest } = parsed.data
       const { data, error } = await supabase
@@ -553,8 +589,15 @@ export async function bulkCreatePaintings(
         .select("id")
         .single()
 
-      if (error || !data) continue
+      if (error || !data) {
+        failed.push({
+          title: item.title || "(untitled)",
+          error: error?.message ?? "Insert failed",
+        })
+        continue
+      }
       savedCount++
+      createdIds.push(data.id)
 
       // Insert tags
       for (const name of item.tags) {
@@ -582,11 +625,72 @@ export async function bulkCreatePaintings(
     }
 
     const primarySlug = await getSectionSlug(items[0].section_id)
-    return { ok: true, count: savedCount, sectionSlug: primarySlug ?? undefined }
+
+    if (createdIds.length > 0) {
+      after(async () => {
+        // Sequential, to be gentle — this is a batch of image fetches + sharp
+        // resizes running after the response has already gone out.
+        for (const id of createdIds) {
+          await generateArModel(id, { force: true })
+        }
+      })
+    }
+
+    return {
+      ok: true,
+      count: savedCount,
+      sectionSlug: primarySlug ?? undefined,
+      failed,
+    }
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Failed to create paintings",
     }
   }
+}
+
+/**
+ * Owner-triggered rebuild of one painting's AR model, run synchronously so
+ * the click gets a real success/failure confirmation instead of a fire-and-
+ * forget background job.
+ */
+export async function regenerateArModel(
+  paintingId: string
+): Promise<{ ok: boolean; error?: string; skipped?: "no-image" | "no-dimensions" }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+
+  const result = await generateArModel(paintingId, { force: true })
+
+  if (!result.ok) return { ok: false, error: result.error }
+
+  if (result.skipped === "no-image") {
+    return { ok: false, skipped: "no-image", error: "Add a photo first" }
+  }
+  if (result.skipped === "no-dimensions") {
+    return {
+      ok: false,
+      skipped: "no-dimensions",
+      error: "Add the painting's size first",
+    }
+  }
+
+  try {
+    const supabase = await db()
+    const { data: painting } = await supabase
+      .from("paintings")
+      .select("section_id, slug")
+      .eq("id", paintingId)
+      .single()
+    if (painting) {
+      const slug = await getSectionSlug(painting.section_id)
+      revalidateSectionPaths(slug)
+      if (slug) revalidatePath(`/portfolio/${slug}/${painting.slug}`)
+    }
+  } catch {
+    // Revalidation is best-effort — the model itself is already rebuilt.
+  }
+
+  return { ok: true }
 }

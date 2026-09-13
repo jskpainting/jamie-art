@@ -1,6 +1,9 @@
 // Batch-generate AR models for every painting that has an image + parseable
 // dimensions, skipping ones that already have a model unless --force is passed.
 //
+// CANONICAL implementation lives in lib/ar/ — see the header of
+// generate-ar-model.mjs (which this script shells out to per painting).
+//
 // Usage:
 //   node scripts/generate-all-ar-models.mjs           # only missing models
 //   node scripts/generate-all-ar-models.mjs --force   # regenerate everything

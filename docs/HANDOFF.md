@@ -20,13 +20,17 @@ _Last updated: 2026-08-20._
   stories, quick-inquire settings and image editing are therefore correctly
   hidden behind `lib/schema-capabilities.ts` — that is not a bug. The
   copy-paste SQL is in `docs/RUN_THIS_SQL.md`.
-- **85 paintings**: abstracts 51 · cityscapes-seascapes 14 · florals 8 ·
-  pixels-rainbows 12. Use these counts as a data-integrity check.
+- **103 paintings**: abstracts 50 · cityscapes-seascapes 17 · florals 8 ·
+  pixels-rainbows 12 · uncategorized/Archives 16. Use these counts as a
+  data-integrity check.
 - Other live counts: sections 5 · events 2 · contacts 7 · inquiries 4 ·
   commission_inquiries 3. **Zero rows** in `newsletters`, `painting_sections`,
   `painting_images`, `tags` and `painting_tags` — multi-gallery, per-painting
   extra images, tags and newsletters have never run with real data, so their
   first-row and empty-state paths are unexercised.
+- The `uncategorized` slug is now editable; the holding bucket is re-created
+  automatically when a gallery is deleted (`lib/actions/sections.ts`
+  `deleteSection`).
 
 ## The owner
 
@@ -62,12 +66,22 @@ library, gallery layout, settings.
   `settings.active_layout` drives `components/gallery/section-gallery.tsx`.
   **Currently `pairs`** = the two-per-row wall.
 - **AR "View on my wall"** — true-size AR on painting pages via
-  `<model-viewer>` + a generated GLB. `scripts/generate-ar-model.mjs
-  <paintingId>` builds a quad at the painting's real dimensions and uploads to
-  the public `ar-models` bucket; the button only renders when a model exists.
-  Owner-confirmed working on iPhone. **82 of 85 paintings have a model.** The 3
-  without (`globe-2`, `cityscape`, one `untitled`) have blank or unparseable
-  `dimensions` — only the owner can supply the real sizes.
+  `<model-viewer>` + a generated GLB. `lib/ar/build-glb.ts` +
+  `lib/ar/generate.ts` (`generateArModel`) build a quad at the painting's real
+  dimensions and upload to the public `ar-models` bucket; the button only
+  renders when a model exists. Models are now generated **automatically** —
+  `createPainting`, `updatePainting` and `bulkCreatePaintings`
+  (`lib/actions/paintings.ts`) trigger `generateArModel` via `after()` from
+  `next/server` after a successful write, so saving stays fast and a missing
+  or changed photo/size regenerates the model without any manual step. The
+  admin painting list also has a "Rebuild 3D model" button
+  (`regenerateArModel`) for a manual, synchronous rebuild, plus a "3D
+  ready"/"No 3D yet" chip per row. `scripts/generate-ar-model.mjs` and
+  `scripts/generate-all-ar-models.mjs` remain as thin CLI wrappers (duplicated
+  logic, kept in sync by hand) for manual batch runs. Owner-confirmed working
+  on iPhone. **100 of 103 paintings have a model.** The 3 without (`globe-2`,
+  `cityscape`, `untitled-2`) have blank or unparseable `dimensions` — only the
+  owner can supply the real sizes (see `docs/ACTION_ITEMS.md` #1).
 - **Settings = "Edit your site"** — one card per public page, plain labels, text
   boxes pre-filled with the current effective copy (`lib/site-copy.ts` holds the
   shared defaults; saving a value equal to the default stores `null`).

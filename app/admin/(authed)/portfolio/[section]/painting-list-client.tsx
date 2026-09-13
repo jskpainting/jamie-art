@@ -22,6 +22,7 @@ import {
   Upload,
   FolderInput,
   GripVertical,
+  Box,
 } from "lucide-react"
 import {
   reorderPaintings,
@@ -32,7 +33,9 @@ import {
   bulkRemoveTag,
   bulkDelete,
   setPaintingSectionMembership,
+  regenerateArModel,
 } from "@/lib/actions/paintings"
+import { arModelPublicUrl } from "@/lib/ar/build-glb"
 import { SortableList } from "@/components/admin/sortable-list"
 import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
@@ -339,10 +342,41 @@ interface PaintingRowProps {
   onMove: (targetSectionId: string) => void
   onToggleSection: (targetSectionId: string, on: boolean) => void
   showAlsoShowIn?: boolean
+  /** undefined = still checking, true/false = HEAD check result. */
+  hasArModel?: boolean
+  onArModelChecked: (id: string, has: boolean) => void
 }
 
-function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection, showAlsoShowIn }: PaintingRowProps) {
+function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDeleted, sections, currentSectionId, onMove, onToggleSection, showAlsoShowIn, hasArModel, onArModelChecked }: PaintingRowProps) {
   const otherSections = sections.filter((s) => s.id !== currentSectionId)
+  const [rebuildingAr, setRebuildingAr] = useState(false)
+
+  async function checkArModel(bust = false) {
+    try {
+      const url = bust
+        ? `${arModelPublicUrl(painting.id)}?t=${Date.now()}`
+        : arModelPublicUrl(painting.id)
+      const res = await fetch(url, { method: "HEAD", cache: "no-store" })
+      onArModelChecked(painting.id, res.ok)
+    } catch {
+      onArModelChecked(painting.id, false)
+    }
+  }
+
+  async function handleRebuildAr() {
+    setRebuildingAr(true)
+    try {
+      const result = await regenerateArModel(painting.id)
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to rebuild 3D model", { duration: 5000 })
+      } else {
+        toast.success("3D model rebuilt", { duration: 5000 })
+        void checkArModel(true)
+      }
+    } finally {
+      setRebuildingAr(false)
+    }
+  }
   const currentSectionTitle =
     sections.find((s) => s.id === currentSectionId)?.title ?? "this gallery"
   const extra = new Set(painting.extra_section_ids ?? [])
@@ -398,6 +432,12 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
             {painting.status}
           </span>
 
+          {hasArModel !== undefined && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 text-muted-foreground bg-muted">
+              {hasArModel ? "3D ready" : "No 3D yet"}
+            </span>
+          )}
+
           <div className="flex items-center gap-1 shrink-0">
             {/* Quick move to another gallery (Dialog — see note above). Always
                 rendered, even with no other galleries — the dialog explains
@@ -410,6 +450,19 @@ function PaintingRow({ painting, handle, checked, onCheckedChange, onEdit, onDel
               onClick={() => setMoveOpen(true)}
             >
               <FolderInput className="h-3.5 w-3.5" />
+            </Button>
+            {/* Plain button, not a dropdown-menu item — rows live inside a
+                dnd-kit SortableList and a Base UI portal menu opened from
+                inside it crashes the page (see the Move-dialog note above). */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-foreground/60 hover:text-foreground"
+              onClick={() => void handleRebuildAr()}
+              disabled={rebuildingAr}
+              aria-label="Rebuild 3D model"
+            >
+              <Box className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
@@ -583,6 +636,13 @@ export function PaintingListClient({
   const [sort, setSort] = useState<PaintingSort>("owner")
   const router = useRouter()
 
+  // "3D ready" / "No 3D yet" chip — checked client-side with a HEAD request
+  // per visible painting rather than threaded through the server query.
+  const [arModelStatus, setArModelStatus] = useState<Record<string, boolean>>({})
+  const handleArModelChecked = useCallback((id: string, has: boolean) => {
+    setArModelStatus((prev) => (prev[id] === has ? prev : { ...prev, [id]: has }))
+  }, [])
+
   useEffect(() => {
     if (initialAddOpen) router.replace(`/admin/portfolio/${section.slug}`)
   }, [initialAddOpen, router, section.slug])
@@ -728,6 +788,26 @@ export function PaintingListClient({
     })
   }
 
+  // Batch-check which visible paintings have an AR model, once per painting
+  // (skip ones already known). Cheap HEAD requests, run in parallel.
+  useEffect(() => {
+    const toCheck = visible.filter((p) => !(p.id in arModelStatus))
+    if (toCheck.length === 0) return
+    void Promise.all(
+      toCheck.map(async (p) => {
+        try {
+          const res = await fetch(arModelPublicUrl(p.id), {
+            method: "HEAD",
+            cache: "no-store",
+          })
+          handleArModelChecked(p.id, res.ok)
+        } catch {
+          handleArModelChecked(p.id, false)
+        }
+      })
+    )
+  }, [visible, arModelStatus, handleArModelChecked])
+
   const isEmpty = paintings.length === 0
 
   return (
@@ -848,6 +928,8 @@ export function PaintingListClient({
                     handleToggleSection(painting.id, target, on)
                   }
                   showAlsoShowIn={showAlsoShowIn}
+                  hasArModel={arModelStatus[painting.id]}
+                  onArModelChecked={handleArModelChecked}
                 />
               ))}
             </div>
@@ -882,6 +964,8 @@ export function PaintingListClient({
                       handleToggleSection(painting.id, target, on)
                     }
                     showAlsoShowIn={showAlsoShowIn}
+                    hasArModel={arModelStatus[painting.id]}
+                    onArModelChecked={handleArModelChecked}
                   />
                 </>
               )

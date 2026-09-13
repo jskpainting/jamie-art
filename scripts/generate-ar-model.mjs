@@ -6,6 +6,14 @@
 // model-viewer serves this GLB to Android Scene Viewer and auto-generates the
 // iOS USDZ (AR Quick Look) from it — no separate USDZ file needed.
 //
+// CANONICAL implementation now lives in lib/ar/ (build-glb.ts + generate.ts),
+// which the app calls directly (createPainting/updatePainting/bulkCreate
+// hooks + the "Rebuild 3D model" admin action). This plain .mjs script is a
+// thin standalone wrapper kept for manual/CLI use and for
+// generate-all-ar-models.mjs's batch backfill — it cannot import the
+// TypeScript lib directly, so its buildGlb/parsePhysical are a duplicate; keep
+// them in sync with lib/ar/build-glb.ts if either changes.
+//
 // Usage: node scripts/generate-ar-model.mjs <paintingId>
 //   (looks the painting up in Supabase for its image + dimensions)
 
@@ -164,12 +172,13 @@ async function main() {
   const [wIn, hIn] = dims
   console.log(`▸ ${p.title} — ${wIn}"×${hIn}" (${(wIn * IN_TO_M).toFixed(3)}×${(hIn * IN_TO_M).toFixed(3)} m)`)
 
-  // Fetch + downscale the image (long side ≤ 1400) as JPEG to keep the GLB small.
+  // Fetch + downscale the image (long side ≤ 2048) as JPEG to keep the GLB
+  // reasonably sized. Matches lib/ar/generate.ts ("no compromise" quality).
   const imgBuf = Buffer.from(await (await fetch(p.primary_image_url)).arrayBuffer())
   const jpeg = await sharp(imgBuf)
     .rotate()
-    .resize(1400, 1400, { fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 86 })
+    .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 90 })
     .toBuffer()
   console.log(`  texture ${(jpeg.length / 1024).toFixed(0)} KB`)
 
