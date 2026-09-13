@@ -176,7 +176,12 @@ async function callGemini(input: RunTextInput): Promise<string> {
         contents: [{ parts: [{ text: parts.join("\n\n") }] }],
         generationConfig: {
           temperature: input.temperature ?? 0.7,
-          maxOutputTokens: input.maxTokens ?? 300,
+          // Newer Gemini models spend part of this budget on hidden
+          // "thinking" (750+ tokens on a short prompt), which silently
+          // truncated our text to a sentence. Give generous headroom and ask
+          // for no thinking where the model allows it.
+          maxOutputTokens: (input.maxTokens ?? 300) + 2048,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(PER_PROVIDER_TIMEOUT_MS),
@@ -205,13 +210,20 @@ async function callGemini(input: RunTextInput): Promise<string> {
     throw new ProviderError(id, `malformed JSON response: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  const text = (
+  // Thinking models can return several parts; keep every non-thought text part.
+  const partsOut = (
     body as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
+      candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]
     }
-  )?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (typeof text !== "string") {
-    throw new ProviderError(id, "malformed response: no candidates[0].content.parts[0].text")
+  )?.candidates?.[0]?.content?.parts
+  const text = Array.isArray(partsOut)
+    ? partsOut
+        .filter((p) => !p.thought && typeof p.text === "string")
+        .map((p) => p.text as string)
+        .join("")
+    : ""
+  if (text.length === 0) {
+    throw new ProviderError(id, "malformed response: no text in candidates[0].content.parts")
   }
   return text.trim()
 }
