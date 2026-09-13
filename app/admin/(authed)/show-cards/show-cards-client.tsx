@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/button"
 import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { ShowCard, CARD_WIDTH_MM, CARD_HEIGHT_MM } from "@/components/print/show-card"
+import {
+  ShowCard,
+  CARD_WIDTH_MM,
+  CARD_HEIGHT_MM,
+  type CardLayout,
+} from "@/components/print/show-card"
 import type { PaintingForCards } from "@/lib/db/queries"
 
 // CSS mm -> px is a fixed ratio (96px per inch), independent of device DPI.
@@ -75,14 +80,15 @@ function ScaledCardProof({ children }: { children: React.ReactNode }) {
   )
 }
 
-const STORAGE_KEY = "show-cards:v1"
+const STORAGE_KEY = "show-cards:v2"
 export const DEFAULT_TAGLINE = "Scan to see it on your wall"
 type Paper = "letter" | "a4"
+type LayoutChoice = "auto" | CardLayout
 
 interface StoredState {
   selections: Record<string, number>
   tagline: string
-  showThumb: boolean
+  layout: LayoutChoice
   paper: Paper
 }
 
@@ -106,43 +112,20 @@ interface ShowCardsClientProps {
   paintings: PaintingForCards[]
   arModelIds: string[]
   qrByPaintingId: Record<string, string>
+  email: string | null
 }
 
-function SimpleSwitch({
-  checked,
-  onCheckedChange,
-  id,
-}: {
-  checked: boolean
-  onCheckedChange: (v: boolean) => void
-  id?: string
-}) {
-  return (
-    <button
-      id={id}
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onCheckedChange(!checked)}
-      className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-        checked ? "bg-primary" : "bg-muted"
-      )}
-    >
-      <span
-        className={cn(
-          "inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform",
-          checked ? "translate-x-4" : "translate-x-0.5"
-        )}
-      />
-    </button>
-  )
-}
+const LAYOUT_OPTIONS: { value: LayoutChoice; label: string }[] = [
+  { value: "auto", label: "Automatic (by painting shape)" },
+  { value: "side", label: "Painting on the left" },
+  { value: "stack", label: "Painting on top" },
+]
 
 export function ShowCardsClient({
   paintings,
   arModelIds,
   qrByPaintingId,
+  email,
 }: ShowCardsClientProps) {
   const arModelSet = useMemo(() => new Set(arModelIds), [arModelIds])
 
@@ -154,7 +137,7 @@ export function ShowCardsClient({
     const defaults: StoredState = {
       selections: {},
       tagline: DEFAULT_TAGLINE,
-      showThumb: true,
+      layout: "auto",
       paper: "letter",
     }
     if (typeof window === "undefined") return defaults
@@ -168,8 +151,10 @@ export function ShowCardsClient({
             ? parsed.selections
             : defaults.selections,
         tagline: typeof parsed.tagline === "string" ? parsed.tagline : defaults.tagline,
-        showThumb:
-          typeof parsed.showThumb === "boolean" ? parsed.showThumb : defaults.showThumb,
+        layout:
+          parsed.layout === "auto" || parsed.layout === "side" || parsed.layout === "stack"
+            ? parsed.layout
+            : defaults.layout,
         paper: parsed.paper === "letter" || parsed.paper === "a4" ? parsed.paper : defaults.paper,
       }
     } catch {
@@ -179,19 +164,19 @@ export function ShowCardsClient({
 
   const [selections, setSelections] = useState<Record<string, number>>(stored.selections)
   const [tagline, setTagline] = useState(stored.tagline)
-  const [showThumb, setShowThumb] = useState(stored.showThumb)
+  const [layout, setLayout] = useState<LayoutChoice>(stored.layout)
   const [paper, setPaper] = useState<Paper>(stored.paper)
 
   // Persist on every change. Writing to localStorage (not calling setState)
   // is exactly what effects are for — this is not the restore step above.
   useEffect(() => {
     try {
-      const data: StoredState = { selections, tagline, showThumb, paper }
+      const data: StoredState = { selections, tagline, layout, paper }
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // quota / privacy-mode errors — ignore
     }
-  }, [selections, tagline, showThumb, paper])
+  }, [selections, tagline, layout, paper])
 
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<CardsFilter>("all")
@@ -279,12 +264,14 @@ export function ShowCardsClient({
   const proofPainting: PaintingForCards | undefined =
     paintings.find((p) => selections[p.id]) ?? paintings[0]
   const proofQr = proofPainting ? qrByPaintingId[proofPainting.id] ?? "" : ""
+  const proofLayout = layout === "auto" ? undefined : layout
 
   function handlePrint() {
     const params = new URLSearchParams()
     params.set("paper", paper)
-    params.set("thumb", showThumb ? "1" : "0")
-    params.set("tagline", tagline.trim() || DEFAULT_TAGLINE)
+    params.set("layout", layout)
+    params.set("tagline", tagline)
+    if (email) params.set("email", email)
     params.set(
       "c",
       selectedIds.map((id) => `${id}:${selections[id]}`).join(",")
@@ -302,8 +289,9 @@ export function ShowCardsClient({
               <ShowCard
                 painting={proofPainting}
                 qrSvg={proofQr}
-                showThumb={showThumb}
-                tagline={tagline.trim() || DEFAULT_TAGLINE}
+                tagline={tagline}
+                email={email}
+                layout={proofLayout}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-muted text-xs text-muted-foreground">
@@ -326,16 +314,32 @@ export function ShowCardsClient({
               value={tagline}
               maxLength={40}
               onChange={(e) => setTagline(e.target.value)}
-              placeholder={DEFAULT_TAGLINE}
+              placeholder="Optional — e.g. Scan to see it on your wall"
               className="max-w-sm"
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <SimpleSwitch id="show-thumb" checked={showThumb} onCheckedChange={setShowThumb} />
-            <label htmlFor="show-thumb" className="text-sm">
-              Show a small picture of the painting
-            </label>
+          <div>
+            <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Card layout
+            </span>
+            <div className="inline-flex flex-wrap rounded-md border border-border p-0.5">
+              {LAYOUT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setLayout(opt.value)}
+                  className={cn(
+                    "rounded-[6px] px-3 py-1 text-sm transition-colors",
+                    layout === opt.value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { PageHeader } from "@/components/admin/page-header"
-import { getPaintingsForCards, getArModelIds } from "@/lib/db/queries"
+import { getPaintingsForCards, getArModelIds, getSettings } from "@/lib/db/queries"
 import { generateQrSvg, cardTargetUrl } from "@/components/print/qr"
 import { ShowCardsClient } from "./show-cards-client"
 
@@ -9,9 +9,10 @@ export const metadata: Metadata = {
 }
 
 export default async function ShowCardsAdminPage() {
-  const [paintings, arModelIds] = await Promise.all([
+  const [paintings, arModelIds, settings] = await Promise.all([
     getPaintingsForCards(),
     getArModelIds(),
+    getSettings(),
   ])
 
   // QR SVGs for every candidate painting, generated once up front so the
@@ -36,6 +37,7 @@ export default async function ShowCardsAdminPage() {
         paintings={paintings}
         arModelIds={[...arModelIds]}
         qrByPaintingId={qrByPaintingId}
+        email={settings?.email ?? null}
       />
     </div>
   )

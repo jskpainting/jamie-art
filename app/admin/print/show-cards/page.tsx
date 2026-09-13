@@ -1,8 +1,8 @@
 import Link from "next/link"
 import type { Metadata } from "next"
-import { getPaintingsForCards, getArModelIds, type PaintingForCards } from "@/lib/db/queries"
+import { getPaintingsForCards, getArModelIds, getSettings, type PaintingForCards } from "@/lib/db/queries"
 import { generateQrSvg, cardTargetUrl } from "@/components/print/qr"
-import { ShowCard } from "@/components/print/show-card"
+import { ShowCard, type CardLayout } from "@/components/print/show-card"
 import { PrintButton } from "@/components/print/print-button"
 import { DismissibleNotice } from "@/components/print/dismissible-notice"
 
@@ -155,12 +155,20 @@ function CalibrationRuler({ paper }: { paper: PaperConfig }) {
 export default async function PrintShowCardsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paper?: string; thumb?: string; tagline?: string; c?: string }>
+  searchParams: Promise<{
+    paper?: string
+    layout?: string
+    tagline?: string
+    c?: string
+  }>
 }) {
   const params = await searchParams
   const paper = params.paper === "a4" ? PAPERS.a4 : PAPERS.letter
-  const showThumb = params.thumb !== "0"
-  const tagline = (params.tagline ?? "Scan to see it on your wall").trim() || "Scan to see it on your wall"
+  const layoutParam = params.layout === "side" || params.layout === "stack" ? params.layout : "auto"
+  const layout: CardLayout | undefined = layoutParam === "auto" ? undefined : layoutParam
+  // Tagline may be intentionally empty (param present but ""); only fall back
+  // to the default when the param itself is entirely absent.
+  const tagline = params.tagline !== undefined ? params.tagline : "Scan to see it on your wall"
   const requested = parseCopiesParam(params.c)
 
   if (requested.length === 0) {
@@ -180,10 +188,12 @@ export default async function PrintShowCardsPage({
     )
   }
 
-  const [allPaintings, arModelIds] = await Promise.all([
+  const [allPaintings, arModelIds, settings] = await Promise.all([
     getPaintingsForCards(), // one query — see lib/db/queries.ts
     getArModelIds(),
+    getSettings(),
   ])
+  const email = settings?.email ?? null
   const byId = new Map(allPaintings.map((p) => [p.id, p]))
 
   const foundIds: string[] = []
@@ -290,8 +300,9 @@ export default async function PrintShowCardsPage({
                   <ShowCard
                     painting={entry.painting}
                     qrSvg={entry.qrSvg}
-                    showThumb={showThumb}
                     tagline={tagline}
+                    email={email}
+                    layout={layout}
                   />
                 </div>
               )
