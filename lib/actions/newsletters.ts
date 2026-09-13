@@ -19,6 +19,63 @@ const SendNewsletterSchema = z.object({
   bodyMarkdown: z.string().min(1, "Body is required").max(50000, "Body must be 50,000 characters or fewer"),
 })
 
+const SendTestNewsletterSchema = z.object({
+  subject: z.string().min(1, "Subject is required").max(200, "Subject must be 200 characters or fewer"),
+  bodyMarkdown: z.string().min(1, "Body is required").max(50000, "Body must be 50,000 characters or fewer"),
+})
+
+/**
+ * Sends a single preview copy to the signed-in admin's own email, via the
+ * same Resend path as the real send. Not recorded in the newsletters table —
+ * it's a preview, not a blast, so it shouldn't show up in Past sends or count
+ * toward recipient totals.
+ */
+export async function sendTestNewsletter(input: {
+  subject: string
+  bodyMarkdown: string
+}) {
+  const user = await getUser()
+  if (!user) return { ok: false as const, error: "Unauthorized" }
+  if (!user.email) {
+    return { ok: false as const, error: "Your admin account has no email on file, so a test can't be sent." }
+  }
+
+  const parsed = SendTestNewsletterSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0].message }
+  }
+  const { subject, bodyMarkdown } = parsed.data
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL
+  if (!fromEmail) {
+    return {
+      ok: false as const,
+      error:
+        "Your sending email address isn't set up yet, so this wasn't sent. Ask your developer to set RESEND_FROM_EMAIL to an address on your verified domain.",
+    }
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const unsubscribeUrl = `${SITE_URL}/unsubscribe?token=preview`
+
+  try {
+    const { error: sendError } = await resend.emails.send({
+      from: fromEmail,
+      to: user.email,
+      subject: `[Test] ${subject}`,
+      html: renderNewsletterHtml({ subject, bodyMarkdown, unsubscribeUrl }),
+      text: renderNewsletterPlainText({ bodyMarkdown, unsubscribeUrl }),
+    })
+    if (sendError) {
+      return { ok: false as const, error: sendError.message ?? "The email service rejected the test send." }
+    }
+    return { ok: true as const, data: { to: user.email } }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to send the test email"
+    return { ok: false as const, error: message }
+  }
+}
+
 export async function sendNewsletter(input: {
   subject: string
   bodyMarkdown: string

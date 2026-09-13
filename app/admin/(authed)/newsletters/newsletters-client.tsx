@@ -2,25 +2,29 @@
 
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ChevronDown, ChevronUp, Send } from "lucide-react"
+import { ChevronDown, ChevronUp, Send, MailCheck } from "lucide-react"
 import { format } from "date-fns"
 import { PageHeader } from "@/components/admin/page-header"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
+import { WriteNewsletterCard } from "@/components/admin/write-newsletter-card"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { sendNewsletter } from "@/lib/actions/newsletters"
+import { sendNewsletter, sendTestNewsletter } from "@/lib/actions/newsletters"
 import { renderNewsletterHtml } from "@/lib/email/templates"
 import type { Newsletter } from "@/lib/types"
+import type { PaintingForPicker } from "@/lib/db/queries"
 
 const PREVIEW_UNSUBSCRIBE_URL = "https://example.com/unsubscribe?token=preview"
 
 interface Props {
   newsletters: Newsletter[]
   subscriberCount: number
+  paintings: PaintingForPicker[]
+  aiConfigured: boolean
 }
 
 type SortKey = "newest" | "oldest"
@@ -30,13 +34,29 @@ const SORT_OPTIONS = [
   { value: "oldest", label: "Oldest" },
 ]
 
-export function NewslettersClient({ newsletters: initialNewsletters, subscriberCount }: Props) {
+export function NewslettersClient({
+  newsletters: initialNewsletters,
+  subscriberCount,
+  paintings,
+  aiConfigured,
+}: Props) {
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [newsletters] = useState(initialNewsletters)
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortKey>("newest")
+  const [sendingTest, setSendingTest] = useState(false)
+
+  // Subject auto-suggested from the first heading if left blank — as few
+  // clicks as possible: type/generate a body, subject fills itself in.
+  function handleBodyChange(next: string) {
+    setBody(next)
+    if (!subject.trim()) {
+      const match = next.match(/^#{1,6}\s+(.+)$/m)
+      if (match) setSubject(match[1].trim())
+    }
+  }
 
   const hasActiveFilters = search.trim().length > 0
 
@@ -70,6 +90,22 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
     setBody("")
   }
 
+  async function handleSendTest() {
+    setSendingTest(true)
+    try {
+      const result = await sendTestNewsletter({ subject, bodyMarkdown: body })
+      if (!result.ok) {
+        toast.error(result.error, { duration: 5000 })
+        return
+      }
+      toast.success(`Test sent to ${result.data.to}`, { duration: 5000 })
+    } catch {
+      toast.error("Something went wrong sending the test", { duration: 5000 })
+    } finally {
+      setSendingTest(false)
+    }
+  }
+
   const canSend = subject.trim().length > 0 && body.trim().length > 0
 
   return (
@@ -82,6 +118,16 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
         <span className="font-medium text-foreground">{subscriberCount}</span>{" "}
         subscriber{subscriberCount !== 1 ? "s" : ""}
       </p>
+
+      {/* Write it for me */}
+      <WriteNewsletterCard
+        aiConfigured={aiConfigured}
+        hasExistingBody={body.trim().length > 0}
+        onGenerated={(result) => {
+          setSubject(result.subject)
+          setBody(result.body)
+        }}
+      />
 
       {/* Compose */}
       <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
@@ -102,9 +148,11 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
           <Label>Body</Label>
           <MarkdownEditor
             value={body}
-            onChange={setBody}
+            onChange={handleBodyChange}
             placeholder="Write your newsletter in Markdown…"
             rows={12}
+            toolbar
+            paintings={paintings}
           />
         </div>
 
@@ -127,26 +175,38 @@ export function NewslettersClient({ newsletters: initialNewsletters, subscriberC
           </div>
         )}
 
-        {/* Send button */}
-        <div className="flex items-center justify-between pt-2">
+        {/* Send buttons */}
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             This will send to all {subscriberCount} subscriber{subscriberCount !== 1 ? "s" : ""} — it cannot be undone.
           </p>
-          <ConfirmDialog
-            trigger={
-              <Button
-                disabled={!canSend || subscriberCount === 0}
-                className="bg-red-700 hover:bg-red-800 text-white gap-2"
-              >
-                <Send className="h-4 w-4" />
-                Send to {subscriberCount} subscriber{subscriberCount !== 1 ? "s" : ""}
-              </Button>
-            }
-            title="Send newsletter?"
-            description={`This will send "${subject}" to ${subscriberCount} subscriber${subscriberCount !== 1 ? "s" : ""}. This cannot be undone.`}
-            destructive
-            onConfirm={handleSend}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canSend || sendingTest}
+              onClick={handleSendTest}
+              className="gap-2"
+            >
+              <MailCheck className="h-4 w-4" />
+              {sendingTest ? "Sending…" : "Send a test to me"}
+            </Button>
+            <ConfirmDialog
+              trigger={
+                <Button
+                  disabled={!canSend || subscriberCount === 0}
+                  className="bg-red-700 hover:bg-red-800 text-white gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Send to {subscriberCount} subscriber{subscriberCount !== 1 ? "s" : ""}
+                </Button>
+              }
+              title="Send newsletter?"
+              description={`This will send "${subject}" to ${subscriberCount} subscriber${subscriberCount !== 1 ? "s" : ""}. This cannot be undone.`}
+              destructive
+              onConfirm={handleSend}
+            />
+          </div>
         </div>
       </div>
 
