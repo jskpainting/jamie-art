@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { ImageEditorDialog } from "@/components/admin/image-editor-dialog"
 import { cn } from "@/lib/utils"
+import { uploadBlob as uploadBlobToStorage } from "@/lib/storage/upload"
+import { explainUploadError } from "@/lib/upload-errors"
 import { IMAGE_PRESETS, type PresetKey } from "@/lib/image-presets"
 import {
   IDENTITY_RECIPE,
@@ -107,14 +109,7 @@ export function ImageUploadCropper({
   }, [])
 
   async function uploadBlob(blob: Blob, folder?: "crops"): Promise<{ url: string; path: string }> {
-    const formData = new FormData()
-    formData.append("file", blob, "image.jpg")
-    formData.append("bucket", preset.bucket)
-    if (folder) formData.append("folder", folder)
-    const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-    const json = (await res.json()) as { url?: string; path?: string; error?: string }
-    if (!res.ok || !json.url || !json.path) throw new Error(json.error ?? "Upload failed")
-    return { url: json.url, path: json.path }
+    return uploadBlobToStorage(preset.bucket, blob, { folder })
   }
 
   function closeDialog() {
@@ -145,7 +140,8 @@ export function ImageUploadCropper({
         toast.success("Image uploaded", { duration: 5000 })
         onUploadComplete({ url, width: rendered.width, height: rendered.height })
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Upload failed", { duration: 5000 })
+        const { headline, detail } = explainUploadError(e)
+        toast.error(headline, { description: detail, duration: 8000 })
       } finally {
         setUploading(false)
       }
@@ -252,7 +248,8 @@ export function ImageUploadCropper({
         toast.success("Image uploaded", { duration: 5000 })
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload failed", { duration: 5000 })
+      const { headline, detail } = explainUploadError(e)
+      toast.error(headline, { description: detail, duration: 8000 })
     } finally {
       setUploading(false)
     }

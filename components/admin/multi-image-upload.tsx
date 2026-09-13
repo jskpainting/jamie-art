@@ -22,6 +22,8 @@ import { Upload, X, Loader2, GripVertical } from "lucide-react"
 import { toast } from "sonner"
 import { IMAGE_PRESETS, type PresetKey } from "@/lib/image-presets"
 import { IDENTITY_RECIPE, renderEdit } from "@/lib/image-edit"
+import { uploadBlob } from "@/lib/storage/upload"
+import { explainUploadError } from "@/lib/upload-errors"
 import { cn } from "@/lib/utils"
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -115,15 +117,11 @@ export function MultiImageUpload({
           // Extra painting photos never get cropped by this field — they're
           // just compressed to the same ceiling as every other painting photo.
           const rendered = await renderEdit(dataUrl, IDENTITY_RECIPE, preset.maxOutputPx)
-          const formData = new FormData()
-          formData.append("file", rendered.blob, "image.jpg")
-          formData.append("bucket", preset.bucket)
-          const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-          const json = (await res.json()) as { url?: string; error?: string }
-          if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed")
-          results.push({ id: crypto.randomUUID(), url: json.url })
-        } catch {
-          toast.error(`${file.name}: upload failed — try again`)
+          const { url } = await uploadBlob(preset.bucket, rendered.blob)
+          results.push({ id: crypto.randomUUID(), url })
+        } catch (e) {
+          const { headline, detail } = explainUploadError(e)
+          toast.error(`${file.name}: ${headline}`, { description: detail, duration: 8000 })
         }
       }
       if (results.length > 0) onChange([...value, ...results])

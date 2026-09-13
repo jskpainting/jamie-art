@@ -581,13 +581,32 @@ export async function bulkCreatePaintings(
       }
 
       const { price_dollars: price_cents, ...rest } = parsed.data
-      const { data, error } = await supabase
-        .from("paintings")
-        .insert(
-          await withoutUnmigratedStoryFields({ ...rest, price_cents, sort_order })
-        )
-        .select("id")
-        .single()
+      const payload = await withoutUnmigratedStoryFields({ ...rest, price_cents, sort_order })
+
+      let data: { id: string } | null = null
+      let error: { code?: string; message: string } | null = null
+      let attemptSlug = slug
+
+      // The `used` set above prevents in-batch collisions, but a concurrent
+      // insert (another bulk upload running at the same time) can still hit
+      // the DB's unique (section_id, slug) constraint. Retry with -2, -3, …
+      // suffixes rather than dropping the row.
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const res = await supabase
+          .from("paintings")
+          .insert({ ...payload, slug: attemptSlug })
+          .select("id")
+          .single()
+        data = res.data
+        error = res.error
+        if (!error) break
+        if (error.code !== "23505") break
+
+        let n = attempt + 1
+        while (used.has(`${base}-${n}`)) n++
+        attemptSlug = `${base}-${n}`
+        used.add(attemptSlug)
+      }
 
       if (error || !data) {
         failed.push({

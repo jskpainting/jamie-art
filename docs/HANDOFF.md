@@ -123,6 +123,15 @@ library, gallery layout, settings.
 6. **Migrations are manual.** Write the SQL into `supabase/migrations/`, then
    give the owner a copy-paste block (`docs/RUN_THIS_SQL.md`) and gate the UI on
    `lib/schema-capabilities.ts` so nothing errors before it's run.
+7. **Vercel serverless functions reject request bodies over ~4.5 MB** before the
+   route even runs (`FUNCTION_PAYLOAD_TOO_LARGE`, plain-text 413) — this is why
+   phone photos sent raw through `/api/admin/upload` used to fail about half
+   the time. Every upload surface now shrinks the photo client-side
+   (`lib/image-shrink.ts`) and uploads it straight to Supabase Storage with a
+   signed URL from `/api/admin/upload-url` (`lib/storage/upload.ts`), so Vercel
+   is never in the byte path. `/api/admin/upload` still exists for the
+   cropper's internal "crops" folder writes made server-side elsewhere — don't
+   remove it.
 
 ---
 
