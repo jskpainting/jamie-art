@@ -29,10 +29,22 @@ interface WriteNewsletterCardProps {
   aiConfigured: boolean
   hasExistingBody: boolean
   onGenerated: (result: { subject: string; body: string }) => void
+  /** Pre-fills the request box (e.g. "Invite people to <event>…") when arriving
+   * from the events page's "Invite people" link. */
+  initialRequest?: string
+  /** When set, passed through to `generateNewsletter` so the draft includes the
+   * event in its context and is told to place `{{RSVP_BUTTON}}`. */
+  eventId?: string
 }
 
-export function WriteNewsletterCard({ aiConfigured, hasExistingBody, onGenerated }: WriteNewsletterCardProps) {
-  const [request, setRequest] = useState("")
+export function WriteNewsletterCard({
+  aiConfigured,
+  hasExistingBody,
+  onGenerated,
+  initialRequest,
+  eventId,
+}: WriteNewsletterCardProps) {
+  const [request, setRequest] = useState(initialRequest ?? "")
   const [includeNewPaintings, setIncludeNewPaintings] = useState(true)
   const [includeEvents, setIncludeEvents] = useState(true)
   const [tone, setTone] = useState<Tone>("warm")
@@ -53,6 +65,7 @@ export function WriteNewsletterCard({ aiConfigured, hasExistingBody, onGenerated
         includeNewPaintings,
         includeEvents,
         tone,
+        eventId,
       })
       if (!result.ok) {
         toast.error(result.error, { duration: 5000 })

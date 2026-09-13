@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { PageHeader } from "@/components/admin/page-header"
 import { MarkdownEditor } from "@/components/admin/markdown-editor"
 import { WriteNewsletterCard } from "@/components/admin/write-newsletter-card"
+import { AudiencePicker, type AudienceGroupOption, type AudienceTagOption } from "@/components/admin/audience-picker"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
 import { ListToolbar, FilteredEmptyState } from "@/components/admin/list-toolbar"
 import { Button } from "@/components/ui/button"
@@ -15,16 +16,37 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { sendNewsletter, sendTestNewsletter } from "@/lib/actions/newsletters"
 import { renderNewsletterHtml } from "@/lib/email/templates"
-import type { Newsletter } from "@/lib/types"
+import type { Newsletter, NewsletterAudience, Event } from "@/lib/types"
+import type { AudienceInput } from "@/lib/schemas"
 import type { PaintingForPicker } from "@/lib/db/queries"
 
 const PREVIEW_UNSUBSCRIBE_URL = "https://example.com/unsubscribe?token=preview"
+
+type EventRsvpCounts = { yes: number; no: number; maybe: number; invited: number }
 
 interface Props {
   newsletters: Newsletter[]
   subscriberCount: number
   paintings: PaintingForPicker[]
   aiConfigured: boolean
+  crmEnabled: boolean
+  rsvpEnabled: boolean
+  groups: AudienceGroupOption[]
+  tags: AudienceTagOption[]
+  eventRsvpCounts: Record<string, EventRsvpCounts>
+  inviteEvent: Event | null
+  inviteRequest: string | null
+}
+
+/** Human label for an audience selector — mirrors lib/actions/newsletters.ts's
+ * server-side version (kept separate since that module is server-actions-only). */
+function audienceLabel(audience: AudienceInput | NewsletterAudience | null | undefined, subscriberCount: number): string {
+  if (!audience || audience.type === "all") return "All subscribers"
+  if ("label" in audience && audience.label) return audience.label
+  if (audience.type === "groups") return `${audience.ids.length} group${audience.ids.length !== 1 ? "s" : ""}`
+  if (audience.type === "tags") return `${audience.names.length} tag${audience.names.length !== 1 ? "s" : ""}`
+  if (audience.type === "people") return `${audience.ids.length} ${audience.ids.length === 1 ? "person" : "people"}`
+  return `${subscriberCount} subscribers`
 }
 
 type SortKey = "newest" | "oldest"
@@ -39,6 +61,13 @@ export function NewslettersClient({
   subscriberCount,
   paintings,
   aiConfigured,
+  crmEnabled,
+  rsvpEnabled,
+  groups,
+  tags,
+  eventRsvpCounts,
+  inviteEvent,
+  inviteRequest,
 }: Props) {
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
@@ -47,6 +76,9 @@ export function NewslettersClient({
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortKey>("newest")
   const [sendingTest, setSendingTest] = useState(false)
+  const [audience, setAudience] = useState<AudienceInput>({ type: "all" })
+  const [audienceCount, setAudienceCount] = useState<number | null>(subscriberCount)
+  const [eventId] = useState<string | undefined>(inviteEvent?.id)
 
   // Subject auto-suggested from the first heading if left blank — as few
   // clicks as possible: type/generate a body, subject fills itself in.
@@ -80,9 +112,14 @@ export function NewslettersClient({
     : null
 
   async function handleSend() {
-    const result = await sendNewsletter({ subject, bodyMarkdown: body })
+    const result = await sendNewsletter({
+      subject,
+      bodyMarkdown: body,
+      audience: crmEnabled ? audience : undefined,
+      eventId,
+    })
     if (!result.ok) throw new Error(result.error)
-    toast.success(`Newsletter sent to ${result.data.sent} subscriber${result.data.sent !== 1 ? "s" : ""}`)
+    toast.success(`Newsletter sent to ${result.data.sent} recipient${result.data.sent !== 1 ? "s" : ""}`)
     if (result.data.failed > 0) {
       toast.error(`${result.data.failed} send${result.data.failed !== 1 ? "s" : ""} failed — check the past sends table`)
     }
@@ -93,7 +130,7 @@ export function NewslettersClient({
   async function handleSendTest() {
     setSendingTest(true)
     try {
-      const result = await sendTestNewsletter({ subject, bodyMarkdown: body })
+      const result = await sendTestNewsletter({ subject, bodyMarkdown: body, eventId })
       if (!result.ok) {
         toast.error(result.error, { duration: 5000 })
         return
@@ -106,7 +143,9 @@ export function NewslettersClient({
     }
   }
 
-  const canSend = subject.trim().length > 0 && body.trim().length > 0
+  const effectiveCount = crmEnabled ? audienceCount : subscriberCount
+  const audienceDisplayLabel = crmEnabled ? audienceLabel(audience, subscriberCount) : "All subscribers"
+  const canSend = subject.trim().length > 0 && body.trim().length > 0 && effectiveCount !== 0
 
   return (
     <div className="space-y-8">
@@ -114,15 +153,23 @@ export function NewslettersClient({
 
       {/* Subscriber count */}
       <p className="text-sm text-muted-foreground">
-        Sending to{" "}
-        <span className="font-medium text-foreground">{subscriberCount}</span>{" "}
-        subscriber{subscriberCount !== 1 ? "s" : ""}
+        {subscriberCount}{" "}
+        <span className="font-medium text-foreground">subscriber{subscriberCount !== 1 ? "s" : ""}</span>{" "}
+        in total
+        {inviteEvent && (
+          <>
+            {" · "}Inviting people to{" "}
+            <span className="font-medium text-foreground">{inviteEvent.title}</span>
+          </>
+        )}
       </p>
 
       {/* Write it for me */}
       <WriteNewsletterCard
         aiConfigured={aiConfigured}
         hasExistingBody={body.trim().length > 0}
+        initialRequest={inviteRequest ?? undefined}
+        eventId={eventId}
         onGenerated={(result) => {
           setSubject(result.subject)
           setBody(result.body)
@@ -144,6 +191,20 @@ export function NewslettersClient({
           />
         </div>
 
+        {crmEnabled && (
+          <div className="space-y-1.5">
+            <Label>Who gets this</Label>
+            <AudiencePicker
+              subscriberCount={subscriberCount}
+              groups={groups}
+              tags={tags}
+              value={audience}
+              onChange={setAudience}
+              onCountChange={setAudienceCount}
+            />
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label>Body</Label>
           <MarkdownEditor
@@ -153,6 +214,7 @@ export function NewslettersClient({
             rows={12}
             toolbar
             paintings={paintings}
+            showRsvpButton={rsvpEnabled && !!eventId}
           />
         </div>
 
@@ -178,7 +240,7 @@ export function NewslettersClient({
         {/* Send buttons */}
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            This will send to all {subscriberCount} subscriber{subscriberCount !== 1 ? "s" : ""} — it cannot be undone.
+            This will send to {effectiveCount ?? "…"} {effectiveCount === 1 ? "person" : "people"} ({audienceDisplayLabel}) — it cannot be undone.
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -194,15 +256,15 @@ export function NewslettersClient({
             <ConfirmDialog
               trigger={
                 <Button
-                  disabled={!canSend || subscriberCount === 0}
+                  disabled={!canSend}
                   className="bg-red-700 hover:bg-red-800 text-white gap-2"
                 >
                   <Send className="h-4 w-4" />
-                  Send to {subscriberCount} subscriber{subscriberCount !== 1 ? "s" : ""}
+                  Send to {effectiveCount ?? "…"} {effectiveCount === 1 ? "person" : "people"}
                 </Button>
               }
               title="Send newsletter?"
-              description={`This will send "${subject}" to ${subscriberCount} subscriber${subscriberCount !== 1 ? "s" : ""}. This cannot be undone.`}
+              description={`Sending to ${effectiveCount ?? 0} ${effectiveCount === 1 ? "person" : "people"} (${audienceDisplayLabel}). This cannot be undone.`}
               destructive
               onConfirm={handleSend}
             />
@@ -240,12 +302,21 @@ export function NewslettersClient({
                 <tr className="border-b border-border bg-muted/40">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Subject</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Sent</th>
+                  {crmEnabled && (
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Audience</th>
+                  )}
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Recipients</th>
+                  {rsvpEnabled && (
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">RSVPs</th>
+                  )}
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredNewsletters.map((nl) => (
+                {filteredNewsletters.map((nl) => {
+                  const rsvpCounts = nl.event_id ? eventRsvpCounts[nl.event_id] : undefined
+                  const colCount = 4 + (crmEnabled ? 1 : 0) + (rsvpEnabled ? 1 : 0)
+                  return (
                   <>
                     <tr
                       key={nl.id}
@@ -264,19 +335,31 @@ export function NewslettersClient({
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell whitespace-nowrap">
                         {format(new Date(nl.sent_at), "MMM d, yyyy")}
                       </td>
+                      {crmEnabled && (
+                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell truncate max-w-[160px]">
+                          {audienceLabel(nl.audience, nl.recipient_count)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
                         {nl.recipient_count}
                       </td>
+                      {rsvpEnabled && (
+                        <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell whitespace-nowrap">
+                          {rsvpCounts ? `${rsvpCounts.yes} yes · ${rsvpCounts.no} no` : "—"}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right">
                         <StatusBadge status={nl.status} />
                       </td>
                     </tr>
                     {expandedId === nl.id && (
                       <tr key={`${nl.id}-expanded`} className="border-b border-border last:border-0 bg-muted/20">
-                        <td colSpan={4} className="px-4 py-4">
+                        <td colSpan={colCount} className="px-4 py-4">
                           <div className="space-y-3">
                             <div className="sm:hidden text-xs text-muted-foreground">
                               Sent {format(new Date(nl.sent_at), "MMM d, yyyy")} · {nl.recipient_count} recipients
+                              {crmEnabled && ` · ${audienceLabel(nl.audience, nl.recipient_count)}`}
+                              {rsvpCounts && ` · ${rsvpCounts.yes} yes · ${rsvpCounts.no} no`}
                             </div>
                             <pre className="text-xs bg-background border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
                               {nl.body_markdown}
@@ -292,7 +375,8 @@ export function NewslettersClient({
                       </tr>
                     )}
                   </>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

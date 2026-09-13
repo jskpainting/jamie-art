@@ -3,7 +3,7 @@
 import { useRef, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Bold, Italic, Heading2, Link2, List, Quote, ImagePlus } from "lucide-react"
+import { Bold, Italic, Heading2, Link2, List, Quote, ImagePlus, Ticket } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
@@ -22,6 +22,10 @@ interface MarkdownEditorProps {
   /** Paintings available for the toolbar's "Insert painting" button. Only
    * used when `toolbar` is true — omit to hide that button. */
   paintings?: PaintingForPicker[]
+  /** Shows an "Insert RSVP button" toolbar item that inserts the
+   * `{{RSVP_BUTTON}}` placeholder at the cursor. Only used when `toolbar`
+   * is true — pass this only when the compose card has an event attached. */
+  showRsvpButton?: boolean
 }
 
 export function MarkdownEditor({
@@ -31,6 +35,7 @@ export function MarkdownEditor({
   rows = 8,
   toolbar = false,
   paintings,
+  showRsvpButton = false,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -83,6 +88,15 @@ export function MarkdownEditor({
     setPickerOpen(false)
   }
 
+  function insertRsvpButton() {
+    const el = textareaRef.current
+    const pos = el?.selectionStart ?? value.length
+    const needsLeadingBreak = pos > 0 && value[pos - 1] !== "\n"
+    const block = `${needsLeadingBreak ? "\n\n" : ""}{{RSVP_BUTTON}}\n\n`
+    const next = value.slice(0, pos) + block + value.slice(pos)
+    applyEdit(next, pos + block.length, pos + block.length)
+  }
+
   return (
     <div className="space-y-1">
       <Tabs defaultValue="write">
@@ -118,6 +132,11 @@ export function MarkdownEditor({
               {paintings && (
                 <ToolbarButton label="Insert painting" onClick={() => setPickerOpen(true)}>
                   <ImagePlus className="h-3.5 w-3.5" />
+                </ToolbarButton>
+              )}
+              {showRsvpButton && (
+                <ToolbarButton label="Insert RSVP button" onClick={insertRsvpButton}>
+                  <Ticket className="h-3.5 w-3.5" />
                 </ToolbarButton>
               )}
             </div>

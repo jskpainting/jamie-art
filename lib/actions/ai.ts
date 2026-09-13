@@ -127,6 +127,10 @@ const GenerateNewsletterInput = z.object({
   includeNewPaintings: z.boolean().default(true),
   includeEvents: z.boolean().default(true),
   tone: z.enum(["warm", "short", "playful"]).default("warm"),
+  /** Set when drafting an "invite people to this event" email (from the
+   * newsletters `?event=` flow) — the event is added to the context and the
+   * model is told to place `{{RSVP_BUTTON}}` on its own line. */
+  eventId: z.string().uuid().optional(),
 })
 
 export type GenerateNewsletterInput = z.infer<typeof GenerateNewsletterInput>
@@ -141,7 +145,8 @@ Rules, strictly:
 - When you mention a painting from the context, write it as its own block: an image line \`![Title](image_url)\`, then on the next line \`**Title** — caption\`, then a link line \`[See it](url)\`.
 - End with one gentle call to action (e.g. visiting the site or an upcoming show) — nothing pushy.
 - No signature block or sign-off name at the end — the email template adds that separately.
-- No preamble, no "Here is the newsletter:" — output only the subject line and the body.`
+- No preamble, no "Here is the newsletter:" — output only the subject line and the body.
+- If the context below includes an "Invite to this event" block, this email's purpose is that invitation. Mention the event by name, date and location, and place the literal placeholder \`{{RSVP_BUTTON}}\` alone on its own line where the RSVP button should appear (usually right after inviting them, before any sign-off) — do not describe or link the RSVP yourself, the placeholder becomes the button.`
 
 const TONE_HINTS: Record<GenerateNewsletterInput["tone"], string> = {
   warm: "Tone: warm and personal, like a note to a friend who collects your work.",
@@ -164,10 +169,18 @@ interface NewsletterContextEvent {
   link: string | null
 }
 
+interface NewsletterContextInviteEvent {
+  title: string
+  when: string
+  location: string | null
+  description: string | null
+}
+
 async function buildNewsletterContext(input: GenerateNewsletterInput): Promise<{
   paintings: NewsletterContextPainting[]
   events: NewsletterContextEvent[]
   instagramHandle: string | null
+  inviteEvent: NewsletterContextInviteEvent | null
 }> {
   const supabase = createAdminClient()
 
@@ -212,12 +225,34 @@ async function buildNewsletterContext(input: GenerateNewsletterInput): Promise<{
     .limit(1)
     .maybeSingle()
 
-  return { paintings, events, instagramHandle: settings?.instagram_handle ?? null }
+  let inviteEvent: NewsletterContextInviteEvent | null = null
+  if (input.eventId) {
+    const { data: event } = await supabase
+      .from("events")
+      .select("title, starts_at, ends_at, location, description")
+      .eq("id", input.eventId)
+      .maybeSingle()
+    if (event) {
+      inviteEvent = {
+        title: event.title,
+        when: formatEventDateRange(event.starts_at, event.ends_at),
+        location: event.location,
+        description: event.description,
+      }
+    }
+  }
+
+  return { paintings, events, instagramHandle: settings?.instagram_handle ?? null, inviteEvent }
 }
 
 function buildNewsletterPrompt(
   input: GenerateNewsletterInput,
-  context: { paintings: NewsletterContextPainting[]; events: NewsletterContextEvent[]; instagramHandle: string | null }
+  context: {
+    paintings: NewsletterContextPainting[]
+    events: NewsletterContextEvent[]
+    instagramHandle: string | null
+    inviteEvent: NewsletterContextInviteEvent | null
+  }
 ): string {
   const lines: string[] = []
   lines.push(`Artist: ${ARTIST_NAME}`)
@@ -240,6 +275,14 @@ function buildNewsletterPrompt(
         `- ${e.title} | ${e.when}${e.location ? ` | ${e.location}` : ""}${e.link ? ` | ${e.link}` : ""}`
       )
     }
+  }
+
+  if (context.inviteEvent) {
+    const e = context.inviteEvent
+    lines.push("", "Invite to this event:")
+    lines.push(
+      `- ${e.title} | ${e.when}${e.location ? ` | ${e.location}` : ""}${e.description ? ` | ${e.description}` : ""}`
+    )
   }
 
   lines.push("", TONE_HINTS[input.tone])

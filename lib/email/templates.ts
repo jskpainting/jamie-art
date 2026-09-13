@@ -4,14 +4,50 @@ interface NewsletterParams {
   subject: string
   bodyMarkdown: string
   unsubscribeUrl: string
+  /** Recipient's first name — substituted for `{{FIRST_NAME}}`. Falls back to "there". */
+  firstName?: string | null
+  /** When set, an RSVP button is rendered — at `{{RSVP_BUTTON}}` if present, else appended
+   * before the footer/sign-off. Omit entirely for a non-event send. */
+  rsvpUrl?: string | null
+}
+
+const FIRST_NAME_TOKEN = "{{FIRST_NAME}}"
+const RSVP_TOKEN = "{{RSVP_BUTTON}}"
+const RSVP_BUTTON_LABEL = "RSVP — I’ll be there"
+
+function substituteFirstName(markdown: string, firstName?: string | null): string {
+  return markdown.split(FIRST_NAME_TOKEN).join(firstName?.trim() || "there")
+}
+
+/** Replaces `{{RSVP_BUTTON}}` with `block` if present, else appends `block` at the end
+ * (before the template's own footer). `block` is null when there's no event to invite to. */
+function applyRsvpButton(markdown: string, block: string | null): string {
+  if (markdown.includes(RSVP_TOKEN)) {
+    return markdown.split(RSVP_TOKEN).join(block ?? "")
+  }
+  return block ? `${markdown.trimEnd()}\n\n${block}\n` : markdown
+}
+
+/** Bulletproof (table-based) button markup — renders correctly in Outlook and other
+ * clients that don't support styled anchors. Left as raw HTML for `marked` to pass through. */
+function rsvpButtonHtml(rsvpUrl: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0"><tr><td style="border-radius:6px;background-color:#0A0A0A"><a href="${rsvpUrl}" target="_blank" style="display:inline-block;padding:14px 28px;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:6px">${RSVP_BUTTON_LABEL}</a></td></tr></table>`
+}
+
+function rsvpButtonPlainText(rsvpUrl: string): string {
+  return `${RSVP_BUTTON_LABEL}: ${rsvpUrl}`
 }
 
 export function renderNewsletterHtml({
   subject,
   bodyMarkdown,
   unsubscribeUrl,
+  firstName,
+  rsvpUrl,
 }: NewsletterParams): string {
-  const bodyHtml = marked.parse(bodyMarkdown) as string
+  let markdown = substituteFirstName(bodyMarkdown, firstName)
+  markdown = applyRsvpButton(markdown, rsvpUrl ? rsvpButtonHtml(rsvpUrl) : null)
+  const bodyHtml = marked.parse(markdown) as string
 
   // Style the rendered markdown block: replace tag-level styles for email clients
   const styledBody = bodyHtml
@@ -78,8 +114,12 @@ export function renderNewsletterHtml({
 export function renderNewsletterPlainText({
   bodyMarkdown,
   unsubscribeUrl,
+  firstName,
+  rsvpUrl,
 }: Omit<NewsletterParams, "subject">): string {
-  const plain = stripMarkdown(bodyMarkdown)
+  let markdown = substituteFirstName(bodyMarkdown, firstName)
+  markdown = applyRsvpButton(markdown, rsvpUrl ? rsvpButtonPlainText(rsvpUrl) : null)
+  const plain = stripMarkdown(markdown)
   return `${plain}
 
 ---
