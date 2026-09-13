@@ -9,6 +9,7 @@ import {
   IN_TO_M,
   arModelPublicUrl,
 } from "@/lib/ar/build-glb"
+import { orientPhysical } from "@/lib/mosaic-layout"
 
 export { arModelPublicUrl }
 
@@ -56,8 +57,6 @@ export async function generateArModel(
       }
     }
 
-    const [wIn, hIn] = dims
-
     const imgRes = await fetch(painting.primary_image_url)
     if (!imgRes.ok) {
       console.error("[ar] image fetch failed", paintingId, imgRes.status)
@@ -65,11 +64,18 @@ export async function generateArModel(
     }
     const imgBuf = Buffer.from(await imgRes.arrayBuffer())
 
-    const jpeg = await sharp(imgBuf)
+    const { data: jpeg, info } = await sharp(imgBuf)
       .rotate()
       .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 90 })
-      .toBuffer()
+      .toBuffer({ resolveWithObject: true })
+
+    // The owner enters sizes as height × width about as often as width ×
+    // height. The photo (after EXIF rotation) is the truth about which way
+    // the canvas hangs, so orient the entered numbers to match it — otherwise
+    // a wide painting stands on its side in AR.
+    const [wIn, hIn] =
+      orientPhysical(dims, info.height > 0 ? info.width / info.height : null) ?? dims
 
     const glb = buildGlb(jpeg, wIn * IN_TO_M, hIn * IN_TO_M)
 

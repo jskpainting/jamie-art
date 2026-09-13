@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { layoutMosaic, parsePhysical } from "@/lib/mosaic-layout"
+import { layoutMosaic, physicalOf } from "@/lib/mosaic-layout"
 import { EmptyState } from "@/components/empty-state"
 import { paintingAlt } from "@/lib/site"
 import { aspectOf, Caption, hrefFor, Tile, TILE, useContainerWidth } from "./gallery-shared"
@@ -22,7 +22,7 @@ export function MosaicGallery({ paintings, sectionSlug }: MosaicGalleryProps) {
   const items = useMemo(
     () =>
       paintings.map((p) => ({
-        physical: parsePhysical(p.dimensions),
+        physical: physicalOf(p),
         aspect: aspectOf(p),
       })),
     [paintings]

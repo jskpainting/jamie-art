@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { layoutMosaic, parsePhysical } from "@/lib/mosaic-layout"
+import { layoutMosaic, parsePhysical, physicalOf } from "@/lib/mosaic-layout"
 import { EmptyState } from "@/components/empty-state"
 import { formatPrice } from "@/lib/utils"
 import type { Painting, PaintingStatus } from "@/lib/types"
@@ -65,7 +65,7 @@ export function MosaicGallery({ paintings, sectionSlug }: MosaicGalleryProps) {
   const inputs = useMemo(
     () =>
       paintings.map((p) => ({
-        physical: parsePhysical(p.dimensions),
+        physical: physicalOf(p),
         aspect: p.width && p.height && p.height > 0 ? p.width / p.height : 4 / 3,
       })),
     [paintings]

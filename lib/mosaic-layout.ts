@@ -37,6 +37,40 @@ export function parsePhysical(
   return [nums[0], nums[1]]
 }
 
+/**
+ * Orient a parsed physical size to match the photo.
+ *
+ * The owner writes sizes in the art convention (height × width) about as
+ * often as width × height — 28 of 103 paintings disagreed with their photo
+ * when checked on 2026-09-13. The two numbers are the canvas's side lengths;
+ * the photo is the truth about which way it hangs. When the photo is clearly
+ * wide or tall and the numbers say the opposite, swap them. Square-ish photos
+ * (or no photo) leave the order as entered.
+ */
+export function orientPhysical(
+  physical: [number, number] | null,
+  pixelAspect: number | null | undefined
+): [number, number] | null {
+  if (!physical || !pixelAspect || pixelAspect <= 0) return physical
+  const physAspect = physical[0] / physical[1]
+  const photoWide = pixelAspect > 1.05
+  const photoTall = pixelAspect < 0.95
+  if ((photoWide && physAspect < 0.95) || (photoTall && physAspect > 1.05)) {
+    return [physical[1], physical[0]]
+  }
+  return physical
+}
+
+/** [widthIn, heightIn] for a painting, oriented to match its stored photo size. */
+export function physicalOf(p: {
+  dimensions: string | null
+  width?: number | null
+  height?: number | null
+}): [number, number] | null {
+  const aspect = p.width && p.height && p.height > 0 ? p.width / p.height : null
+  return orientPhysical(parsePhysical(p.dimensions), aspect)
+}
+
 export interface MosaicItemInput {
   /** Physical size in inches [w, h], null if unknown. */
   physical: [number, number] | null

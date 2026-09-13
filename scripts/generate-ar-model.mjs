@@ -169,18 +169,26 @@ async function main() {
   if (!dims) throw new Error(`Painting "${p.title}" has no parseable dimensions ("${p.dimensions}")`)
   if (!p.primary_image_url) throw new Error("Painting has no image")
 
-  const [wIn, hIn] = dims
-  console.log(`▸ ${p.title} — ${wIn}"×${hIn}" (${(wIn * IN_TO_M).toFixed(3)}×${(hIn * IN_TO_M).toFixed(3)} m)`)
-
   // Fetch + downscale the image (long side ≤ 2048) as JPEG to keep the GLB
   // reasonably sized. Matches lib/ar/generate.ts ("no compromise" quality).
   const imgBuf = Buffer.from(await (await fetch(p.primary_image_url)).arrayBuffer())
-  const jpeg = await sharp(imgBuf)
+  const { data: jpeg, info } = await sharp(imgBuf)
     .rotate()
     .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 90 })
-    .toBuffer()
+    .toBuffer({ resolveWithObject: true })
   console.log(`  texture ${(jpeg.length / 1024).toFixed(0)} KB`)
+
+  // The owner enters sizes as height × width about as often as width ×
+  // height; the photo decides which way the canvas hangs (same rule as
+  // lib/mosaic-layout.ts orientPhysical).
+  let [wIn, hIn] = dims
+  const pix = info.height > 0 ? info.width / info.height : null
+  if (pix && ((pix > 1.05 && wIn / hIn < 0.95) || (pix < 0.95 && wIn / hIn > 1.05))) {
+    ;[wIn, hIn] = [hIn, wIn]
+    console.log(`  swapped entered size to match the photo → ${wIn}"×${hIn}"`)
+  }
+  console.log(`▸ ${p.title} — ${wIn}"×${hIn}" (${(wIn * IN_TO_M).toFixed(3)}×${(hIn * IN_TO_M).toFixed(3)} m)`)
 
   const glb = buildGlb(jpeg, wIn * IN_TO_M, hIn * IN_TO_M)
   console.log(`  GLB ${(glb.length / 1024).toFixed(0)} KB`)

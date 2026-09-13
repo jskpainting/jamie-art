@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { layoutPairs, PAIRS } from "@/lib/pairs-layout"
-import { parsePhysical } from "@/lib/mosaic-layout"
+import { physicalOf } from "@/lib/mosaic-layout"
 import { EmptyState } from "@/components/empty-state"
 import { paintingAlt } from "@/lib/site"
 import { aspectOf, Caption, hrefFor, Tile, TILE, useContainerWidth } from "./gallery-shared"
@@ -21,7 +21,7 @@ export function PairsGallery({ paintings, sectionSlug }: PairsGalleryProps) {
   const inputs = useMemo(
     () =>
       paintings.map((p) => {
-        const d = parsePhysical(p.dimensions)
+        const d = physicalOf(p)
         return {
           physHeightInches: d ? d[1] : null,
           aspect: aspectOf(p),

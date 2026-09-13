@@ -6,7 +6,7 @@ import { PaintingDetailView } from "@/components/painting-detail-view"
 import { JsonLd } from "@/components/json-ld"
 import { getPaintingBySlug, getSectionBySlug, getRelatedPaintings, getSettings, getArModelUrl } from "@/lib/db/queries"
 import { SITE_URL, ARTIST_NAME, paintingAlt } from "@/lib/site"
-import { parsePhysical } from "@/lib/mosaic-layout"
+import { physicalOf } from "@/lib/mosaic-layout"
 import type { PaintingWithImages } from "@/lib/types"
 
 type Props = {
@@ -82,7 +82,7 @@ export default async function PaintingPage({ params }: Props) {
   const relatedHeading =
     relatedSource === "tags" ? "Related work" : `More from ${section.title}`
 
-  const dims = parsePhysical(painting.dimensions)
+  const dims = physicalOf(painting)
   const availabilityMap: Record<string, string | undefined> = {
     available: "https://schema.org/InStock",
     sold: "https://schema.org/SoldOut",

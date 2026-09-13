@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { layoutPairs, PAIRS, type PairsItemInput } from "@/lib/pairs-layout"
-import { parsePhysical } from "@/lib/mosaic-layout"
+import { parsePhysical, physicalOf, orientPhysical } from "@/lib/mosaic-layout"
 import { aspectOf } from "@/components/gallery/gallery-shared"
 import { paintingAlt } from "@/lib/site"
 import { loadImageDims } from "@/lib/image-edit"
@@ -65,9 +65,7 @@ export function WallFitPreview({
   neighbors,
   excludeId,
 }: WallFitPreviewProps) {
-  const physical = parsePhysical(dimensions)
-  const physHeightInches = physical ? physical[1] : null
-  const physAspect = physical ? physical[0] / physical[1] : null
+  const physicalRaw = parsePhysical(dimensions)
 
   // `imageAspect` (from stored width/height columns) is null for the ~85
   // legacy paintings uploaded before those columns existed. Fall back to
@@ -116,6 +114,11 @@ export function WallFitPreview({
     measuredDims && measuredDims.height > 0 ? measuredDims.width / measuredDims.height : null
   const effectiveImageAspect = imageAspect && imageAspect > 0 ? imageAspect : measuredAspect
 
+  // Orient the entered size to the photo (the owner often types height × width).
+  const physical = orientPhysical(physicalRaw, effectiveImageAspect)
+  const physHeightInches = physical ? physical[1] : null
+  const physAspect = physical ? physical[0] / physical[1] : null
+
   const thisAspect = effectiveImageAspect ?? physAspect ?? 4 / 3
 
   const others = useMemo(
@@ -126,7 +129,7 @@ export function WallFitPreview({
   const layout = useMemo(() => {
     const thisInput: PairsItemInput = { physHeightInches, aspect: thisAspect }
     const otherInputs: PairsItemInput[] = others.map((n) => {
-      const d = parsePhysical(n.dimensions)
+      const d = physicalOf(n)
       return { physHeightInches: d ? d[1] : null, aspect: aspectOf(n) }
     })
     return layoutPairs([thisInput, ...otherInputs], PREVIEW_WIDTH)
