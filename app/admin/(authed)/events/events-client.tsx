@@ -75,7 +75,7 @@ function EventRow({
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
           >
             <Users className="h-3 w-3" />
-            {counts.yes} yes · {counts.no} no · {counts.invited} invited
+            {counts.yes} yes · {counts.maybe} maybe · {counts.no} no · {counts.invited} invited
           </Link>
         )}
         {event.link && (

@@ -345,7 +345,7 @@ export function NewslettersClient({
                       </td>
                       {rsvpEnabled && (
                         <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell whitespace-nowrap">
-                          {rsvpCounts ? `${rsvpCounts.yes} yes · ${rsvpCounts.no} no` : "—"}
+                          {rsvpCounts ? `${rsvpCounts.yes} yes · ${rsvpCounts.maybe ?? 0} maybe · ${rsvpCounts.no} no` : "—"}
                         </td>
                       )}
                       <td className="px-4 py-3 text-right">

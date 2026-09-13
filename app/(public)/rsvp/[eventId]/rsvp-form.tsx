@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Minus, Plus, Check, X as XIcon } from "lucide-react"
+import { Minus, Plus, Check, HelpCircle, X as XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -103,6 +103,10 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
     void submit("no", 1)
   }
 
+  function handleMaybe() {
+    void submit("maybe", 1)
+  }
+
   function adjustGuests(delta: number) {
     const next = Math.min(10, Math.max(1, guests + delta))
     setGuests(next)
@@ -115,6 +119,8 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
         <div className="flex items-center gap-2 mb-2">
           {status === "yes" ? (
             <Check className="h-5 w-5 text-accent" />
+          ) : status === "maybe" ? (
+            <HelpCircle className="h-5 w-5 text-muted-foreground" />
           ) : (
             <XIcon className="h-5 w-5 text-muted-foreground" />
           )}
@@ -123,7 +129,7 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
               ? "You're on the list"
               : status === "no"
                 ? "Thanks for letting us know"
-                : "Got it — we'll see"}
+                : "Maybe — we'll keep a spot warm"}
           </p>
         </div>
         {status === "yes" && (
@@ -175,13 +181,21 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
         <p className="text-sm text-muted-foreground leading-relaxed">{rsvpNote}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Button
           onClick={handleYes}
           disabled={loading}
           className="h-12 w-full text-base"
         >
           Yes, I&rsquo;ll be there
+        </Button>
+        <Button
+          onClick={handleMaybe}
+          disabled={loading}
+          variant="outline"
+          className="h-12 w-full text-base"
+        >
+          Maybe
         </Button>
         <Button
           onClick={handleNo}
