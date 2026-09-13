@@ -39,7 +39,9 @@ export async function logActivity(
   refId?: string | null
 ): Promise<void> {
   try {
-    const supabase = await db()
+    // Always the admin client: this runs from public routes (RSVP, signup,
+    // enquiries) where there is no signed-in user, and only writes system rows.
+    const supabase = createAdminClient()
     const { error } = await supabase.from("contact_activities").insert({
       contact_id: contactId,
       kind,
@@ -73,7 +75,9 @@ export async function findOrCreateContact(input: {
   subscribed?: boolean
 }): Promise<{ ok: true; id: string; created: boolean } | { ok: false; error: string }> {
   try {
-    const supabase = await db()
+    // Admin client for the same reason as logActivity — public callers have
+    // no session, and RLS would refuse the insert.
+    const supabase = createAdminClient()
     const email = input.email.trim().toLowerCase()
 
     const { data: existing, error: lookupError } = await supabase
