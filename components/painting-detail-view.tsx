@@ -277,13 +277,7 @@ export function PaintingDetailView({
             )}
 
             {arModelUrl && (
-              <div
-                ref={arSectionRef}
-                className="mt-1 flex flex-col gap-3 border-t border-border pt-5"
-              >
-                <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
-                  See it in your space
-                </span>
+              <div ref={arSectionRef} className="mt-1">
                 <ArViewer
                   src={arModelUrl}
                   alt={paintingAlt(painting.title)}

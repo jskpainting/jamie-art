@@ -1,28 +1,19 @@
 "use client"
 
-import { createElement, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import {
+  createElement,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react"
+import { detectArSupport } from "@/lib/ar-support"
 
-function subscribeCoarsePointer(onChange: () => void) {
-  if (typeof window === "undefined" || !window.matchMedia) return () => {}
-  const mq = window.matchMedia("(pointer: coarse)")
-  mq.addEventListener("change", onChange)
-  return () => mq.removeEventListener("change", onChange)
+function subscribeNoop() {
+  return () => {}
 }
-function getCoarsePointerSnapshot() {
-  return typeof window !== "undefined" && !!window.matchMedia
-    ? window.matchMedia("(pointer: coarse)").matches
-    : false
-}
-function getCoarsePointerServerSnapshot() {
-  return false
-}
-/** Feature-detect a coarse pointer (touch) without brittle UA sniffing. */
-function useCoarsePointer() {
-  return useSyncExternalStore(
-    subscribeCoarsePointer,
-    getCoarsePointerSnapshot,
-    getCoarsePointerServerSnapshot
-  )
+function getArSupportServerSnapshot() {
+  return "none" as const
 }
 
 interface ArViewerProps {
@@ -30,153 +21,270 @@ interface ArViewerProps {
   src: string
   alt: string
   /**
-   * True for the `?ar=1` QR-card arrival flow. Opens the viewer immediately
-   * (so `@google/model-viewer` and the .glb start loading as soon as
-   * possible) and promotes the AR button so it's the obvious next tap.
+   * True for the `?ar=1` QR-card arrival flow. Starts loading
+   * `@google/model-viewer` immediately and attempts to open AR without
+   * waiting for a tap.
    */
   promoted?: boolean
 }
 
+type ViewerState = "idle" | "loading" | "ready" | "pulsing" | "unsupported" | "failed"
+
 /**
- * "View on my wall" — lazy-loads Google's <model-viewer> only when the visitor
- * asks for it (the library is ~1MB, so we never ship it on initial page load).
- * On a phone the AR button launches the built-in AR: iOS AR Quick Look (which
- * model-viewer generates a USDZ for on the fly) or Android Scene Viewer, placing
- * the painting on a wall at its real size. On desktop it's a rotatable 3D preview.
+ * "View on my wall" — a single button that launches the device's native AR
+ * (iOS AR Quick Look or Android Scene Viewer) to place the painting on a
+ * wall at its real size. Renders nothing during SSR and nothing at all on a
+ * device that can't do AR (desktops included) — there is no 3D-preview
+ * fallback. `@google/model-viewer` (~1MB) is only fetched once the visitor
+ * taps the button (or immediately for the promoted `?ar=1` QR flow).
  */
 export function ArViewer({ src, alt, promoted = false }: ArViewerProps) {
-  // `promoted` is read from window.location.search in a parent effect, so it
-  // can flip true a tick after this component's first render. Deriving `open`
-  // from `promoted || manuallyOpened` (rather than syncing a separate `open`
-  // state via an effect) means that later flip is picked up for free.
-  const [manuallyOpened, setManuallyOpened] = useState(false)
-  const open = promoted || manuallyOpened
-  const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const [arSupported, setArSupported] = useState<boolean | null>(null)
-  const coarsePointer = useCoarsePointer()
+  // detectArSupport() is deterministic for a given client (it doesn't change
+  // across the page's lifetime), so a noop subscription is fine here — this
+  // is just how we get "none" on the server/first paint and the real value
+  // once mounted, without a setState-in-effect render cascade.
+  const support = useSyncExternalStore(
+    subscribeNoop,
+    detectArSupport,
+    getArSupportServerSnapshot
+  )
+  const [state, setState] = useState<ViewerState>("idle")
+  const [libLoaded, setLibLoaded] = useState(false)
   const modelRef = useRef<HTMLElement | null>(null)
+  const autoStartedRef = useRef(false)
 
-  useEffect(() => {
-    if (!open || ready) return
-    let active = true
-    import("@google/model-viewer")
-      .then(() => active && setReady(true))
-      .catch(() => active && setFailed(true))
-    return () => {
-      active = false
+  async function ensureLibLoaded() {
+    if (libLoaded) return
+    await import("@google/model-viewer")
+    setLibLoaded(true)
+  }
+
+  async function handleActivate() {
+    if (state === "loading") return
+    if (state === "ready" || state === "pulsing") {
+      try {
+        await (
+          modelRef.current as unknown as
+            | { activateAR?: () => Promise<void> | void }
+            | null
+        )?.activateAR?.()
+      } catch {
+        // Already loaded; a failed re-tap just leaves the button as-is.
+      }
+      return
     }
-  }, [open, ready])
+    setState("loading")
+    try {
+      await ensureLibLoaded()
+    } catch {
+      setState("failed")
+    }
+  }
 
-  // Once the model has loaded, ask model-viewer whether this device can
-  // actually launch AR (WebXR / Scene Viewer / Quick Look). The built-in
-  // ar-button slot already hides itself when AR isn't available — this is
-  // only used to swap the caption on an unsupported phone so nothing reads
-  // as broken.
+  // Promoted (`?ar=1`) flow: start loading as soon as we know AR is
+  // supported, without waiting for a tap.
   useEffect(() => {
+    if (!promoted || support === "none") return
+    if (autoStartedRef.current) return
+    autoStartedRef.current = true
+    setState("loading")
+    ensureLibLoaded().catch(() => setState("failed"))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promoted, support])
+
+  // Once the (hidden) model-viewer element is mounted, wait for it to load
+  // the model, then try to launch AR.
+  useEffect(() => {
+    if (!libLoaded) return
     const el = modelRef.current
     if (!el) return
+    let cancelled = false
+
     function handleLoad() {
-      setArSupported(
-        Boolean((el as unknown as { canActivateAR?: boolean }).canActivateAR)
+      if (cancelled || !el) return
+      const canActivateAR = Boolean(
+        (el as unknown as { canActivateAR?: boolean }).canActivateAR
       )
+      if (!canActivateAR) {
+        setState("unsupported")
+        return
+      }
+      try {
+        const result = (
+          el as unknown as { activateAR: () => Promise<void> | void }
+        ).activateAR()
+        // Optimistically show the ready/pulsing button as soon as AR is
+        // requested — activateAR() only resolves once the AR session ends
+        // (iOS Quick Look, in particular), so awaiting it would leave the
+        // button stuck in a loading state for the whole visit.
+        setState(promoted ? "pulsing" : "ready")
+        if (result && typeof (result as Promise<void>).catch === "function") {
+          ;(result as Promise<void>).catch(() => {
+            if (cancelled) return
+            setState(promoted ? "pulsing" : "failed")
+          })
+        }
+      } catch {
+        if (cancelled) return
+        setState(promoted ? "pulsing" : "failed")
+      }
     }
+
     el.addEventListener("load", handleLoad)
-    return () => el.removeEventListener("load", handleLoad)
-  }, [ready])
+    return () => {
+      cancelled = true
+      el.removeEventListener("load", handleLoad)
+    }
+  }, [libLoaded, promoted])
 
-  if (!open) {
+  if (support === "none") return null
+
+  const arIcon = (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 2 3 7v10l9 5 9-5V7z" />
+      <path d="M3 7l9 5 9-5" />
+      <path d="M12 12v10" />
+    </svg>
+  )
+
+  // Kept mounted (never unmounted once loaded) so a second tap is instant —
+  // rendered visually hidden rather than `display:none`, which model-viewer
+  // needs to lay itself out and load the model. Written as an unconditional
+  // literal within each guarded branch below (not `libLoaded && createElement(...)`)
+  // so passing `modelRef` here reads as ordinary element-ref wiring rather
+  // than a render-time ref read.
+  if (!libLoaded) {
+    const isLoading = state === "loading"
     return (
-      <button
-        type="button"
-        onClick={() => setManuallyOpened(true)}
-        className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+      <div className="flex flex-col gap-3 border-t border-border pt-5">
+        <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+          See it in your space
+        </span>
+        <button
+          type="button"
+          onClick={handleActivate}
+          disabled={isLoading}
+          className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
         >
-          <path d="M12 2 3 7v10l9 5 9-5V7z" />
-          <path d="M3 7l9 5 9-5" />
-          <path d="M12 12v10" />
-        </svg>
-        View on my wall
-      </button>
-    )
-  }
-
-  if (failed) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Couldn&rsquo;t load the 3D viewer. Please try again.
-      </p>
-    )
-  }
-
-  if (!ready) {
-    return (
-      <div className="flex h-[60vh] max-h-[520px] items-center justify-center rounded-2xl border border-border bg-muted/30 text-sm text-muted-foreground">
-        Loading 3D preview…
+          {arIcon}
+          {isLoading ? "Opening your camera…" : "View on my wall"}
+        </button>
       </div>
     )
   }
 
-  const unsupportedOnPhone = coarsePointer && arSupported === false
-
-  const caption = unsupportedOnPhone
-    ? "AR isn't supported on this phone — but here's the painting up close."
-    : promoted
-      ? "Tap, then point your camera at your wall — the painting appears at its real size."
-      : (
-          <>
-            On a phone, tap <span className="font-medium">View in your space</span>{" "}
-            and point your camera at a wall — the painting appears at its real size.
-            On a computer, drag to rotate.
-          </>
-        )
-
-  return (
-    <div className="space-y-3">
-      {createElement(
-        "model-viewer",
-        {
+  if (state === "loading") {
+    return (
+      <div className="flex flex-col gap-3 border-t border-border pt-5">
+        <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+          See it in your space
+        </span>
+        <button
+          type="button"
+          disabled
+          className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium disabled:opacity-60"
+        >
+          {arIcon}
+          Opening your camera…
+        </button>
+        {createElement("model-viewer", {
           ref: modelRef,
           src,
           alt,
           ar: true,
           "ar-modes": "webxr scene-viewer quick-look",
           "ar-placement": "wall",
-          "camera-controls": true,
-          "touch-action": "pan-y",
-          "shadow-intensity": "0.6",
-          exposure: "1",
           style: {
-            width: "100%",
-            height: "60vh",
-            maxHeight: "520px",
-            borderRadius: "1rem",
-            background: "transparent",
+            position: "absolute",
+            width: "1px",
+            height: "1px",
+            opacity: 0,
+            pointerEvents: "none",
           },
-        },
-        createElement(
-          "button",
-          {
-            slot: "ar-button",
-            className: promoted
-              ? "ar-pulse absolute bottom-4 left-4 right-4 rounded-full bg-foreground px-5 py-3 text-sm font-medium text-background shadow-lg"
-              : "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-lg",
+        })}
+      </div>
+    )
+  }
+
+  if (state === "unsupported" || state === "failed") {
+    return (
+      <div className="flex flex-col gap-3 border-t border-border pt-5">
+        <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+          See it in your space
+        </span>
+        <p className="text-sm text-muted-foreground">
+          {state === "unsupported"
+            ? "AR isn't available on this device."
+            : "Couldn’t open AR — please try again."}
+        </p>
+        {createElement("model-viewer", {
+          ref: modelRef,
+          src,
+          alt,
+          ar: true,
+          "ar-modes": "webxr scene-viewer quick-look",
+          "ar-placement": "wall",
+          style: {
+            position: "absolute",
+            width: "1px",
+            height: "1px",
+            opacity: 0,
+            pointerEvents: "none",
           },
-          "View in your space"
-        )
+        })}
+      </div>
+    )
+  }
+
+  const isPulsing = state === "pulsing"
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-5">
+      <span className="text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground">
+        See it in your space
+      </span>
+      <button
+        type="button"
+        onClick={handleActivate}
+        className={
+          isPulsing
+            ? "ar-pulse inline-flex w-fit items-center justify-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-lg"
+            : "inline-flex w-fit items-center justify-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
+        }
+      >
+        {arIcon}
+        View on my wall
+      </button>
+      {isPulsing && (
+        <p className="text-xs text-muted-foreground">
+          Tap to see it on your wall
+        </p>
       )}
-      <p className="text-xs text-muted-foreground text-center">{caption}</p>
+      {createElement("model-viewer", {
+        ref: modelRef,
+        src,
+        alt,
+        ar: true,
+        "ar-modes": "webxr scene-viewer quick-look",
+        "ar-placement": "wall",
+        style: {
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          opacity: 0,
+          pointerEvents: "none",
+        },
+      })}
     </div>
   )
 }
