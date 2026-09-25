@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { getPaintingsForCards, getArModelIds, getSettings, type PaintingForCards } from "@/lib/db/queries"
 import { generateQrSvg, cardTargetUrl } from "@/components/print/qr"
 import { ShowCard, type CardLayout } from "@/components/print/show-card"
+import { TextShowCard } from "@/components/print/text-show-card"
 import { PrintButton } from "@/components/print/print-button"
 import { DismissibleNotice } from "@/components/print/dismissible-notice"
 
@@ -157,6 +158,7 @@ export default async function PrintShowCardsPage({
 }: {
   searchParams: Promise<{
     paper?: string
+    style?: string
     layout?: string
     tagline?: string
     c?: string
@@ -164,6 +166,7 @@ export default async function PrintShowCardsPage({
 }) {
   const params = await searchParams
   const paper = params.paper === "a4" ? PAPERS.a4 : PAPERS.letter
+  const textOnly = params.style === "text"
   const layoutParam = params.layout === "side" || params.layout === "stack" ? params.layout : "auto"
   const layout: CardLayout | undefined = layoutParam === "auto" ? undefined : layoutParam
   // Tagline may be intentionally empty (param present but ""); only fall back
@@ -223,8 +226,9 @@ export default async function PrintShowCardsPage({
   }
 
   // Generate each distinct painting's QR SVG once, then expand into copies.
+  // The text-only card has no QR code, so skip the work entirely.
   const qrByPaintingId = new Map<string, string>()
-  await Promise.all(
+  if (!textOnly) await Promise.all(
     foundIds.map(async (id) => {
       const p = byId.get(id)!
       const url = cardTargetUrl(p.section_slug, p.slug, arModelIds.has(p.id))
@@ -297,13 +301,17 @@ export default async function PrintShowCardsPage({
                   className="card"
                   style={{ left: `${x}mm`, top: `${y}mm` }}
                 >
-                  <ShowCard
-                    painting={entry.painting}
-                    qrSvg={entry.qrSvg}
-                    tagline={tagline}
-                    email={email}
-                    layout={layout}
-                  />
+                  {textOnly ? (
+                    <TextShowCard painting={entry.painting} />
+                  ) : (
+                    <ShowCard
+                      painting={entry.painting}
+                      qrSvg={entry.qrSvg}
+                      tagline={tagline}
+                      email={email}
+                      layout={layout}
+                    />
+                  )}
                 </div>
               )
             })}

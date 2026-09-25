@@ -1,6 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import Image from "next/image"
 import { Minus, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -13,6 +21,7 @@ import {
   CARD_HEIGHT_MM,
   type CardLayout,
 } from "@/components/print/show-card"
+import { TextShowCard } from "@/components/print/text-show-card"
 import type { PaintingForCards } from "@/lib/db/queries"
 
 // CSS mm -> px is a fixed ratio (96px per inch), independent of device DPI.
@@ -84,12 +93,14 @@ const STORAGE_KEY = "show-cards:v2"
 export const DEFAULT_TAGLINE = "Scan to see it on your wall"
 type Paper = "letter" | "a4"
 type LayoutChoice = "auto" | CardLayout
+type CardStyle = "qr" | "text"
 
 interface StoredState {
   selections: Record<string, number>
   tagline: string
   layout: LayoutChoice
   paper: Paper
+  style: CardStyle
 }
 
 type CardsFilter = "all" | "selected" | "unselected" | "with-ar" | "without-ar"
@@ -115,6 +126,23 @@ interface ShowCardsClientProps {
   email: string | null
 }
 
+// false while the server renders and while the browser hydrates, true after.
+// The card style is restored from localStorage in the first client render, so
+// anything drawn from it must wait for this or it won't match the server HTML.
+const noopSubscribe = () => () => {}
+function useHydrated() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  )
+}
+
+const STYLE_OPTIONS: { value: CardStyle; label: string }[] = [
+  { value: "qr", label: "Picture + QR code" },
+  { value: "text", label: "Text only" },
+]
+
 const LAYOUT_OPTIONS: { value: LayoutChoice; label: string }[] = [
   { value: "auto", label: "Automatic (by painting shape)" },
   { value: "side", label: "Painting on the left" },
@@ -139,6 +167,7 @@ export function ShowCardsClient({
       tagline: DEFAULT_TAGLINE,
       layout: "auto",
       paper: "letter",
+      style: "qr",
     }
     if (typeof window === "undefined") return defaults
     try {
@@ -156,6 +185,7 @@ export function ShowCardsClient({
             ? parsed.layout
             : defaults.layout,
         paper: parsed.paper === "letter" || parsed.paper === "a4" ? parsed.paper : defaults.paper,
+        style: parsed.style === "text" || parsed.style === "qr" ? parsed.style : defaults.style,
       }
     } catch {
       return defaults
@@ -166,17 +196,20 @@ export function ShowCardsClient({
   const [tagline, setTagline] = useState(stored.tagline)
   const [layout, setLayout] = useState<LayoutChoice>(stored.layout)
   const [paper, setPaper] = useState<Paper>(stored.paper)
+  const [cardStyle, setCardStyle] = useState<CardStyle>(stored.style)
+  const hydrated = useHydrated()
+  const shownStyle: CardStyle = hydrated ? cardStyle : "qr"
 
   // Persist on every change. Writing to localStorage (not calling setState)
   // is exactly what effects are for — this is not the restore step above.
   useEffect(() => {
     try {
-      const data: StoredState = { selections, tagline, layout, paper }
+      const data: StoredState = { selections, tagline, layout, paper, style: cardStyle }
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // quota / privacy-mode errors — ignore
     }
-  }, [selections, tagline, layout, paper])
+  }, [selections, tagline, layout, paper, cardStyle])
 
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<CardsFilter>("all")
@@ -269,6 +302,7 @@ export function ShowCardsClient({
   function handlePrint() {
     const params = new URLSearchParams()
     params.set("paper", paper)
+    params.set("style", cardStyle)
     params.set("layout", layout)
     params.set("tagline", tagline)
     if (email) params.set("email", email)
@@ -285,7 +319,9 @@ export function ShowCardsClient({
       <div className="mb-8 flex flex-col gap-6 rounded-xl border border-border bg-card p-4 md:flex-row md:items-start md:p-6">
         <div className="shrink-0">
           <ScaledCardProof>
-            {proofPainting ? (
+            {proofPainting && shownStyle === "text" ? (
+              <TextShowCard painting={proofPainting} />
+            ) : proofPainting ? (
               <ShowCard
                 painting={proofPainting}
                 qrSvg={proofQr}
@@ -303,35 +339,18 @@ export function ShowCardsClient({
 
         <div className="flex-1 space-y-5">
           <div>
-            <label
-              htmlFor="tagline-input"
-              className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground"
-            >
-              Tagline
-            </label>
-            <Input
-              id="tagline-input"
-              value={tagline}
-              maxLength={40}
-              onChange={(e) => setTagline(e.target.value)}
-              placeholder="Optional — e.g. Scan to see it on your wall"
-              className="max-w-sm"
-            />
-          </div>
-
-          <div>
             <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
-              Card layout
+              Card style
             </span>
             <div className="inline-flex flex-wrap rounded-md border border-border p-0.5">
-              {LAYOUT_OPTIONS.map((opt) => (
+              {STYLE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setLayout(opt.value)}
+                  onClick={() => setCardStyle(opt.value)}
                   className={cn(
                     "rounded-[6px] px-3 py-1 text-sm transition-colors",
-                    layout === opt.value
+                    shownStyle === opt.value
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
@@ -340,7 +359,58 @@ export function ShowCardsClient({
                 </button>
               ))}
             </div>
+            {shownStyle === "text" && (
+              <p className="mt-1.5 max-w-sm text-xs text-muted-foreground">
+                Your name, the title and year, medium and size, and the price — in large
+                type you can read from a few feet away. No picture or QR code.
+              </p>
+            )}
           </div>
+
+          {shownStyle === "qr" && (
+            <>
+              <div>
+                <label
+                  htmlFor="tagline-input"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground"
+                >
+                  Tagline
+                </label>
+                <Input
+                  id="tagline-input"
+                  value={tagline}
+                  maxLength={40}
+                  onChange={(e) => setTagline(e.target.value)}
+                  placeholder="Optional — e.g. Scan to see it on your wall"
+                  className="max-w-sm"
+                />
+              </div>
+
+              <div>
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Card layout
+                </span>
+                <div className="inline-flex flex-wrap rounded-md border border-border p-0.5">
+                  {LAYOUT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setLayout(opt.value)}
+                      className={cn(
+                        "rounded-[6px] px-3 py-1 text-sm transition-colors",
+                        layout === opt.value
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </>
+          )}
 
           <div>
             <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
