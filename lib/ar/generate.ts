@@ -17,6 +17,19 @@ export type GenerateArModelResult =
   | { ok: true; skipped?: "no-image" | "no-dimensions" | "exists" }
   | { ok: false; error: string }
 
+/** Delete `<paintingId>.glb` if present (removing a missing object isn't an error). */
+async function removeStaleModel(
+  admin: ReturnType<typeof createAdminClient>,
+  paintingId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await admin.storage.from("ar-models").remove([`${paintingId}.glb`])
+  if (error) {
+    console.error("[ar] stale model delete failed", paintingId, error)
+    return { ok: false, error: error.message }
+  }
+  return { ok: true }
+}
+
 /**
  * Generate (or refresh) the AR "canvas in the room" GLB model for a painting
  * and upload it to the public `ar-models` bucket as `<paintingId>.glb`.
@@ -41,10 +54,20 @@ export async function generateArModel(
       return { ok: false, error: "Painting not found" }
     }
 
-    if (!painting.primary_image_url) return { ok: true, skipped: "no-image" }
+    // No photo, or a size that's been cleared / can't be read: any model
+    // already on file was built from the old photo or size, so remove it —
+    // the "View on my wall" button then disappears instead of hanging a
+    // wrong-size canvas on someone's wall.
+    if (!painting.primary_image_url) {
+      const removed = await removeStaleModel(admin, paintingId)
+      return removed.ok ? { ok: true, skipped: "no-image" } : removed
+    }
 
     const dims = parsePhysicalInches(painting.dimensions)
-    if (!dims) return { ok: true, skipped: "no-dimensions" }
+    if (!dims) {
+      const removed = await removeStaleModel(admin, paintingId)
+      return removed.ok ? { ok: true, skipped: "no-dimensions" } : removed
+    }
 
     if (!force) {
       // Cheap existence check for the batch/backfill path — avoid redoing
