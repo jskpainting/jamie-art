@@ -141,6 +141,9 @@ export async function listMedia(
   }
 }
 
+const USAGE_CHECK_FAILED =
+  "Couldn't check whether this photo is in use, so it wasn't deleted. Please try again."
+
 /** Finds every place a public storage URL is referenced on the live site. */
 export async function getMediaUsage(
   url: string
@@ -152,10 +155,14 @@ export async function getMediaUsage(
     const supabase = await db()
     const usage: MediaUsage[] = []
 
-    const { data: settings } = await supabase
+    // Every lookup must check `error`: supabase-js resolves with { error }
+    // rather than throwing, and a failed lookup silently read as "not used"
+    // would let deleteMedia remove a photo the live site still shows.
+    const { data: settings, error: settingsErr } = await supabase
       .from("settings")
       .select("home_hero_image_url, about_image_url, commission_image_url")
       .maybeSingle()
+    if (settingsErr) throw settingsErr
     if (settings?.home_hero_image_url === url) {
       usage.push({ label: "Home page hero", adminHref: "/admin/settings" })
     }
@@ -166,15 +173,20 @@ export async function getMediaUsage(
       usage.push({ label: "Commission page photo", adminHref: "/admin/settings" })
     }
 
-    const { data: bio } = await supabase.from("bio").select("headshot_url").maybeSingle()
+    const { data: bio, error: bioErr } = await supabase
+      .from("bio")
+      .select("headshot_url")
+      .maybeSingle()
+    if (bioErr) throw bioErr
     if (bio?.headshot_url === url) {
       usage.push({ label: "About page headshot", adminHref: "/admin/bio" })
     }
 
-    const { data: paintings } = await supabase
+    const { data: paintings, error: paintingsErr } = await supabase
       .from("paintings")
       .select("title, sections!paintings_section_id_fkey(slug)")
       .eq("primary_image_url", url)
+    if (paintingsErr) throw paintingsErr
     for (const p of paintings ?? []) {
       const sectionSlug = (p as { sections?: { slug?: string } | null }).sections?.slug
       usage.push({
@@ -183,10 +195,11 @@ export async function getMediaUsage(
       })
     }
 
-    const { data: paintingImages } = await supabase
+    const { data: paintingImages, error: paintingImagesErr } = await supabase
       .from("painting_images")
       .select("paintings(title, sections!paintings_section_id_fkey(slug))")
       .eq("url", url)
+    if (paintingImagesErr) throw paintingImagesErr
     for (const row of paintingImages ?? []) {
       const painting = (
         row as { paintings?: { title?: string; sections?: { slug?: string } | null } | null }
@@ -198,22 +211,28 @@ export async function getMediaUsage(
       })
     }
 
-    const { data: events } = await supabase.from("events").select("title").eq("image_url", url)
+    const { data: events, error: eventsErr } = await supabase
+      .from("events")
+      .select("title")
+      .eq("image_url", url)
+    if (eventsErr) throw eventsErr
     for (const ev of events ?? []) {
       usage.push({ label: `Event: ${ev.title}`, adminHref: "/admin/events" })
     }
 
-    const { data: sections } = await supabase
+    const { data: sections, error: sectionsErr } = await supabase
       .from("sections")
       .select("title")
       .eq("cover_image_url", url)
+    if (sectionsErr) throw sectionsErr
     for (const s of sections ?? []) {
       usage.push({ label: `Gallery cover: ${s.title}`, adminHref: "/admin/portfolio" })
     }
 
     return { ok: true, data: usage }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Failed to check image usage" }
+    console.error("getMediaUsage error:", e)
+    return { ok: false, error: "Couldn't check where this photo is used. Please try again." }
   }
 }
 
@@ -236,7 +255,8 @@ export async function deleteMedia(
     } = admin.storage.from(bucket).getPublicUrl(path)
 
     const usageResult = await getMediaUsage(publicUrl)
-    if (!usageResult.ok) return { ok: false, error: usageResult.error }
+    // Fail closed: if we can't prove the photo is unused, don't delete it.
+    if (!usageResult.ok) return { ok: false, error: USAGE_CHECK_FAILED }
     if (usageResult.data.length > 0) {
       const places = usageResult.data.map((u) => u.label).join(", ")
       return {
