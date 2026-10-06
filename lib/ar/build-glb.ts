@@ -25,6 +25,15 @@ export function arModelPublicUrl(paintingId: string): string {
   return `${base}/storage/v1/object/public/ar-models/${paintingId}.glb`
 }
 
+/**
+ * Next.js data-cache tag for the public page's "does this painting have a
+ * model?" check (getArModelUrl). lib/ar/generate.ts expires it whenever it
+ * uploads or deletes the model, so the button appears/disappears right away.
+ */
+export function arModelCacheTag(paintingId: string): string {
+  return `ar-model:${paintingId}`
+}
+
 /** Parse [widthIn, heightIn] from a dimensions string like `24"x36"`. */
 export function parsePhysicalInches(
   dimensions: string | null
