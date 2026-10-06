@@ -71,7 +71,10 @@ export async function POST(request: Request) {
       await logActivity(created.id as string, "signup", "Signed up for the newsletter")
     }
 
-    return NextResponse.json({ ok: true }, { status: 201 })
+    // Same status and body as every other non-error outcome above (already
+    // subscribed, opted out, lookup hiccup) — a 201 here told anyone probing
+    // the endpoint which addresses were new and which were already on the list.
+    return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("newsletter route error:", err)
     // Always 200 for newsletter
