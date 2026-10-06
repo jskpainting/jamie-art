@@ -11,6 +11,7 @@ import {
   RsvpStatusSchema,
 } from "@/lib/schemas"
 import { logActivity, findOrCreateContact } from "@/lib/actions/crm"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -134,12 +135,21 @@ export async function createInvites(
 
     for (const contact of contacts ?? []) {
       const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || null
-      const { data: existing } = await supabase
+      const email = normalizeEmail(contact.email as string)
+      // Matches a row saved with any casing — e.g. someone who RSVP'd from
+      // the website as "Jane@Example.com" — so they get their existing token
+      // rather than a duplicate invite.
+      const { data: matches, error: existingError } = await supabase
         .from("event_rsvps")
-        .select("id, token, status")
+        .select("id, token, status, email")
         .eq("event_id", eventId)
-        .eq("email", contact.email as string)
-        .maybeSingle()
+        .ilike("email", emailMatchPattern(email))
+        .limit(10)
+      if (existingError) {
+        if (isSchemaSetupError(existingError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+        throw existingError
+      }
+      const existing = pickEmailMatch(matches, email)
 
       if (existing) {
         invites.push({ contactId: contact.id as string, token: existing.token as string })
@@ -151,7 +161,7 @@ export async function createInvites(
         .insert({
           event_id: eventId,
           contact_id: contact.id,
-          email: contact.email,
+          email,
           name,
           status: "invited",
           source: "email",
@@ -332,23 +342,23 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
 
     const supabase = createAdminClient()
-    const email = parsed.data.email.trim().toLowerCase()
+    const email = normalizeEmail(parsed.data.email)
 
     // Anyone can type any email into this form, so it must never change an
     // answer that's already on file (theirs or someone else's). An existing
     // row — including an "invited" one — is changed only through the
     // person's own invite link (respondByToken).
-    const { data: existingRow, error: existingError } = await supabase
+    const { data: matches, error: existingError } = await supabase
       .from("event_rsvps")
-      .select("id")
+      .select("id, email")
       .eq("event_id", eventId)
-      .eq("email", email)
-      .maybeSingle()
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
     if (existingError) {
       if (isSchemaSetupError(existingError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
       throw existingError
     }
-    if (existingRow) return { ok: false, reason: "already_replied" }
+    if (pickEmailMatch(matches, email)) return { ok: false, reason: "already_replied" }
 
     if (parsed.data.status === "yes" && event.rsvp_limit != null) {
       const currentYes = await countYes(eventId, supabase)

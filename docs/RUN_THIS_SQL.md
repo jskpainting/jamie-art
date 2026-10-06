@@ -306,6 +306,48 @@ people click Yes with no form, strangers from the website fill in name +
 email, and "invite everyone" from an event with an AI-drafted email and an
 RSVP button.
 
+---
+
+# Round 6 — One person per email, whatever the capitals
+
+Makes "Jane@Example.com" and "jane@example.com" count as the same person, so
+nobody ends up in People twice. It only tidies the capitals on emails already
+saved — it never deletes or merges anyone.
+
+1. Go to **supabase.com** → open the **jamie-art** project
+2. Left sidebar → **SQL Editor** → **+ New query**
+3. Paste the whole block below
+4. Click the green **Run** button — you should see **"Success. No rows returned"**
+
+```sql
+-- Store every saved email in lowercase (skips any that would clash)
+update contacts c
+set email = lower(trim(c.email))
+where c.email <> lower(trim(c.email))
+  and not exists (
+    select 1 from contacts o
+    where o.id <> c.id and lower(trim(o.email)) = lower(trim(c.email))
+  );
+
+update event_rsvps r
+set email = lower(trim(r.email))
+where r.email <> lower(trim(r.email))
+  and not exists (
+    select 1 from event_rsvps o
+    where o.id <> r.id
+      and o.event_id = r.event_id
+      and lower(trim(o.email)) = lower(trim(r.email))
+  );
+
+-- From now on, refuse a second person with the same email in different capitals
+create unique index if not exists contacts_email_lower_unique on contacts (lower(email));
+```
+
+The site already treats emails this way without it — this just makes the
+database enforce it too. If you ever see an error mentioning "could not create
+unique index", two people in People share an email; ask your developer to
+tidy them up, then run it again.
+
 ## What you unlock
 
 | Feature | Where it shows up |

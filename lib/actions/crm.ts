@@ -15,6 +15,7 @@ import {
   type AudienceInput,
 } from "@/lib/schemas"
 import type { ActivityKind } from "@/lib/types"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -78,14 +79,15 @@ export async function findOrCreateContact(input: {
     // Admin client for the same reason as logActivity — public callers have
     // no session, and RLS would refuse the insert.
     const supabase = createAdminClient()
-    const email = input.email.trim().toLowerCase()
+    const email = normalizeEmail(input.email)
 
-    const { data: existing, error: lookupError } = await supabase
+    const { data: matches, error: lookupError } = await supabase
       .from("contacts")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle()
+      .select("id, email")
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
     if (lookupError) throw lookupError
+    const existing = pickEmailMatch(matches, email)
 
     if (existing) {
       return { ok: true, id: existing.id as string, created: false }
@@ -106,11 +108,12 @@ export async function findOrCreateContact(input: {
     // 23505 = created by a concurrent request — treat as found, not a failure.
     if (error) {
       if ((error as { code?: string }).code === "23505") {
-        const { data: found } = await supabase
+        const { data: raced } = await supabase
           .from("contacts")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle()
+          .select("id, email")
+          .ilike("email", emailMatchPattern(email))
+          .limit(10)
+        const found = pickEmailMatch(raced, email)
         if (found) return { ok: true, id: found.id as string, created: false }
       }
       throw error

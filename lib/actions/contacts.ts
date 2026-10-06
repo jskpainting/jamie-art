@@ -14,6 +14,7 @@ import {
   type ContactImportRowExtended,
 } from "@/lib/schemas"
 import { logActivity } from "@/lib/actions/crm"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -34,12 +35,28 @@ export async function createContact(input: unknown) {
 
   try {
     const supabase = await db()
+    const email = normalizeEmail(parsed.data.email)
+    const { data: matches, error: lookupError } = await supabase
+      .from("contacts")
+      .select("id, email")
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
+    if (lookupError) throw lookupError
+    if (pickEmailMatch(matches, email)) {
+      return { ok: false, error: "Someone with that email is already in People." }
+    }
+
     const { data, error } = await supabase
       .from("contacts")
-      .insert(parsed.data)
+      .insert({ ...parsed.data, email })
       .select("id")
       .single()
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        return { ok: false, error: "Someone with that email is already in People." }
+      }
+      throw error
+    }
     revalidateContacts()
     return { ok: true, data: { id: data.id } }
   } catch (e) {
@@ -59,11 +76,30 @@ export async function updateContact(id: string, input: unknown) {
 
   try {
     const supabase = await db()
+    const patch = { ...parsed.data }
+    if (patch.email !== undefined) {
+      patch.email = normalizeEmail(patch.email)
+      const { data: matches, error: lookupError } = await supabase
+        .from("contacts")
+        .select("id, email")
+        .ilike("email", emailMatchPattern(patch.email))
+        .limit(10)
+      if (lookupError) throw lookupError
+      const clash = pickEmailMatch(matches, patch.email)
+      if (clash && clash.id !== id) {
+        return { ok: false, error: "Someone else in People already has that email." }
+      }
+    }
     const { error } = await supabase
       .from("contacts")
-      .update(parsed.data)
+      .update(patch)
       .eq("id", id)
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        return { ok: false, error: "Someone else in People already has that email." }
+      }
+      throw error
+    }
     revalidateContacts()
     return { ok: true }
   } catch (e) {
@@ -148,14 +184,16 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
     let updated = 0
 
     for (const row of validRows) {
-      const email = row.email.trim().toLowerCase()
+      const email = normalizeEmail(row.email)
       const tags = splitTags(row.tags)
 
-      const { data: existing } = await supabase
+      const { data: matches, error: lookupError } = await supabase
         .from("contacts")
         .select("*")
-        .eq("email", email)
-        .maybeSingle()
+        .ilike("email", emailMatchPattern(email))
+        .limit(10)
+      if (lookupError) throw lookupError
+      const existing = pickEmailMatch(matches, email)
 
       let contactId: string
 

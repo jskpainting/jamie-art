@@ -3,9 +3,10 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
 import { logActivity } from "@/lib/actions/crm"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
 
 const schema = z.object({
-  email: z.string().email().max(320),
+  email: z.string().trim().toLowerCase().email().max(320),
 })
 
 export async function POST(request: Request) {
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = createAdminClient()
+    const email = normalizeEmail(parsed.data.email)
 
     // This endpoint is public and unauthenticated. An upsert that forced
     // subscribed: true let anyone re-subscribe someone who had opted out,
@@ -29,11 +31,11 @@ export async function POST(request: Request) {
     // the original `source` while doing it. An existing row is therefore
     // left exactly as it is: an opt-out stays opted out, and the owner can
     // re-subscribe someone deliberately from /admin/contacts.
-    const { data: existing, error: lookupError } = await supabase
+    const { data: matches, error: lookupError } = await supabase
       .from("contacts")
-      .select("id")
-      .eq("email", parsed.data.email)
-      .maybeSingle()
+      .select("id, email")
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
 
     if (lookupError) {
       console.error("newsletter lookup error:", lookupError)
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    if (existing) {
+    if (pickEmailMatch(matches, email)) {
       // Already known — say nothing either way.
       return NextResponse.json({ ok: true })
     }
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
     const { data: created, error } = await supabase
       .from("contacts")
       .insert({
-        email: parsed.data.email,
+        email,
         source: "newsletter_form",
         subscribed: true,
       })
