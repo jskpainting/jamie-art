@@ -246,11 +246,14 @@ async function getEventForRsvpCheck(eventId: string) {
 }
 
 async function countYes(eventId: string, supabase: Awaited<ReturnType<typeof db>>) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("event_rsvps")
     .select("guests")
     .eq("event_id", eventId)
     .eq("status", "yes")
+  // Throwing (caught by the callers) beats counting 0 and letting a full
+  // event take more people.
+  if (error) throw error
   return (data ?? []).reduce((sum, r) => sum + ((r.guests as number) ?? 1), 0)
 }
 
@@ -285,13 +288,12 @@ export async function respondByToken(token: string, input: unknown): Promise<Pub
     if (!event.rsvp_enabled) return { ok: false, reason: "disabled" }
     if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
 
-    if (
-      parsed.data.status === "yes" &&
-      rsvp.status !== "yes" &&
-      event.rsvp_limit != null
-    ) {
+    // Checked on every "yes", including someone who already said yes and is
+    // now adding guests — their old count is swapped for the new one.
+    if (parsed.data.status === "yes" && event.rsvp_limit != null) {
       const currentYes = await countYes(rsvp.event_id as string, supabase)
-      if (currentYes + parsed.data.guests > event.rsvp_limit) {
+      const previousGuests = rsvp.status === "yes" ? ((rsvp.guests as number) ?? 1) : 0
+      if (currentYes - previousGuests + parsed.data.guests > event.rsvp_limit) {
         return { ok: false, reason: "full" }
       }
     }
