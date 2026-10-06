@@ -429,12 +429,15 @@ export async function bulkRemoveTag(contactIds: string[], tag: string) {
     if (fetchError) throw fetchError
 
     for (const row of rows ?? []) {
-      const tags = ((row.tags as string[] | null) ?? []).filter((t) => t !== tag)
+      const current = (row.tags as string[] | null) ?? []
+      if (!current.includes(tag)) continue
+      const tags = current.filter((t) => t !== tag)
       const { error } = await supabase
         .from("contacts")
         .update({ tags })
         .eq("id", row.id as string)
       if (error) throw error
+      await logActivity(row.id as string, "tag", `Tag "${tag}" removed`)
     }
 
     revalidateContacts()
