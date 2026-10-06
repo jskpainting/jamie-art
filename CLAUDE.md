@@ -77,11 +77,13 @@ rendered content on localhost **and** production:
 
 ```bash
 curl -s https://www.jamiekendrioski.com/portfolio/abstracts \
-  | grep -oE "/portfolio/[a-z-]+/[a-z0-9-]+\"" | sort -u | wc -l   # expect 50
+  | grep -oE "/portfolio/[a-z-]+/[a-z0-9-]+\"" | sort -u | wc -l   # expect 57
 ```
 
-Expected counts: abstracts 50 · cityscapes-seascapes 17 · florals 8 ·
-pixels-rainbows 12 (+ 16 in the uncategorized/Archives gallery, 103 total).
+Expected counts (2026-10-06): abstracts 57 links (56 own + 1 also shown from
+cityscapes) · cityscapes-seascapes 17 · florals 8 · pixels-rainbows 13 = 94 unique
+public paintings, + 16 in the non-public uncategorized/"Archives" gallery =
+110 in the database. These grow as the owner adds work — a drop is the alarm.
 
 **Adding an FK/join table can silently break existing PostgREST embeds.** A
 second relationship between two tables makes implicit embeds ambiguous
@@ -95,6 +97,14 @@ the SQL in `supabase/migrations/`, add a copy-paste block to
 so nothing errors before it runs.
 
 ## Recent shipped phases
+
+- 2026-10-06: Consent/privacy fixes (RSVP can't re-subscribe or overwrite
+  others' replies, case-insensitive emails + Round 6 SQL, unsubscribe needs a
+  click, signup doesn't reveal membership), RSVP limit/past-date checks, CSV
+  re-import merges, newsletter sender name, edit purchases, bulk remove tag,
+  photo-delete safety, AR rebuild/delete + cache tag, show-cards hydration,
+  signed-URL uploads everywhere
+- 2026-09-25: Show cards "Text only" style
 
 - 2026-09-13: Admin dialogs scroll on small screens + editable Uncategorized slug
 - 2026-09-13: Medium/Size dropdowns (recent-first, "Other…", managed in Settings)
