@@ -246,7 +246,10 @@ async function countYes(eventId: string, supabase: Awaited<ReturnType<typeof db>
 
 type PublicRsvpResult =
   | { ok: true }
-  | { ok: false; reason: "full" | "past" | "disabled" | "not_found" | "invalid" }
+  | {
+      ok: false
+      reason: "full" | "past" | "disabled" | "not_found" | "invalid" | "already_replied"
+    }
   | { ok: false; error: string }
 
 /** Answering via an emailed invite link — no name/email needed. */
@@ -311,7 +314,11 @@ export async function respondByToken(token: string, input: unknown): Promise<Pub
   }
 }
 
-/** Answering from the public event page with no invite — upserts by (event_id, email). */
+/**
+ * Answering from the public event page with no invite. Only ever ADDS a reply:
+ * if this email already has a row for the event, nothing is changed and the
+ * result is `already_replied`.
+ */
 export async function respondPublic(eventId: string, input: unknown): Promise<PublicRsvpResult> {
   const parsed = RsvpRespondPublicSchema.safeParse({ eventId, ...(input as object) })
   if (!parsed.success) return { ok: false, reason: "invalid" }
@@ -327,17 +334,25 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     const supabase = createAdminClient()
     const email = parsed.data.email.trim().toLowerCase()
 
+    // Anyone can type any email into this form, so it must never change an
+    // answer that's already on file (theirs or someone else's). An existing
+    // row — including an "invited" one — is changed only through the
+    // person's own invite link (respondByToken).
+    const { data: existingRow, error: existingError } = await supabase
+      .from("event_rsvps")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("email", email)
+      .maybeSingle()
+    if (existingError) {
+      if (isSchemaSetupError(existingError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+      throw existingError
+    }
+    if (existingRow) return { ok: false, reason: "already_replied" }
+
     if (parsed.data.status === "yes" && event.rsvp_limit != null) {
-      const { data: existingRow } = await supabase
-        .from("event_rsvps")
-        .select("guests, status")
-        .eq("event_id", eventId)
-        .eq("email", email)
-        .maybeSingle()
       const currentYes = await countYes(eventId, supabase)
-      const previousGuests =
-        existingRow && existingRow.status === "yes" ? (existingRow.guests as number) : 0
-      if (currentYes - previousGuests + parsed.data.guests > event.rsvp_limit) {
+      if (currentYes + parsed.data.guests > event.rsvp_limit) {
         return { ok: false, reason: "full" }
       }
     }
@@ -354,25 +369,27 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     })
     if (!found.ok) return { ok: false, error: found.error }
 
+    // A plain insert, not an upsert: the (event_id, email) unique constraint
+    // turns a reply that raced in since the check above into "already replied"
+    // instead of silently overwriting it.
     const { data, error } = await supabase
       .from("event_rsvps")
-      .upsert(
-        {
-          event_id: eventId,
-          contact_id: found.id,
-          email,
-          name: parsed.data.name,
-          status: parsed.data.status,
-          guests: parsed.data.guests,
-          note: parsed.data.note ?? null,
-          source: "site",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "event_id,email" }
-      )
+      .insert({
+        event_id: eventId,
+        contact_id: found.id,
+        email,
+        name: parsed.data.name,
+        status: parsed.data.status,
+        guests: parsed.data.guests,
+        note: parsed.data.note ?? null,
+        source: "site",
+      })
       .select("id")
       .single()
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === "23505") return { ok: false, reason: "already_replied" }
+      throw error
+    }
 
     await logActivity(found.id, "rsvp", `RSVP'd "${parsed.data.status}" on the website`, data.id as string)
 

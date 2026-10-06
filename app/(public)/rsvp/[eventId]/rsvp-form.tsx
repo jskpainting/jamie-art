@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Minus, Plus, Check, HelpCircle, X as XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -42,6 +43,7 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
   const [keepMePosted, setKeepMePosted] = useState(false)
   const [website, setWebsite] = useState("") // honeypot — left empty by real visitors
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [alreadyReplied, setAlreadyReplied] = useState(false)
 
   const showForm = !submitted || changing
 
@@ -55,6 +57,7 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
     }
 
     setLoading(true)
+    setAlreadyReplied(false)
     try {
       const res = await fetch("/api/rsvp", {
         method: "POST",
@@ -81,7 +84,10 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
       }
 
       const reason = json.reason as string | undefined
-      if (reason === "full") {
+      if (reason === "already_replied") {
+        // Shown inline (not a toast) so the "contact Jamie" link is usable.
+        setAlreadyReplied(true)
+      } else if (reason === "full") {
         toast.error("Sorry — this event is full.")
       } else if (reason === "past" || reason === "disabled") {
         toast.error("RSVPs are no longer open for this event.")
@@ -206,6 +212,16 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
           Can&rsquo;t make it
         </Button>
       </div>
+
+      {alreadyReplied && (
+        <p className="text-sm text-destructive" role="alert">
+          You&rsquo;ve already replied — use the link in your invite email, or{" "}
+          <Link href="/contact" className="underline underline-offset-4">
+            contact Jamie
+          </Link>
+          .
+        </p>
+      )}
 
       {!token && (
         <div className="space-y-4 pt-2">
