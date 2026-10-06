@@ -622,13 +622,29 @@ export async function updatePurchase(id: string, input: unknown) {
       .select("contact_id")
       .eq("id", id)
       .single()
-    if (fetchError) throw fetchError
+    if (fetchError) {
+      if (isSchemaSetupError(fetchError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+      throw fetchError
+    }
+
+    // Same as addPurchase: a painting purchase keeps the painting's title on
+    // the row, so the record still reads right if the painting is deleted.
+    let title = parsed.data.title ?? null
+    if (parsed.data.painting_id && !title) {
+      const { data: painting, error: paintingError } = await supabase
+        .from("paintings")
+        .select("title")
+        .eq("id", parsed.data.painting_id)
+        .maybeSingle()
+      if (paintingError) throw paintingError
+      title = (painting?.title as string | undefined) ?? null
+    }
 
     const { error } = await supabase
       .from("purchases")
       .update({
         painting_id: parsed.data.painting_id ?? null,
-        title: parsed.data.title ?? null,
+        title,
         price_cents: parsed.data.price_cents ?? null,
         purchased_on: parsed.data.purchased_on ?? null,
         notes: parsed.data.notes ?? null,
