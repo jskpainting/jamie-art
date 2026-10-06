@@ -12,6 +12,8 @@ import {
 } from "@/lib/schemas"
 import { logActivity, findOrCreateContact } from "@/lib/actions/crm"
 import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
+import { bucketOf } from "@/lib/event-bucket"
+import type { Event } from "@/lib/types"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -238,11 +240,22 @@ async function getEventForRsvpCheck(eventId: string) {
   const supabase = createAdminClient()
   const { data: event, error } = await supabase
     .from("events")
-    .select("id, status, starts_at, rsvp_enabled, rsvp_limit")
+    .select("id, status, starts_at, ends_at, rsvp_enabled, rsvp_limit")
     .eq("id", eventId)
     .maybeSingle()
   if (error || !event) return null
   return event
+}
+
+/**
+ * RSVPs close once the event is over — the same rule the /rsvp page uses to
+ * show "This event has already taken place." (bucketOf: a manual "past"
+ * status, or the end date — start + 1 day when there's no end — has gone by).
+ * Cancelled events are closed too.
+ */
+function rsvpsClosed(event: Pick<Event, "status" | "starts_at" | "ends_at">) {
+  if (event.status === "cancelled") return true
+  return bucketOf(event, Date.now()) === "past"
 }
 
 async function countYes(eventId: string, supabase: Awaited<ReturnType<typeof db>>) {
@@ -286,7 +299,7 @@ export async function respondByToken(token: string, input: unknown): Promise<Pub
     const event = await getEventForRsvpCheck(rsvp.event_id as string)
     if (!event) return { ok: false, reason: "not_found" }
     if (!event.rsvp_enabled) return { ok: false, reason: "disabled" }
-    if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
+    if (rsvpsClosed(event)) return { ok: false, reason: "past" }
 
     // Checked on every "yes", including someone who already said yes and is
     // now adding guests — their old count is swapped for the new one.
@@ -341,7 +354,7 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     const event = await getEventForRsvpCheck(eventId)
     if (!event) return { ok: false, reason: "not_found" }
     if (!event.rsvp_enabled) return { ok: false, reason: "disabled" }
-    if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
+    if (rsvpsClosed(event)) return { ok: false, reason: "past" }
 
     const supabase = createAdminClient()
     const email = normalizeEmail(parsed.data.email)

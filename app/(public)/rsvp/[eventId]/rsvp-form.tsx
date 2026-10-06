@@ -89,7 +89,9 @@ export function RsvpForm({ eventId, token, rsvpNote, invite }: RsvpFormProps) {
         setAlreadyReplied(true)
       } else if (reason === "full") {
         toast.error("Sorry — this event is full.")
-      } else if (reason === "past" || reason === "disabled") {
+      } else if (reason === "past") {
+        toast.error("This event has already taken place, so RSVPs are closed.")
+      } else if (reason === "disabled") {
         toast.error("RSVPs are no longer open for this event.")
       } else {
         toast.error("Something went wrong. Please try again.")
