@@ -545,6 +545,7 @@ export async function bulkCreatePaintings(
   count?: number
   sectionSlug?: string
   failed?: { title: string; error: string }[]
+  tagFailed?: { title: string; tags: string[]; error: string }[]
 }> {
   const user = await getUser()
   if (!user) return { ok: false, error: "Unauthorized" }
@@ -583,6 +584,8 @@ export async function bulkCreatePaintings(
     let savedCount = 0
     const createdIds: string[] = []
     const failed: { title: string; error: string }[] = []
+    // Saved paintings whose tags (some or all) didn't save.
+    const tagFailed: { title: string; tags: string[]; error: string }[] = []
 
     for (const item of items) {
       // Derive unique slug within section
@@ -665,23 +668,42 @@ export async function bulkCreatePaintings(
       savedCount++
       createdIds.push(data.id)
 
-      // Insert tags
+      // Insert tags. Both writes resolve with { error } rather than throwing,
+      // so check each one. The painting itself is already saved, so a tag
+      // failure is reported separately (tagFailed) — listing it under
+      // `failed` would make the screen offer to save the painting again.
+      const failedTags: string[] = []
+      let tagError: string | null = null
       for (const name of item.tags) {
         const normalized = name.trim().toLowerCase()
         if (!normalized) continue
-        const { data: tagRow } = await supabase
+        const { data: tagRow, error: tagErr } = await supabase
           .from("tags")
           .upsert({ name: normalized }, { onConflict: "name" })
           .select("id")
           .single()
-        if (tagRow) {
-          await supabase
-            .from("painting_tags")
-            .upsert(
-              { painting_id: data.id, tag_id: tagRow.id as string },
-              { onConflict: "painting_id,tag_id" }
-            )
+        if (tagErr || !tagRow) {
+          failedTags.push(normalized)
+          tagError ??= tagErr?.message ?? "Tag not saved"
+          continue
         }
+        const { error: linkErr } = await supabase
+          .from("painting_tags")
+          .upsert(
+            { painting_id: data.id, tag_id: tagRow.id as string },
+            { onConflict: "painting_id,tag_id" }
+          )
+        if (linkErr) {
+          failedTags.push(normalized)
+          tagError ??= linkErr.message
+        }
+      }
+      if (failedTags.length > 0) {
+        tagFailed.push({
+          title: item.title || "(untitled)",
+          tags: failedTags,
+          error: tagError ?? "Tag not saved",
+        })
       }
     }
 
@@ -707,6 +729,7 @@ export async function bulkCreatePaintings(
       count: savedCount,
       sectionSlug: primarySlug ?? undefined,
       failed,
+      tagFailed,
     }
   } catch (e) {
     return {

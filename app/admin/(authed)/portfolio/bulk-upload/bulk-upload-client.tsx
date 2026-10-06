@@ -941,6 +941,18 @@ export function BulkUploadClient({
       )
     }
 
+    // Saved, but some tags didn't stick — not a failed row (re-saving would
+    // duplicate the painting), so it gets its own message.
+    const tagFailed = result.tagFailed ?? []
+    if (tagFailed.length > 0) {
+      const names = tagFailed.slice(0, 5).map((f) => f.title).join(", ")
+      const suffix = tagFailed.length > 5 ? `, and ${tagFailed.length - 5} more` : ""
+      toast.error(
+        `Saved, but tags couldn't be added to: ${names}${suffix}. Add them from each painting's edit screen.`,
+        { id: "bulk-save-tags", duration: 8000 }
+      )
+    }
+
     savedCards.forEach((c) => {
       if (c.previewUrl.startsWith("blob:")) URL.revokeObjectURL(c.previewUrl)
     })
