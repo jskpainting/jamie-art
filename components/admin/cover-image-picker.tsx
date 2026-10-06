@@ -22,6 +22,8 @@ import {
 import { IMAGE_PRESETS } from "@/lib/image-presets"
 import { IDENTITY_RECIPE, areaToRecipeCrop, renderEdit } from "@/lib/image-edit"
 import { recordImageEdit } from "@/lib/actions/image-edits"
+import { uploadBlob } from "@/lib/storage/upload"
+import { explainUploadError } from "@/lib/upload-errors"
 
 const PRESET = IMAGE_PRESETS.galleryCover
 const COVER_ASPECT = PRESET.ratio as number // matches the public section card (aspect-[4/3])
@@ -116,15 +118,10 @@ export function CoverImagePicker({
       const recipe = { crop: areaToRecipeCrop(croppedAreaPixels), brightness: 1, contrast: 1 }
       const { blob } = await renderEdit(imageSrc, recipe, PRESET.maxOutputPx)
 
-      async function upload(b: Blob, folder?: "crops") {
-        const formData = new FormData()
-        formData.append("file", b, "cover.jpg")
-        formData.append("bucket", BUCKET)
-        if (folder) formData.append("folder", folder)
-        const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-        const json = (await res.json()) as { url?: string; path?: string; error?: string }
-        if (!res.ok || !json.url || !json.path) throw new Error(json.error ?? "Upload failed")
-        return { url: json.url, path: json.path }
+      // Signed-URL upload straight to Storage — posting the bytes through
+      // /api/admin/upload fails on Vercel for anything over ~4.5 MB.
+      function upload(b: Blob, folder?: "crops") {
+        return uploadBlob(BUCKET, b, { folder })
       }
 
       // Non-destructive: keep the untouched original at the bucket root, and
@@ -145,7 +142,7 @@ export function CoverImagePicker({
       setImageSrc(null)
       toast.success("Cover updated", { duration: 5000 })
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed")
+      setError(explainUploadError(e).headline)
     } finally {
       setSaving(false)
     }

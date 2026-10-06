@@ -29,6 +29,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { IMAGE_PRESETS, type PresetKey } from "@/lib/image-presets"
+import { uploadBlob } from "@/lib/storage/upload"
+import { explainUploadError } from "@/lib/upload-errors"
 import { isIdentityRecipe, type EditRecipe } from "@/lib/image-edit"
 
 // Which editor preset a library item opens with, keyed by its own bucket.
@@ -326,23 +328,26 @@ function MediaDetailDialog({
         // Nothing changed — point straight at the original, no new file.
         newUrl = buildStorageUrl(editSource.bucket, editSource.path)
       } else {
-        const formData = new FormData()
-        formData.append("file", result.blob, "image.jpg")
-        formData.append("bucket", item.bucket)
-        formData.append("folder", "crops")
-        const res = await fetch("/api/admin/upload", { method: "POST", body: formData })
-        const json = (await res.json()) as { url?: string; path?: string; error?: string }
-        if (!res.ok || !json.url || !json.path) throw new Error(json.error ?? "Upload failed")
+        // Signed-URL upload straight to Storage — posting the bytes through
+        // /api/admin/upload fails on Vercel for anything over ~4.5 MB.
+        let uploaded: { url: string; path: string }
+        try {
+          uploaded = await uploadBlob(item.bucket, result.blob, { folder: "crops" })
+        } catch (e) {
+          const { headline, detail } = explainUploadError(e)
+          toast.error(headline, { description: detail, duration: 8000 })
+          return
+        }
 
         const recordResult = await recordImageEdit({
           bucket: item.bucket,
-          path: json.path,
+          path: uploaded.path,
           source_bucket: editSource.bucket,
           source_path: editSource.path,
           recipe: result.recipe,
         })
         if (!recordResult.ok) throw new Error(recordResult.error)
-        newUrl = json.url
+        newUrl = uploaded.url
       }
 
       closeEditor()
