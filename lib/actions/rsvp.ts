@@ -342,6 +342,10 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
       }
     }
 
+    // "Keep me posted" only subscribes a brand-new contact. An existing
+    // contact's subscribed flag is never touched from this public form: it
+    // doesn't prove the visitor owns the address, so ticking the box here
+    // must not be able to re-subscribe someone who opted out.
     const found = await findOrCreateContact({
       email,
       first_name: parsed.data.name.split(" ")[0] || parsed.data.name,
@@ -349,15 +353,6 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
       subscribed: parsed.data.keepMePosted,
     })
     if (!found.ok) return { ok: false, error: found.error }
-
-    // Keep an existing contact's subscribed flag unless they explicitly opted in now.
-    if (!found.created && parsed.data.keepMePosted) {
-      await supabase
-        .from("contacts")
-        .update({ subscribed: true })
-        .eq("id", found.id)
-        .eq("subscribed", false)
-    }
 
     const { data, error } = await supabase
       .from("event_rsvps")
