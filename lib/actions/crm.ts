@@ -577,11 +577,19 @@ export async function addPurchase(contactId: string, input: unknown) {
       throw error
     }
 
+    // The purchase row is already saved at this point, so a failure here is
+    // reported as a warning on a successful result — returning ok:false would
+    // leave the form open and invite a second, duplicate purchase.
+    let warning: string | null = null
     if (parsed.data.markSold && parsed.data.painting_id) {
-      await supabase
+      const { error: soldError } = await supabase
         .from("paintings")
         .update({ status: "sold", sold_at: new Date().toISOString() })
         .eq("id", parsed.data.painting_id)
+      if (soldError) {
+        console.error("addPurchase mark-sold error:", soldError)
+        warning = "Purchase saved, but the painting couldn't be marked as sold. Mark it sold from Portfolio."
+      }
     }
 
     await logActivity(
@@ -593,7 +601,7 @@ export async function addPurchase(contactId: string, input: unknown) {
 
     revalidateContacts(contactId)
     revalidatePath("/admin/portfolio", "layout")
-    return { ok: true, data: { id: data.id as string } }
+    return { ok: true, data: { id: data.id as string }, warning }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to add purchase"
     return { ok: false, error: message }

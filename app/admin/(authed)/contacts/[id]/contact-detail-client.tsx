@@ -170,7 +170,8 @@ export function ContactDetailClient({
       if (!result.ok) {
         toast.error(result.error, { duration: 5000 })
       } else {
-        toast.success("Purchase recorded", { duration: 5000 })
+        if (result.warning) toast.error(result.warning, { duration: 5000 })
+        else toast.success("Purchase recorded", { duration: 5000 })
         resetPurchaseForm()
         setAddingPurchase(false)
       }

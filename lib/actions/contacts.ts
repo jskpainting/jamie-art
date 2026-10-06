@@ -261,13 +261,16 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
           const groupId = groupName ? groupIds.get(groupName) : undefined
           if (groupId) {
             // ignoreDuplicates → only a brand-new membership comes back.
-            const { data: added } = await supabase
+            const { data: added, error: memberError } = await supabase
               .from("contact_group_members")
               .upsert(
                 { contact_id: contactId, group_id: groupId },
                 { onConflict: "contact_id,group_id", ignoreDuplicates: true }
               )
               .select("contact_id")
+            // Counted as a skipped row (with the reason) rather than silently
+            // leaving the person out of the group.
+            if (memberError) throw memberError
             if (existing && added && added.length > 0) changed = true
           }
         }
