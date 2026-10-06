@@ -135,9 +135,16 @@ function splitTags(raw: string | undefined): string[] {
 /**
  * Accepts the extended row shape (phone, city, tags, group, notes) but the
  * old 3-column CSV (email, first_name, last_name) still works unchanged —
- * every added field is optional. An existing email only has its BLANK
- * fields filled in; nothing already set is ever overwritten. New rows get
+ * every added field is optional. Every row is sent here, including emails
+ * already in People: an existing person only has their BLANK fields filled
+ * in, new tags merged and the CSV's group added — nothing already set is
+ * ever overwritten, and `subscribed` is never touched. New rows get
  * `source: "csv"` and an `import` timeline entry.
+ *
+ * Returns counts for the summary toast: `inserted` (new people), `updated`
+ * (existing people who gained something), `unchanged` (existing people the
+ * CSV had nothing new for) and `skipped` (invalid rows, or rows that failed
+ * to save — `firstError` says why).
  */
 export async function importContacts(rows: (ContactImportRow | ContactImportRowExtended)[]) {
   const user = await getUser()
@@ -148,6 +155,7 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
     const parsed = ContactImportRowExtendedSchema.safeParse(row)
     if (parsed.success) validRows.push(parsed.data)
   }
+  let skipped = rows.length - validRows.length
 
   if (validRows.length === 0) {
     return { ok: false, error: "No valid rows to import" }
@@ -162,11 +170,12 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
     if (crm) {
       const wantedGroups = [...new Set(validRows.map((r) => r.group?.trim()).filter(Boolean))] as string[]
       for (const name of wantedGroups) {
-        const { data: existingGroup } = await supabase
+        const { data: existingGroup, error: groupLookupError } = await supabase
           .from("contact_groups")
           .select("id")
           .eq("name", name)
           .maybeSingle()
+        if (groupLookupError) throw groupLookupError
         if (existingGroup) {
           groupIds.set(name, existingGroup.id as string)
           continue
@@ -176,89 +185,118 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
           .insert({ name })
           .select("id")
           .single()
-        if (!createError && created) groupIds.set(name, created.id as string)
+        if (createError) throw createError
+        groupIds.set(name, created.id as string)
       }
     }
 
     let inserted = 0
     let updated = 0
+    let unchanged = 0
+    let firstError: string | null = null
 
+    // One row failing (e.g. a bad value) shouldn't throw away the rest of the
+    // file, so each row is saved — and counted — on its own.
     for (const row of validRows) {
-      const email = normalizeEmail(row.email)
-      const tags = splitTags(row.tags)
+      try {
+        const email = normalizeEmail(row.email)
+        const tags = splitTags(row.tags)
 
-      const { data: matches, error: lookupError } = await supabase
-        .from("contacts")
-        .select("*")
-        .ilike("email", emailMatchPattern(email))
-        .limit(10)
-      if (lookupError) throw lookupError
-      const existing = pickEmailMatch(matches, email)
-
-      let contactId: string
-
-      if (existing) {
-        // Only fill fields that are currently blank — never overwrite.
-        const patch: Record<string, unknown> = {}
-        if (!existing.first_name && row.first_name) patch.first_name = row.first_name
-        if (!existing.last_name && row.last_name) patch.last_name = row.last_name
-        if (crm) {
-          if (!existing.phone && row.phone) patch.phone = row.phone
-          if (!existing.city && row.city) patch.city = row.city
-          if (!existing.notes && row.notes) patch.notes = row.notes
-        }
-        if (tags.length > 0) {
-          const merged = new Set([...(existing.tags as string[] | null ?? []), ...tags])
-          patch.tags = [...merged]
-        }
-
-        if (Object.keys(patch).length > 0) {
-          if (crm) patch.updated_at = new Date().toISOString()
-          const { error } = await supabase.from("contacts").update(patch).eq("id", existing.id)
-          if (error) throw error
-        }
-        contactId = existing.id as string
-        updated += 1
-      } else {
-        const insertRow: Record<string, unknown> = {
-          email,
-          first_name: row.first_name ?? null,
-          last_name: row.last_name ?? null,
-          source: "csv",
-          tags,
-        }
-        if (crm) {
-          insertRow.phone = row.phone ?? null
-          insertRow.city = row.city ?? null
-          insertRow.notes = row.notes ?? null
-        }
-        const { data: created, error } = await supabase
+        const { data: matches, error: lookupError } = await supabase
           .from("contacts")
-          .insert(insertRow)
-          .select("id")
-          .single()
-        if (error) throw error
-        contactId = created.id as string
-        inserted += 1
-      }
+          .select("*")
+          .ilike("email", emailMatchPattern(email))
+          .limit(10)
+        if (lookupError) throw lookupError
+        const existing = pickEmailMatch(matches, email)
 
-      if (crm) {
-        const groupName = row.group?.trim()
-        const groupId = groupName ? groupIds.get(groupName) : undefined
-        if (groupId) {
-          await supabase
-            .from("contact_group_members")
-            .upsert(
-              { contact_id: contactId, group_id: groupId },
-              { onConflict: "contact_id,group_id", ignoreDuplicates: true }
-            )
+        let contactId: string
+        let changed = false
+
+        if (existing) {
+          // Only fill fields that are currently blank — never overwrite.
+          const patch: Record<string, unknown> = {}
+          if (!existing.first_name && row.first_name) patch.first_name = row.first_name
+          if (!existing.last_name && row.last_name) patch.last_name = row.last_name
+          if (crm) {
+            if (!existing.phone && row.phone) patch.phone = row.phone
+            if (!existing.city && row.city) patch.city = row.city
+            if (!existing.notes && row.notes) patch.notes = row.notes
+          }
+          const existingTags = (existing.tags as string[] | null) ?? []
+          const merged = new Set([...existingTags, ...tags])
+          if (merged.size > existingTags.length) patch.tags = [...merged]
+
+          if (Object.keys(patch).length > 0) {
+            if (crm) patch.updated_at = new Date().toISOString()
+            const { error } = await supabase.from("contacts").update(patch).eq("id", existing.id)
+            if (error) throw error
+            changed = true
+          }
+          contactId = existing.id as string
+        } else {
+          const insertRow: Record<string, unknown> = {
+            email,
+            first_name: row.first_name ?? null,
+            last_name: row.last_name ?? null,
+            source: "csv",
+            tags,
+          }
+          if (crm) {
+            insertRow.phone = row.phone ?? null
+            insertRow.city = row.city ?? null
+            insertRow.notes = row.notes ?? null
+          }
+          const { data: created, error } = await supabase
+            .from("contacts")
+            .insert(insertRow)
+            .select("id")
+            .single()
+          if (error) throw error
+          contactId = created.id as string
         }
-        await logActivity(contactId, "import", "Imported from CSV")
+
+        if (crm) {
+          const groupName = row.group?.trim()
+          const groupId = groupName ? groupIds.get(groupName) : undefined
+          if (groupId) {
+            // ignoreDuplicates → only a brand-new membership comes back.
+            const { data: added } = await supabase
+              .from("contact_group_members")
+              .upsert(
+                { contact_id: contactId, group_id: groupId },
+                { onConflict: "contact_id,group_id", ignoreDuplicates: true }
+              )
+              .select("contact_id")
+            if (existing && added && added.length > 0) changed = true
+          }
+        }
+
+        if (!existing) {
+          inserted += 1
+          if (crm) await logActivity(contactId, "import", "Imported from CSV")
+        } else if (changed) {
+          updated += 1
+          if (crm) await logActivity(contactId, "import", "Details added from a CSV import")
+        } else {
+          unchanged += 1
+        }
+      } catch (rowError) {
+        skipped += 1
+        if (!firstError) {
+          const detail = rowError instanceof Error ? rowError.message
+            : typeof rowError === "object" && rowError && "message" in rowError ? String(rowError.message)
+            : "unknown error"
+          firstError = `${row.email}: ${detail}`
+        }
       }
     }
 
     revalidateContacts()
-    return { ok: true, data: { inserted, skipped: updated } }
+    if (inserted + updated + unchanged === 0) {
+      return { ok: false, error: firstError ? `Nothing was imported — ${firstError}` : "Nothing was imported" }
+    }
+    return { ok: true, data: { inserted, updated, unchanged, skipped, firstError } }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to import contacts"
     return { ok: false, error: message }

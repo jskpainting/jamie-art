@@ -77,20 +77,23 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
   }
 
   const validRows = rows.filter(
-    (r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email)
+    (r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email.trim())
   )
   const newRows = validRows.filter(
-    (r) => !existingSet.has((r.email ?? "").toLowerCase())
+    (r) => !existingSet.has((r.email ?? "").trim().toLowerCase())
   )
-  const duplicateCount = validRows.length - newRows.length
+  const existingCount = validRows.length - newRows.length
 
+  // Every valid row goes to the server, including people already in the
+  // list — the server fills in their blank details, merges tags and adds
+  // the group (never overwriting anything, never changing subscribed).
   async function handleImport() {
-    if (!newRows.length) return
+    if (!validRows.length) return
     setImporting(true)
     try {
       const result = await importContacts(
-        newRows.map((r) => ({
-          email: r.email!,
+        validRows.map((r) => ({
+          email: r.email!.trim(),
           first_name: r.first_name,
           last_name: r.last_name,
           phone: r.phone,
@@ -101,11 +104,18 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
         }))
       )
       if (!result.ok) {
-        toast.error(result.error)
+        toast.error(result.error, { duration: 5000 })
       } else {
-        toast.success(
-          `${result.data?.inserted ?? 0} added, ${result.data?.skipped ?? 0} skipped`
-        )
+        const d = result.data
+        // Rows the browser already filtered out as invalid also count as skipped.
+        const skipped = (d?.skipped ?? 0) + (rows.length - validRows.length)
+        const parts = [`${d?.inserted ?? 0} added`, `${d?.updated ?? 0} updated`]
+        if (d?.unchanged) parts.push(`${d.unchanged} already up to date`)
+        parts.push(`${skipped} skipped`)
+        toast.success(parts.join(", "), { duration: 5000 })
+        if (d?.firstError) {
+          toast.error(`Some rows couldn't be saved — ${d.firstError}`, { duration: 5000 })
+        }
         setRows([])
       }
     } finally {
@@ -164,7 +174,7 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.slice(0, 5).map((row, i) => {
-                  const isDupe = existingSet.has((row.email ?? "").toLowerCase())
+                  const isDupe = existingSet.has((row.email ?? "").trim().toLowerCase())
                   return (
                     <tr key={i} className={isDupe ? "opacity-50" : ""}>
                       <td className="px-3 py-2">{row.email ?? "—"}</td>
@@ -172,7 +182,7 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
                       <td className="px-3 py-2">{row.last_name ?? "—"}</td>
                       <td className="px-3 py-2">
                         {isDupe ? (
-                          <span className="text-muted-foreground">duplicate</span>
+                          <span className="text-muted-foreground">already in list</span>
                         ) : (
                           <span className="text-green-600 dark:text-green-400">new</span>
                         )}
@@ -193,16 +203,16 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
           <div className="flex gap-4 text-sm">
             <span><strong>{validRows.length}</strong> valid</span>
             <span className="text-green-600 dark:text-green-400"><strong>{newRows.length}</strong> new</span>
-            <span className="text-muted-foreground"><strong>{duplicateCount}</strong> duplicate{duplicateCount !== 1 ? "s" : ""}</span>
+            <span className="text-muted-foreground"><strong>{existingCount}</strong> already in list</span>
           </div>
 
           <Button
             onClick={handleImport}
-            disabled={importing || newRows.length === 0}
+            disabled={importing || validRows.length === 0}
             size="sm"
           >
             {importing && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-            {importing ? "Importing…" : `Import ${newRows.length} contact${newRows.length !== 1 ? "s" : ""}`}
+            {importing ? "Importing…" : `Import ${validRows.length} ${validRows.length === 1 ? "person" : "people"}`}
           </Button>
         </div>
       )}
