@@ -1,7 +1,9 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 import { z } from "zod"
+import { generateArModel } from "@/lib/ar/generate"
 import { getUser, isAuthBypassed } from "@/lib/supabase/auth"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -384,7 +386,7 @@ export async function replaceImageUrl(
       .from("paintings")
       .update({ primary_image_url: newUrl })
       .eq("primary_image_url", oldUrl)
-      .select("title, slug, sections!paintings_section_id_fkey(slug)")
+      .select("id, title, slug, sections!paintings_section_id_fkey(slug)")
     if (paintingErr) throw paintingErr
     for (const p of paintingRows ?? []) {
       replaced++
@@ -395,6 +397,19 @@ export async function replaceImageUrl(
         layoutRoutes.add(`/portfolio/${sectionSlug}`)
         layoutRoutes.add(`/portfolio/${sectionSlug}/${p.slug}`)
       }
+    }
+    // The AR "View on my wall" model is built from the main photo, so rebuild
+    // it for every painting whose main photo just changed — same background
+    // after() job a painting save uses. Scheduled here, right after the write
+    // succeeded, so a later failing update can't skip it.
+    const repointedPaintingIds = (paintingRows ?? []).map((p) => p.id as string)
+    if (repointedPaintingIds.length > 0) {
+      after(async () => {
+        // Sequential, to be gentle — image fetch + sharp resize per painting.
+        for (const id of repointedPaintingIds) {
+          await generateArModel(id, { force: true })
+        }
+      })
     }
 
     const { data: paintingImageRows, error: paintingImageErr } = await supabase
