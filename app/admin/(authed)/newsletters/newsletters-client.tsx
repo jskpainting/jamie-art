@@ -126,6 +126,9 @@ export function NewslettersClient({
     if (result.data.failed > 0) {
       toast.error(`${result.data.failed} send${result.data.failed !== 1 ? "s" : ""} failed — check the past sends table`)
     }
+    if ("warning" in result.data && result.data.warning) {
+      toast.error(result.data.warning, { duration: 5000 })
+    }
     setSubject("")
     setBody("")
     router.refresh()

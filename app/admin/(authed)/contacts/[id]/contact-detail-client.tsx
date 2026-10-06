@@ -4,11 +4,12 @@ import { useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import {
   updateContactDetails,
   setContactGroups,
   addPurchase,
+  updatePurchase,
   deletePurchase,
   addNote,
 } from "@/lib/actions/crm"
@@ -28,7 +29,7 @@ import { formatPrice, cn } from "@/lib/utils"
 // bundle for this component (see components/admin/field-options-card.tsx).
 const SCHEMA_SETUP_MESSAGE =
   "This feature needs a quick one-time setup that hasn't run yet — everything else works normally."
-import type { ContactDetail, ContactGroup } from "@/lib/types"
+import type { ContactDetail, ContactGroup, PurchaseWithPainting } from "@/lib/types"
 import type { PaintingForPicker } from "@/lib/db/queries"
 
 interface ContactDetailClientProps {
@@ -145,8 +146,11 @@ export function ContactDetailClient({
   const [purchaseNotes, setPurchaseNotes] = useState("")
   const [markSold, setMarkSold] = useState(false)
   const [savingPurchase, setSavingPurchase] = useState(false)
+  // Set while the add form is being reused to edit an existing purchase.
+  const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null)
 
   function resetPurchaseForm() {
+    setEditingPurchaseId(null)
     setPurchaseMode("painting")
     setPurchasePaintingId(null)
     setPurchaseTitle("")
@@ -156,7 +160,42 @@ export function ContactDetailClient({
     setMarkSold(false)
   }
 
+  function startEditPurchase(p: PurchaseWithPainting) {
+    setEditingPurchaseId(p.id)
+    setPurchaseMode(p.painting_id ? "painting" : "other")
+    setPurchasePaintingId(p.painting_id)
+    setPurchaseTitle(p.painting_id ? "" : p.title ?? "")
+    setPurchasePrice(p.price_cents != null ? (p.price_cents / 100).toFixed(2) : "")
+    setPurchaseDate(p.purchased_on ? p.purchased_on.slice(0, 10) : "")
+    setPurchaseNotes(p.notes ?? "")
+    setMarkSold(false)
+    setAddingPurchase(true)
+  }
+
+  async function handleSaveEditedPurchase(id: string) {
+    setSavingPurchase(true)
+    try {
+      const result = await updatePurchase(id, {
+        painting_id: purchaseMode === "painting" ? purchasePaintingId : null,
+        title: purchaseMode === "other" ? purchaseTitle || null : null,
+        price_cents: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : null,
+        purchased_on: purchaseDate || null,
+        notes: purchaseNotes || null,
+      })
+      if (!result.ok) {
+        toast.error(result.error, { duration: 5000 })
+      } else {
+        toast.success("Purchase updated", { duration: 5000 })
+        resetPurchaseForm()
+        setAddingPurchase(false)
+      }
+    } finally {
+      setSavingPurchase(false)
+    }
+  }
+
   async function handleAddPurchase() {
+    if (editingPurchaseId) return handleSaveEditedPurchase(editingPurchaseId)
     setSavingPurchase(true)
     try {
       const result = await addPurchase(contact.id, {
@@ -170,7 +209,8 @@ export function ContactDetailClient({
       if (!result.ok) {
         toast.error(result.error, { duration: 5000 })
       } else {
-        toast.success("Purchase recorded", { duration: 5000 })
+        if (result.warning) toast.error(result.warning, { duration: 5000 })
+        else toast.success("Purchase recorded", { duration: 5000 })
         resetPurchaseForm()
         setAddingPurchase(false)
       }
@@ -301,7 +341,15 @@ export function ContactDetailClient({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAddingPurchase((v) => !v)}
+                onClick={() => {
+                  // Mid-edit, "Add purchase" switches to a fresh, empty form.
+                  if (editingPurchaseId) {
+                    resetPurchaseForm()
+                    setAddingPurchase(true)
+                  } else {
+                    setAddingPurchase((v) => !v)
+                  }
+                }}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Add purchase
@@ -315,6 +363,9 @@ export function ContactDetailClient({
             <>
               {addingPurchase && (
                 <div className="rounded-lg border border-border p-3 space-y-3">
+                  {editingPurchaseId && (
+                    <p className="text-xs font-medium text-muted-foreground">Editing purchase</p>
+                  )}
                   <div className="flex gap-2 text-xs">
                     <button
                       type="button"
@@ -386,7 +437,7 @@ export function ContactDetailClient({
                     />
                   </FormField>
 
-                  {purchaseMode === "painting" && purchasePaintingId && (
+                  {!editingPurchaseId && purchaseMode === "painting" && purchasePaintingId && (
                     <label className="flex items-center gap-2.5 cursor-pointer">
                       <Checkbox checked={markSold} onCheckedChange={(v) => setMarkSold(!!v)} />
                       <span className="text-sm">Also mark the painting as sold</span>
@@ -396,7 +447,7 @@ export function ContactDetailClient({
                   <div className="flex gap-2">
                     <Button size="sm" onClick={handleAddPurchase} disabled={savingPurchase}>
                       {savingPurchase && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                      Save purchase
+                      {editingPurchaseId ? "Save changes" : "Save purchase"}
                     </Button>
                     <Button
                       size="sm"
@@ -436,21 +487,36 @@ export function ContactDetailClient({
                           {p.price_cents != null && ` · ${formatPrice(p.price_cents)}`}
                         </p>
                       </div>
-                      <ConfirmDialog
-                        trigger={
-                          <Button variant="ghost" size="icon-sm" aria-label="Delete purchase">
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        }
-                        title="Delete purchase"
-                        description="Remove this purchase record?"
-                        destructive
-                        onConfirm={async () => {
-                          const result = await deletePurchase(p.id)
-                          if (!result.ok) throw new Error(result.error)
-                          toast.success("Purchase deleted", { duration: 5000 })
-                        }}
-                      />
+                      <div className="flex items-center shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-foreground/60 hover:text-foreground"
+                          onClick={() => startEditPurchase(p)}
+                          aria-label="Edit purchase"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <ConfirmDialog
+                          trigger={
+                            <Button variant="ghost" size="icon-sm" aria-label="Delete purchase">
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          }
+                          title="Delete purchase"
+                          description="Remove this purchase record?"
+                          destructive
+                          onConfirm={async () => {
+                            const result = await deletePurchase(p.id)
+                            if (!result.ok) throw new Error(result.error)
+                            if (editingPurchaseId === p.id) {
+                              resetPurchaseForm()
+                              setAddingPurchase(false)
+                            }
+                            toast.success("Purchase deleted", { duration: 5000 })
+                          }}
+                        />
+                      </div>
                     </li>
                   ))}
                 </ul>

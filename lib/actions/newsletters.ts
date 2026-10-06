@@ -10,6 +10,7 @@ import { SITE_URL } from "@/lib/site"
 import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { AudienceSchema, type AudienceInput } from "@/lib/schemas"
 import { resolveAudience, logActivity } from "@/lib/actions/crm"
+import { buildFromHeader } from "@/lib/email-address"
 import { createInvites } from "@/lib/actions/rsvp"
 import {
   renderNewsletterHtml,
@@ -42,6 +43,56 @@ function audienceLabel(audience: AudienceInput | undefined): string {
 }
 
 /**
+ * Checks the email-service settings BEFORE anything is written or sent, so a
+ * missing key can never leave a newsletter stuck on "sending". `new Resend()`
+ * throws when the API key is missing, so it's built here inside the check.
+ *
+ * `from` uses the "Name shown on newsletter emails" from Settings when it's
+ * set ("Jamie Kendrioski <hello@…>"), otherwise RESEND_FROM_EMAIL as-is.
+ */
+async function getEmailConfig(): Promise<
+  | { ok: true; resend: Resend; from: string }
+  | { ok: false; error: string }
+> {
+  const fromEmail = process.env.RESEND_FROM_EMAIL
+  if (!fromEmail) {
+    return {
+      ok: false,
+      error:
+        "Your sending email address isn't set up yet, so this wasn't sent. Nothing has gone out. Ask your developer to set RESEND_FROM_EMAIL to an address on your verified domain.",
+    }
+  }
+  if (!process.env.RESEND_API_KEY) {
+    return {
+      ok: false,
+      error:
+        "The email service isn't connected yet, so this wasn't sent. Nothing has gone out. Ask your developer to set RESEND_API_KEY.",
+    }
+  }
+  // Best-effort: a settings hiccup falls back to the env sender, never blocks a send.
+  let fromName: string | null = null
+  const { data: settings, error: settingsError } = await createAdminClient()
+    .from("settings")
+    .select("newsletter_from_name")
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (settingsError) console.error("newsletter from-name lookup error:", settingsError)
+  else fromName = (settings?.newsletter_from_name as string | null) ?? null
+
+  try {
+    return {
+      ok: true,
+      resend: new Resend(process.env.RESEND_API_KEY),
+      from: buildFromHeader(fromEmail, fromName),
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown error"
+    return { ok: false, error: `The email service couldn't be set up, so this wasn't sent: ${message}` }
+  }
+}
+
+/**
  * Sends a single preview copy to the signed-in admin's own email, via the
  * same Resend path as the real send. Not recorded in the newsletters table —
  * it's a preview, not a blast, so it shouldn't show up in Past sends or count
@@ -67,16 +118,10 @@ export async function sendTestNewsletter(input: {
   }
   const { subject, bodyMarkdown, eventId } = parsed.data
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-  if (!fromEmail) {
-    return {
-      ok: false as const,
-      error:
-        "Your sending email address isn't set up yet, so this wasn't sent. Ask your developer to set RESEND_FROM_EMAIL to an address on your verified domain.",
-    }
-  }
+  const config = await getEmailConfig()
+  if (!config.ok) return { ok: false as const, error: config.error }
+  const { resend, from: fromEmail } = config
 
-  const resend = new Resend(process.env.RESEND_API_KEY)
   const unsubscribeUrl = `${SITE_URL}/unsubscribe?token=preview`
   const rsvpUrl = eventId ? `${SITE_URL}/rsvp/${eventId}?t=preview` : null
 
@@ -112,6 +157,14 @@ export async function sendNewsletter(input: {
     return { ok: false as const, error: parsed.error.issues[0].message }
   }
   const { subject, bodyMarkdown } = parsed.data
+
+  // Resend's onboarding@resend.dev sandbox sender only delivers to the Resend
+  // account owner; every other recipient is rejected. Refusing here — before
+  // the audit row exists — is far kinder than "sent" followed by silence, and
+  // can't leave a row stuck on "sending".
+  const config = await getEmailConfig()
+  if (!config.ok) return { ok: false as const, error: config.error }
+  const { resend, from: fromEmail } = config
 
   const caps = await getSchemaCapabilities()
   // Fall back to "all subscribed" when the CRM columns aren't migrated yet —
@@ -159,144 +212,155 @@ export async function sendNewsletter(input: {
     return { ok: false as const, error: "Failed to create newsletter record" }
   }
 
-  if (contactIds.length === 0) {
-    await adminClient
-      .from("newsletters")
-      .update({ status: "completed", recipient_count: 0 })
-      .eq("id", newsletter.id)
-    revalidatePath("/admin/newsletters")
-    return { ok: true as const, data: { sent: 0, failed: 0, newsletter_id: newsletter.id } }
-  }
-
-  const { data: contacts, error: contactsError } = await adminClient
-    .from("contacts")
-    .select("id, email, unsubscribe_token, first_name")
-    .in("id", contactIds)
-
-  if (contactsError) {
-    await adminClient
-      .from("newsletters")
-      .update({ status: "failed", error_message: "Failed to fetch contacts" })
-      .eq("id", newsletter.id)
-    return { ok: false as const, error: "Failed to fetch subscribers" }
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  // Single canonical origin — a stale fallback here sends unsubscribe links to
-  // the wrong domain, which breaks opt-out and hurts deliverability.
-  const siteUrl = SITE_URL
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-
-  // Resend's onboarding@resend.dev sandbox sender only delivers to the Resend
-  // account owner; every other recipient is rejected. Refusing here is far
-  // kinder than "sent" followed by silence.
-  if (!fromEmail) {
-    await adminClient
-      .from("newsletters")
-      .update({
-        status: "failed",
-        error_message: "RESEND_FROM_EMAIL is not set",
-      })
-      .eq("id", newsletter.id)
-    return {
-      ok: false as const,
-      error:
-        "Your sending email address isn't set up yet, so this wasn't sent. Nothing has gone out. Ask your developer to set RESEND_FROM_EMAIL to an address on your verified domain.",
+  /** Updates the audit row; returns false (and logs) if that write failed. */
+  async function setRow(patch: Record<string, unknown>): Promise<boolean> {
+    const { error } = await adminClient.from("newsletters").update(patch).eq("id", newsletter!.id)
+    if (error) {
+      console.error("newsletter status update failed:", error)
+      return false
     }
+    return true
   }
 
-  // When inviting to an event, create/reuse the per-contact RSVP tokens
-  // before sending, so every email can link straight to that person's page.
-  const tokenByContactId = new Map<string, string>()
-  if (eventId) {
-    const invites = await createInvites(eventId, contactIds)
-    if (invites.ok) {
-      for (const invite of invites.invites) {
-        tokenByContactId.set(invite.contactId, invite.token)
-      }
-    }
-    // Best-effort: if invite creation failed outright, the send continues
-    // without RSVP buttons rather than blocking the whole newsletter.
-  }
-
+  // From here on the row exists, so ANY failure must move it off "sending".
   let sent = 0
-  const failures: string[] = []
-
-  for (const contact of contacts ?? []) {
-    const contactId = contact.id as string
-    const unsubscribeUrl = `${siteUrl}/unsubscribe?token=${contact.unsubscribe_token}`
-    const token = tokenByContactId.get(contactId)
-    const rsvpUrl = eventId && token ? `${siteUrl}/rsvp/${eventId}?t=${token}` : null
-    const firstName = contact.first_name as string | null
-
-    let deliveryOk = false
-    try {
-      // The Resend SDK does NOT throw on an API error — it returns
-      // { data: null, error }. Its only throws are a missing API key and a
-      // missing React renderer. Counting a send as successful without checking
-      // `error` meant a blast that delivered to nobody still reported "Sent".
-      const { error: sendError } = await resend.emails.send({
-        from: fromEmail,
-        to: contact.email,
-        subject,
-        html: renderNewsletterHtml({ subject, bodyMarkdown, unsubscribeUrl, firstName, rsvpUrl }),
-        text: renderNewsletterPlainText({ bodyMarkdown, unsubscribeUrl, firstName, rsvpUrl }),
-      })
-      if (sendError) {
-        failures.push(
-          `${contact.email}: ${sendError.message ?? "rejected by the email service"}`
-        )
-      } else {
-        sent++
-        deliveryOk = true
+  try {
+    if (contactIds.length === 0) {
+      if (!(await setRow({ status: "completed", recipient_count: 0 }))) {
+        return {
+          ok: false as const,
+          error: "Nothing was sent (no one matched), but the record in Past sends couldn't be updated.",
+        }
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "unknown error"
-      failures.push(`${contact.email}: ${msg}`)
+      revalidatePath("/admin/newsletters")
+      return { ok: true as const, data: { sent: 0, failed: 0, newsletter_id: newsletter.id } }
     }
 
-    // Best-effort bookkeeping — never let a broken write here fail the send.
-    if (caps.crm) {
+    const { data: contacts, error: contactsError } = await adminClient
+      .from("contacts")
+      .select("id, email, unsubscribe_token, first_name")
+      .in("id", contactIds)
+
+    if (contactsError) {
+      await setRow({ status: "failed", error_message: "Failed to fetch contacts" })
+      revalidatePath("/admin/newsletters")
+      return { ok: false as const, error: "Failed to fetch subscribers" }
+    }
+
+    // Single canonical origin — a stale fallback here sends unsubscribe links to
+    // the wrong domain, which breaks opt-out and hurts deliverability.
+    const siteUrl = SITE_URL
+
+    // When inviting to an event, create/reuse the per-contact RSVP tokens
+    // before sending, so every email can link straight to that person's page.
+    const tokenByContactId = new Map<string, string>()
+    if (eventId) {
+      const invites = await createInvites(eventId, contactIds)
+      if (invites.ok) {
+        for (const invite of invites.invites) {
+          tokenByContactId.set(invite.contactId, invite.token)
+        }
+      }
+      // Best-effort: if invite creation failed outright, the send continues
+      // without RSVP buttons rather than blocking the whole newsletter.
+    }
+
+    const failures: string[] = []
+
+    for (const contact of contacts ?? []) {
+      const contactId = contact.id as string
+      const unsubscribeUrl = `${siteUrl}/unsubscribe?token=${contact.unsubscribe_token}`
+      const token = tokenByContactId.get(contactId)
+      const rsvpUrl = eventId && token ? `${siteUrl}/rsvp/${eventId}?t=${token}` : null
+      const firstName = contact.first_name as string | null
+
+      let deliveryOk = false
       try {
-        await adminClient.from("newsletter_recipients").upsert(
-          {
-            newsletter_id: newsletter.id,
-            contact_id: contactId,
-            status: deliveryOk ? "sent" : "failed",
-          },
-          { onConflict: "newsletter_id,contact_id" }
-        )
+        // The Resend SDK does NOT throw on an API error — it returns
+        // { data: null, error }. Its only throws are a missing API key and a
+        // missing React renderer. Counting a send as successful without checking
+        // `error` meant a blast that delivered to nobody still reported "Sent".
+        const { error: sendError } = await resend.emails.send({
+          from: fromEmail,
+          to: contact.email,
+          subject,
+          html: renderNewsletterHtml({ subject, bodyMarkdown, unsubscribeUrl, firstName, rsvpUrl }),
+          text: renderNewsletterPlainText({ bodyMarkdown, unsubscribeUrl, firstName, rsvpUrl }),
+        })
+        if (sendError) {
+          failures.push(
+            `${contact.email}: ${sendError.message ?? "rejected by the email service"}`
+          )
+        } else {
+          sent++
+          deliveryOk = true
+        }
       } catch (e) {
-        console.error("newsletter_recipients write failed:", e)
+        const msg = e instanceof Error ? e.message : "unknown error"
+        failures.push(`${contact.email}: ${msg}`)
+      }
+
+      // Best-effort bookkeeping — never let a broken write here fail the send.
+      if (caps.crm) {
+        try {
+          await adminClient.from("newsletter_recipients").upsert(
+            {
+              newsletter_id: newsletter.id,
+              contact_id: contactId,
+              status: deliveryOk ? "sent" : "failed",
+            },
+            { onConflict: "newsletter_id,contact_id" }
+          )
+        } catch (e) {
+          console.error("newsletter_recipients write failed:", e)
+        }
+      }
+      if (deliveryOk) {
+        await logActivity(contactId, "newsletter", `Sent "${subject}"`, newsletter.id as string)
       }
     }
-    if (deliveryOk) {
-      await logActivity(contactId, "newsletter", `Sent "${subject}"`, newsletter.id as string)
-    }
-  }
 
-  const finalStatus =
-    sent === 0 && failures.length > 0 ? "failed" : "completed"
+    const finalStatus =
+      sent === 0 && failures.length > 0 ? "failed" : "completed"
 
-  await adminClient
-    .from("newsletters")
-    .update({
+    const rowUpdated = await setRow({
       status: finalStatus,
       recipient_count: sent,
       error_message:
         failures.length > 0 ? failures.slice(0, 10).join("; ") : null,
     })
-    .eq("id", newsletter.id)
 
-  revalidatePath("/admin/newsletters")
+    revalidatePath("/admin/newsletters")
 
-  return {
-    ok: true as const,
-    data: {
-      sent,
-      failed: failures.length,
-      newsletter_id: newsletter.id,
-    },
+    return {
+      ok: true as const,
+      data: {
+        sent,
+        failed: failures.length,
+        newsletter_id: newsletter.id,
+        // The emails did go out, so this is still a success — but Past sends
+        // will show the wrong status until someone looks at it.
+        warning: rowUpdated
+          ? null
+          : "The emails went out, but the record in Past sends couldn't be updated — it may still say \"sending\".",
+      },
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown error"
+    console.error("sendNewsletter error:", e)
+    await setRow({
+      status: "failed",
+      recipient_count: sent,
+      error_message: `Stopped partway (${sent} sent): ${message}`,
+    })
+    revalidatePath("/admin/newsletters")
+    return {
+      ok: false as const,
+      error:
+        sent > 0
+          ? `Sending stopped partway — ${sent} email${sent !== 1 ? "s" : ""} went out before an error: ${message}`
+          : `Nothing was sent — ${message}`,
+    }
   }
 }
 

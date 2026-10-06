@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import { Plus, Pencil, Trash2, Users, Upload, X, Settings2, ChevronDown } from "lucide-react"
 import { updateContact, deleteContact, bulkUnsubscribe } from "@/lib/actions/contacts"
-import { bulkAddToGroup, bulkAddTag } from "@/lib/actions/crm"
+import { bulkAddToGroup, bulkAddTag, bulkRemoveTag } from "@/lib/actions/crm"
 import { CsvImport } from "@/components/admin/csv-import"
 import { DataTable } from "@/components/admin/data-table"
 import { ConfirmDialog } from "@/components/admin/confirm-dialog"
@@ -156,6 +156,10 @@ export function ContactsClient({
 
   const existingEmails = contacts.map((c) => c.email)
   const selectedRows = filtered.filter((r) => selected.has(r.id))
+  // Only tags someone in the selection actually has can be removed.
+  const selectedTags = [
+    ...new Set(rows.filter((r) => selected.has(r.id)).flatMap((r) => r.tags ?? [])),
+  ].sort()
 
   function toggleSelected(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -214,6 +218,20 @@ export function ContactsClient({
         setSelected(new Set())
         setAddTagOpen(false)
         setAddTagValue("")
+      }
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  async function handleBulkRemoveTag(tag: string) {
+    setBulkBusy(true)
+    try {
+      const result = await bulkRemoveTag([...selected], tag)
+      if (!result.ok) toast.error(result.error, { duration: 5000 })
+      else {
+        toast.success(`Tag "${tag}" removed`, { duration: 5000 })
+        setSelected(new Set())
       }
     } finally {
       setBulkBusy(false)
@@ -492,6 +510,23 @@ export function ContactsClient({
           <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setAddTagOpen(true)}>
             Add tag
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex items-center gap-1 h-8 rounded-lg border border-input bg-background px-2.5 text-sm disabled:opacity-50"
+              disabled={bulkBusy || selectedTags.length === 0}
+            >
+              Remove tag
+              <ChevronDown className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {selectedTags.map((t) => (
+                <DropdownMenuItem key={t} onClick={() => handleBulkRemoveTag(t)}>
+                  {t}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <ConfirmDialog
             trigger={

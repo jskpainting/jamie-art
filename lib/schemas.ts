@@ -109,7 +109,7 @@ export const EventWriteSchema = z.object({
 export type EventWriteInput = z.infer<typeof EventWriteSchema>
 
 export const ContactWriteSchema = z.object({
-  email: z.string().email("Valid email required"),
+  email: z.string().trim().toLowerCase().email("Valid email required"),
   first_name: z.string().nullable().optional(),
   last_name: z.string().nullable().optional(),
   source: z.string().default("manual"),
@@ -129,7 +129,7 @@ export type ContactWriteInput = z.infer<typeof ContactWriteSchema>
  * reset their source, and wiped their tags. No defaults here, by design.
  */
 export const ContactUpdateSchema = z.object({
-  email: z.string().email("Valid email required").optional(),
+  email: z.string().trim().toLowerCase().email("Valid email required").optional(),
   first_name: z.string().nullable().optional(),
   last_name: z.string().nullable().optional(),
   source: z.string().optional(),
@@ -141,7 +141,7 @@ export type ContactUpdateInput = z.infer<typeof ContactUpdateSchema>
 
 
 export const ContactImportRowSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
 })
@@ -311,7 +311,7 @@ export type ContactDetailsUpdateInput = z.infer<typeof ContactDetailsUpdateSchem
 
 /** Extended CSV row — old 3-column imports (email, first_name, last_name) still parse fine. */
 export const ContactImportRowExtendedSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
   phone: z.string().optional(),
@@ -341,7 +341,7 @@ export type RsvpRespondByTokenInput = z.infer<typeof RsvpRespondByTokenSchema>
 export const RsvpRespondPublicSchema = z.object({
   eventId: z.string().uuid(),
   name: z.string().trim().min(1, "Name is required").max(200),
-  email: z.string().email("Valid email required").max(320),
+  email: z.string().trim().toLowerCase().email("Valid email required").max(320),
   status: z.enum(["yes", "no", "maybe"]),
   guests: z.coerce.number().int().min(1).max(10).default(1),
   keepMePosted: z.boolean().default(false),

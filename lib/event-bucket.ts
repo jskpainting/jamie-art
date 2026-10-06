@@ -14,7 +14,7 @@ const ONE_DAY_MS = 86_400_000
  * whose date range spans today automatically appears as "On View Now", and a show
  * whose dates have fully passed automatically ages into Past.
  */
-export function bucketOf(e: Event, now: number): EventBucket {
+export function bucketOf(e: Pick<Event, "status" | "starts_at" | "ends_at">, now: number): EventBucket {
   if (e.status === "current") return "current"
   if (e.status === "past") return "past"
   const start = new Date(e.starts_at).getTime()

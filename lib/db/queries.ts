@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { isAuthBypassed } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSchemaSetupError } from "@/lib/schema-capabilities"
+import { emailMatchPattern } from "@/lib/email-address"
 import type {
   Bio,
   CommissionInquiry,
@@ -1168,12 +1169,12 @@ export async function getContactDetail(id: string): Promise<ContactDetail | null
       supabase
         .from("inquiries")
         .select("*, paintings(title, slug, sections!paintings_section_id_fkey(slug))")
-        .eq("from_email", email)
+        .ilike("from_email", emailMatchPattern(email))
         .order("created_at", { ascending: false }),
       supabase
         .from("commission_inquiries")
         .select("*")
-        .eq("from_email", email)
+        .ilike("from_email", emailMatchPattern(email))
         .order("created_at", { ascending: false }),
       supabase
         .from("newsletter_recipients")

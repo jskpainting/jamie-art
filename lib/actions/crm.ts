@@ -15,6 +15,7 @@ import {
   type AudienceInput,
 } from "@/lib/schemas"
 import type { ActivityKind } from "@/lib/types"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -78,14 +79,15 @@ export async function findOrCreateContact(input: {
     // Admin client for the same reason as logActivity — public callers have
     // no session, and RLS would refuse the insert.
     const supabase = createAdminClient()
-    const email = input.email.trim().toLowerCase()
+    const email = normalizeEmail(input.email)
 
-    const { data: existing, error: lookupError } = await supabase
+    const { data: matches, error: lookupError } = await supabase
       .from("contacts")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle()
+      .select("id, email")
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
     if (lookupError) throw lookupError
+    const existing = pickEmailMatch(matches, email)
 
     if (existing) {
       return { ok: true, id: existing.id as string, created: false }
@@ -106,11 +108,12 @@ export async function findOrCreateContact(input: {
     // 23505 = created by a concurrent request — treat as found, not a failure.
     if (error) {
       if ((error as { code?: string }).code === "23505") {
-        const { data: found } = await supabase
+        const { data: raced } = await supabase
           .from("contacts")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle()
+          .select("id, email")
+          .ilike("email", emailMatchPattern(email))
+          .limit(10)
+        const found = pickEmailMatch(raced, email)
         if (found) return { ok: true, id: found.id as string, created: false }
       }
       throw error
@@ -426,12 +429,15 @@ export async function bulkRemoveTag(contactIds: string[], tag: string) {
     if (fetchError) throw fetchError
 
     for (const row of rows ?? []) {
-      const tags = ((row.tags as string[] | null) ?? []).filter((t) => t !== tag)
+      const current = (row.tags as string[] | null) ?? []
+      if (!current.includes(tag)) continue
+      const tags = current.filter((t) => t !== tag)
       const { error } = await supabase
         .from("contacts")
         .update({ tags })
         .eq("id", row.id as string)
       if (error) throw error
+      await logActivity(row.id as string, "tag", `Tag "${tag}" removed`)
     }
 
     revalidateContacts()
@@ -574,11 +580,19 @@ export async function addPurchase(contactId: string, input: unknown) {
       throw error
     }
 
+    // The purchase row is already saved at this point, so a failure here is
+    // reported as a warning on a successful result — returning ok:false would
+    // leave the form open and invite a second, duplicate purchase.
+    let warning: string | null = null
     if (parsed.data.markSold && parsed.data.painting_id) {
-      await supabase
+      const { error: soldError } = await supabase
         .from("paintings")
         .update({ status: "sold", sold_at: new Date().toISOString() })
         .eq("id", parsed.data.painting_id)
+      if (soldError) {
+        console.error("addPurchase mark-sold error:", soldError)
+        warning = "Purchase saved, but the painting couldn't be marked as sold. Mark it sold from Portfolio."
+      }
     }
 
     await logActivity(
@@ -590,7 +604,7 @@ export async function addPurchase(contactId: string, input: unknown) {
 
     revalidateContacts(contactId)
     revalidatePath("/admin/portfolio", "layout")
-    return { ok: true, data: { id: data.id as string } }
+    return { ok: true, data: { id: data.id as string }, warning }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to add purchase"
     return { ok: false, error: message }
@@ -611,13 +625,29 @@ export async function updatePurchase(id: string, input: unknown) {
       .select("contact_id")
       .eq("id", id)
       .single()
-    if (fetchError) throw fetchError
+    if (fetchError) {
+      if (isSchemaSetupError(fetchError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+      throw fetchError
+    }
+
+    // Same as addPurchase: a painting purchase keeps the painting's title on
+    // the row, so the record still reads right if the painting is deleted.
+    let title = parsed.data.title ?? null
+    if (parsed.data.painting_id && !title) {
+      const { data: painting, error: paintingError } = await supabase
+        .from("paintings")
+        .select("title")
+        .eq("id", parsed.data.painting_id)
+        .maybeSingle()
+      if (paintingError) throw paintingError
+      title = (painting?.title as string | undefined) ?? null
+    }
 
     const { error } = await supabase
       .from("purchases")
       .update({
         painting_id: parsed.data.painting_id ?? null,
-        title: parsed.data.title ?? null,
+        title,
         price_cents: parsed.data.price_cents ?? null,
         purchased_on: parsed.data.purchased_on ?? null,
         notes: parsed.data.notes ?? null,

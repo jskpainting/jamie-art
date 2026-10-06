@@ -11,6 +11,9 @@ import {
   RsvpStatusSchema,
 } from "@/lib/schemas"
 import { logActivity, findOrCreateContact } from "@/lib/actions/crm"
+import { normalizeEmail, emailMatchPattern, pickEmailMatch } from "@/lib/email-address"
+import { bucketOf } from "@/lib/event-bucket"
+import type { Event } from "@/lib/types"
 
 async function db() {
   return isAuthBypassed() ? createAdminClient() : await createServerClient()
@@ -134,12 +137,21 @@ export async function createInvites(
 
     for (const contact of contacts ?? []) {
       const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || null
-      const { data: existing } = await supabase
+      const email = normalizeEmail(contact.email as string)
+      // Matches a row saved with any casing — e.g. someone who RSVP'd from
+      // the website as "Jane@Example.com" — so they get their existing token
+      // rather than a duplicate invite.
+      const { data: matches, error: existingError } = await supabase
         .from("event_rsvps")
-        .select("id, token, status")
+        .select("id, token, status, email")
         .eq("event_id", eventId)
-        .eq("email", contact.email as string)
-        .maybeSingle()
+        .ilike("email", emailMatchPattern(email))
+        .limit(10)
+      if (existingError) {
+        if (isSchemaSetupError(existingError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+        throw existingError
+      }
+      const existing = pickEmailMatch(matches, email)
 
       if (existing) {
         invites.push({ contactId: contact.id as string, token: existing.token as string })
@@ -151,7 +163,7 @@ export async function createInvites(
         .insert({
           event_id: eventId,
           contact_id: contact.id,
-          email: contact.email,
+          email,
           name,
           status: "invited",
           source: "email",
@@ -228,25 +240,42 @@ async function getEventForRsvpCheck(eventId: string) {
   const supabase = createAdminClient()
   const { data: event, error } = await supabase
     .from("events")
-    .select("id, status, starts_at, rsvp_enabled, rsvp_limit")
+    .select("id, status, starts_at, ends_at, rsvp_enabled, rsvp_limit")
     .eq("id", eventId)
     .maybeSingle()
   if (error || !event) return null
   return event
 }
 
+/**
+ * RSVPs close once the event is over — the same rule the /rsvp page uses to
+ * show "This event has already taken place." (bucketOf: a manual "past"
+ * status, or the end date — start + 1 day when there's no end — has gone by).
+ * Cancelled events are closed too.
+ */
+function rsvpsClosed(event: Pick<Event, "status" | "starts_at" | "ends_at">) {
+  if (event.status === "cancelled") return true
+  return bucketOf(event, Date.now()) === "past"
+}
+
 async function countYes(eventId: string, supabase: Awaited<ReturnType<typeof db>>) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("event_rsvps")
     .select("guests")
     .eq("event_id", eventId)
     .eq("status", "yes")
+  // Throwing (caught by the callers) beats counting 0 and letting a full
+  // event take more people.
+  if (error) throw error
   return (data ?? []).reduce((sum, r) => sum + ((r.guests as number) ?? 1), 0)
 }
 
 type PublicRsvpResult =
   | { ok: true }
-  | { ok: false; reason: "full" | "past" | "disabled" | "not_found" | "invalid" }
+  | {
+      ok: false
+      reason: "full" | "past" | "disabled" | "not_found" | "invalid" | "already_replied"
+    }
   | { ok: false; error: string }
 
 /** Answering via an emailed invite link — no name/email needed. */
@@ -270,15 +299,14 @@ export async function respondByToken(token: string, input: unknown): Promise<Pub
     const event = await getEventForRsvpCheck(rsvp.event_id as string)
     if (!event) return { ok: false, reason: "not_found" }
     if (!event.rsvp_enabled) return { ok: false, reason: "disabled" }
-    if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
+    if (rsvpsClosed(event)) return { ok: false, reason: "past" }
 
-    if (
-      parsed.data.status === "yes" &&
-      rsvp.status !== "yes" &&
-      event.rsvp_limit != null
-    ) {
+    // Checked on every "yes", including someone who already said yes and is
+    // now adding guests — their old count is swapped for the new one.
+    if (parsed.data.status === "yes" && event.rsvp_limit != null) {
       const currentYes = await countYes(rsvp.event_id as string, supabase)
-      if (currentYes + parsed.data.guests > event.rsvp_limit) {
+      const previousGuests = rsvp.status === "yes" ? ((rsvp.guests as number) ?? 1) : 0
+      if (currentYes - previousGuests + parsed.data.guests > event.rsvp_limit) {
         return { ok: false, reason: "full" }
       }
     }
@@ -311,7 +339,11 @@ export async function respondByToken(token: string, input: unknown): Promise<Pub
   }
 }
 
-/** Answering from the public event page with no invite — upserts by (event_id, email). */
+/**
+ * Answering from the public event page with no invite. Only ever ADDS a reply:
+ * if this email already has a row for the event, nothing is changed and the
+ * result is `already_replied`.
+ */
 export async function respondPublic(eventId: string, input: unknown): Promise<PublicRsvpResult> {
   const parsed = RsvpRespondPublicSchema.safeParse({ eventId, ...(input as object) })
   if (!parsed.success) return { ok: false, reason: "invalid" }
@@ -322,26 +354,38 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     const event = await getEventForRsvpCheck(eventId)
     if (!event) return { ok: false, reason: "not_found" }
     if (!event.rsvp_enabled) return { ok: false, reason: "disabled" }
-    if (event.status === "past" || event.status === "cancelled") return { ok: false, reason: "past" }
+    if (rsvpsClosed(event)) return { ok: false, reason: "past" }
 
     const supabase = createAdminClient()
-    const email = parsed.data.email.trim().toLowerCase()
+    const email = normalizeEmail(parsed.data.email)
+
+    // Anyone can type any email into this form, so it must never change an
+    // answer that's already on file (theirs or someone else's). An existing
+    // row — including an "invited" one — is changed only through the
+    // person's own invite link (respondByToken).
+    const { data: matches, error: existingError } = await supabase
+      .from("event_rsvps")
+      .select("id, email")
+      .eq("event_id", eventId)
+      .ilike("email", emailMatchPattern(email))
+      .limit(10)
+    if (existingError) {
+      if (isSchemaSetupError(existingError)) return { ok: false, error: SCHEMA_SETUP_MESSAGE }
+      throw existingError
+    }
+    if (pickEmailMatch(matches, email)) return { ok: false, reason: "already_replied" }
 
     if (parsed.data.status === "yes" && event.rsvp_limit != null) {
-      const { data: existingRow } = await supabase
-        .from("event_rsvps")
-        .select("guests, status")
-        .eq("event_id", eventId)
-        .eq("email", email)
-        .maybeSingle()
       const currentYes = await countYes(eventId, supabase)
-      const previousGuests =
-        existingRow && existingRow.status === "yes" ? (existingRow.guests as number) : 0
-      if (currentYes - previousGuests + parsed.data.guests > event.rsvp_limit) {
+      if (currentYes + parsed.data.guests > event.rsvp_limit) {
         return { ok: false, reason: "full" }
       }
     }
 
+    // "Keep me posted" only subscribes a brand-new contact. An existing
+    // contact's subscribed flag is never touched from this public form: it
+    // doesn't prove the visitor owns the address, so ticking the box here
+    // must not be able to re-subscribe someone who opted out.
     const found = await findOrCreateContact({
       email,
       first_name: parsed.data.name.split(" ")[0] || parsed.data.name,
@@ -350,34 +394,27 @@ export async function respondPublic(eventId: string, input: unknown): Promise<Pu
     })
     if (!found.ok) return { ok: false, error: found.error }
 
-    // Keep an existing contact's subscribed flag unless they explicitly opted in now.
-    if (!found.created && parsed.data.keepMePosted) {
-      await supabase
-        .from("contacts")
-        .update({ subscribed: true })
-        .eq("id", found.id)
-        .eq("subscribed", false)
-    }
-
+    // A plain insert, not an upsert: the (event_id, email) unique constraint
+    // turns a reply that raced in since the check above into "already replied"
+    // instead of silently overwriting it.
     const { data, error } = await supabase
       .from("event_rsvps")
-      .upsert(
-        {
-          event_id: eventId,
-          contact_id: found.id,
-          email,
-          name: parsed.data.name,
-          status: parsed.data.status,
-          guests: parsed.data.guests,
-          note: parsed.data.note ?? null,
-          source: "site",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "event_id,email" }
-      )
+      .insert({
+        event_id: eventId,
+        contact_id: found.id,
+        email,
+        name: parsed.data.name,
+        status: parsed.data.status,
+        guests: parsed.data.guests,
+        note: parsed.data.note ?? null,
+        source: "site",
+      })
       .select("id")
       .single()
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === "23505") return { ok: false, reason: "already_replied" }
+      throw error
+    }
 
     await logActivity(found.id, "rsvp", `RSVP'd "${parsed.data.status}" on the website`, data.id as string)
 
