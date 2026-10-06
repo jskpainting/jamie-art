@@ -10,6 +10,7 @@ import { SITE_URL } from "@/lib/site"
 import { getSchemaCapabilities } from "@/lib/schema-capabilities"
 import { AudienceSchema, type AudienceInput } from "@/lib/schemas"
 import { resolveAudience, logActivity } from "@/lib/actions/crm"
+import { buildFromHeader } from "@/lib/email-address"
 import { createInvites } from "@/lib/actions/rsvp"
 import {
   renderNewsletterHtml,
@@ -45,10 +46,14 @@ function audienceLabel(audience: AudienceInput | undefined): string {
  * Checks the email-service settings BEFORE anything is written or sent, so a
  * missing key can never leave a newsletter stuck on "sending". `new Resend()`
  * throws when the API key is missing, so it's built here inside the check.
+ *
+ * `from` uses the "Name shown on newsletter emails" from Settings when it's
+ * set ("Jamie Kendrioski <hello@…>"), otherwise RESEND_FROM_EMAIL as-is.
  */
-function getEmailConfig():
+async function getEmailConfig(): Promise<
   | { ok: true; resend: Resend; from: string }
-  | { ok: false; error: string } {
+  | { ok: false; error: string }
+> {
   const fromEmail = process.env.RESEND_FROM_EMAIL
   if (!fromEmail) {
     return {
@@ -64,8 +69,23 @@ function getEmailConfig():
         "The email service isn't connected yet, so this wasn't sent. Nothing has gone out. Ask your developer to set RESEND_API_KEY.",
     }
   }
+  // Best-effort: a settings hiccup falls back to the env sender, never blocks a send.
+  let fromName: string | null = null
+  const { data: settings, error: settingsError } = await createAdminClient()
+    .from("settings")
+    .select("newsletter_from_name")
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (settingsError) console.error("newsletter from-name lookup error:", settingsError)
+  else fromName = (settings?.newsletter_from_name as string | null) ?? null
+
   try {
-    return { ok: true, resend: new Resend(process.env.RESEND_API_KEY), from: fromEmail }
+    return {
+      ok: true,
+      resend: new Resend(process.env.RESEND_API_KEY),
+      from: buildFromHeader(fromEmail, fromName),
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown error"
     return { ok: false, error: `The email service couldn't be set up, so this wasn't sent: ${message}` }
@@ -98,7 +118,7 @@ export async function sendTestNewsletter(input: {
   }
   const { subject, bodyMarkdown, eventId } = parsed.data
 
-  const config = getEmailConfig()
+  const config = await getEmailConfig()
   if (!config.ok) return { ok: false as const, error: config.error }
   const { resend, from: fromEmail } = config
 
@@ -142,7 +162,7 @@ export async function sendNewsletter(input: {
   // account owner; every other recipient is rejected. Refusing here — before
   // the audit row exists — is far kinder than "sent" followed by silence, and
   // can't leave a row stuck on "sending".
-  const config = getEmailConfig()
+  const config = await getEmailConfig()
   if (!config.ok) return { ok: false as const, error: config.error }
   const { resend, from: fromEmail } = config
 

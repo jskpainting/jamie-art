@@ -17,6 +17,24 @@ export function emailMatchPattern(email: string): string {
   return normalizeEmail(email).replace(/[\\%_]/g, "\\$&")
 }
 
+/**
+ * The From header for newsletter emails. `envFrom` is RESEND_FROM_EMAIL,
+ * which may be a bare address ("hello@x.com") or already "Name <hello@x.com>".
+ * When the owner has set a sender name in Settings it replaces any name in
+ * the env value; otherwise the env value is used exactly as it is.
+ */
+export function buildFromHeader(envFrom: string, name: string | null | undefined): string {
+  const bracketed = envFrom.match(/<([^<>]+)>/)
+  const address = (bracketed ? bracketed[1] : envFrom).trim()
+  // Line breaks / angle brackets / quotes in a display name would break the
+  // header, so they're dropped.
+  const clean = (name ?? "").replace(/[\r\n<>"\\]/g, "").trim()
+  if (!clean) return envFrom.trim()
+  // RFC 5322: a display name containing punctuation like , . ; : @ must be quoted.
+  const display = /[()[\]:;@,.]/.test(clean) ? `"${clean}"` : clean
+  return `${display} <${address}>`
+}
+
 /** The row whose email really is this address (case-insensitively), if any. */
 export function pickEmailMatch<T extends { email: unknown }>(
   rows: T[] | null | undefined,

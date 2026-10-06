@@ -118,7 +118,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
           {...register("newsletter_from_name")}
         />
         <p className="text-xs text-muted-foreground">
-          Shown as the sender name in newsletter emails when Resend integration ships.
+          Shown as the sender name on newsletter emails (and test sends). Leave blank to use the default.
         </p>
         {errors.newsletter_from_name && (
           <p className="text-xs text-destructive">{errors.newsletter_from_name.message}</p>
