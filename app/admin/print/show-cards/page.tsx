@@ -1,6 +1,6 @@
 import Link from "next/link"
 import type { Metadata } from "next"
-import { getPaintingsForCards, getArModelIds, getSettings, type PaintingForCards } from "@/lib/db/queries"
+import { getPaintingsForCards, getArModelIds, type PaintingForCards } from "@/lib/db/queries"
 import { generateQrSvg, cardTargetUrl } from "@/components/print/qr"
 import { ShowCard, type CardLayout } from "@/components/print/show-card"
 import { TextShowCard } from "@/components/print/text-show-card"
@@ -191,12 +191,10 @@ export default async function PrintShowCardsPage({
     )
   }
 
-  const [allPaintings, arModelIds, settings] = await Promise.all([
+  const [allPaintings, arModelIds] = await Promise.all([
     getPaintingsForCards(), // one query — see lib/db/queries.ts
     getArModelIds(),
-    getSettings(),
   ])
-  const email = settings?.email ?? null
   const byId = new Map(allPaintings.map((p) => [p.id, p]))
 
   const foundIds: string[] = []
@@ -308,7 +306,6 @@ export default async function PrintShowCardsPage({
                       painting={entry.painting}
                       qrSvg={entry.qrSvg}
                       tagline={tagline}
-                      email={email}
                       layout={layout}
                     />
                   )}

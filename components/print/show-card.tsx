@@ -21,7 +21,6 @@ export const CARD_HEIGHT_MM = 50.8
 
 const TEXT_COLOR = "#0A0A0A"
 const MUTED_COLOR = "#6B6B66"
-const EMAIL_COLOR = "#3D3D3A"
 const HAIRLINE_COLOR = "#D9D6CC"
 
 export interface ShowCardPainting {
@@ -83,7 +82,6 @@ export interface ShowCardProps {
   /** Raw QR SVG markup, generated server-side (never a PNG data URL — see BUILD_SPEC). */
   qrSvg: string
   tagline: string
-  email: string | null
   /** Defaults to layoutFor(painting). */
   layout?: CardLayout
 }
@@ -165,19 +163,7 @@ function Name() {
   )
 }
 
-function Email({ email, marginTopMm }: { email: string | null; marginTopMm: number }) {
-  if (!email) return null
-  return (
-    <div
-      className="font-sans"
-      style={{ fontSize: "6pt", color: EMAIL_COLOR, marginTop: `${marginTopMm}mm` }}
-    >
-      {email}
-    </div>
-  )
-}
-
-export function ShowCard({ painting, qrSvg, tagline, email, layout }: ShowCardProps) {
+export function ShowCard({ painting, qrSvg, tagline, layout }: ShowCardProps) {
   const hasImage = !!painting.primary_image_url
   const meta = metadataLine(painting)
   const effectiveLayout = layout ?? layoutFor(painting)
@@ -242,7 +228,6 @@ export function ShowCard({ painting, qrSvg, tagline, email, layout }: ShowCardPr
               }}
             >
               <Name />
-              <Email email={email} marginTopMm={0.6} />
             </div>
 
             <div
@@ -323,7 +308,6 @@ export function ShowCard({ painting, qrSvg, tagline, email, layout }: ShowCardPr
               }}
             >
               <Name />
-              <Email email={email} marginTopMm={0.6} />
               {tagline && (
                 <div
                   className="font-sans"

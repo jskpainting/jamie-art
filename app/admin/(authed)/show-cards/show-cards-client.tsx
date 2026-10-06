@@ -132,7 +132,6 @@ interface ShowCardsClientProps {
   paintings: PaintingForCards[]
   arModelIds: string[]
   qrByPaintingId: Record<string, string>
-  email: string | null
 }
 
 // false while the server renders and while the browser hydrates, true after.
@@ -163,7 +162,6 @@ export function ShowCardsClient({
   paintings,
   arModelIds,
   qrByPaintingId,
-  email,
 }: ShowCardsClientProps) {
   const arModelSet = useMemo(() => new Set(arModelIds), [arModelIds])
 
@@ -316,7 +314,6 @@ export function ShowCardsClient({
     params.set("style", cardStyle)
     params.set("layout", layout)
     params.set("tagline", tagline)
-    if (email) params.set("email", email)
     params.set(
       "c",
       Object.keys(selections)
@@ -339,7 +336,6 @@ export function ShowCardsClient({
                 painting={proofPainting}
                 qrSvg={proofQr}
                 tagline={shown.tagline}
-                email={email}
                 layout={proofLayout}
               />
             ) : (
