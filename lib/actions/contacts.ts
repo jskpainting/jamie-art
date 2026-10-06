@@ -237,15 +237,16 @@ export async function importContacts(rows: (ContactImportRow | ContactImportRowE
         } else {
           const insertRow: Record<string, unknown> = {
             email,
-            first_name: row.first_name ?? null,
-            last_name: row.last_name ?? null,
+            // `|| null`: a blank CSV cell arrives as "" — save it as null, not "".
+            first_name: row.first_name || null,
+            last_name: row.last_name || null,
             source: "csv",
             tags,
           }
           if (crm) {
-            insertRow.phone = row.phone ?? null
-            insertRow.city = row.city ?? null
-            insertRow.notes = row.notes ?? null
+            insertRow.phone = row.phone || null
+            insertRow.city = row.city || null
+            insertRow.notes = row.notes || null
           }
           const { data: created, error } = await supabase
             .from("contacts")

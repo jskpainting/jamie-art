@@ -76,9 +76,9 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
     e.target.value = ""
   }
 
-  const validRows = rows.filter(
-    (r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email.trim())
-  )
+  const isValidRow = (r: ParsedRow) =>
+    !!r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email.trim())
+  const validRows = rows.filter(isValidRow)
   const newRows = validRows.filter(
     (r) => !existingSet.has((r.email ?? "").trim().toLowerCase())
   )
@@ -181,7 +181,9 @@ export function CsvImport({ existingEmails, className }: CsvImportProps) {
                       <td className="px-3 py-2">{row.first_name ?? "—"}</td>
                       <td className="px-3 py-2">{row.last_name ?? "—"}</td>
                       <td className="px-3 py-2">
-                        {isDupe ? (
+                        {!isValidRow(row) ? (
+                          <span className="text-destructive">invalid email — skipped</span>
+                        ) : isDupe ? (
                           <span className="text-muted-foreground">already in list</span>
                         ) : (
                           <span className="text-green-600 dark:text-green-400">new</span>
