@@ -31,7 +31,8 @@ export default async function CommissionPage({ searchParams }: Props) {
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-10 py-10 md:py-16">
       {/* Commission hero image */}
-      {settings?.commission_image_url ? (
+      {/* No image set: show nothing rather than an empty grey box. */}
+      {settings?.commission_image_url && (
         <div className="relative w-full aspect-video overflow-hidden mb-12">
           <Image
             src={settings.commission_image_url}
@@ -44,9 +45,6 @@ export default async function CommissionPage({ searchParams }: Props) {
             quality={90}
           />
         </div>
-      ) : (
-        /* TODO: replace placeholder with a real hero image via /admin/settings */
-        <div className="w-full h-[240px] md:h-[320px] bg-muted mb-12" />
       )}
 
       <div className="max-w-2xl">
