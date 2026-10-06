@@ -2,12 +2,14 @@
 // `server-only` package isn't installed in this project, so this file just
 // relies on nothing here being importable from a client component.
 import sharp from "sharp"
+import { revalidateTag } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   buildGlb,
   parsePhysicalInches,
   IN_TO_M,
   arModelPublicUrl,
+  arModelCacheTag,
 } from "@/lib/ar/build-glb"
 import { orientPhysical } from "@/lib/mosaic-layout"
 
@@ -16,6 +18,21 @@ export { arModelPublicUrl }
 export type GenerateArModelResult =
   | { ok: true; skipped?: "no-image" | "no-dimensions" | "exists" }
   | { ok: false; error: string }
+
+/**
+ * Expire the public page's cached "has a model?" check for this painting.
+ * Works inside after() too — Next runs revalidations queued by after()
+ * callbacks once they finish. Immediate expiry (not "max"), so the very next
+ * view re-checks rather than getting one more stale answer.
+ */
+function expireArModelCache(paintingId: string) {
+  try {
+    revalidateTag(arModelCacheTag(paintingId), { expire: 0 })
+  } catch (e) {
+    // Outside a Next request (e.g. a script) there is no cache to expire.
+    console.error("[ar] cache expire failed", paintingId, e)
+  }
+}
 
 /** Delete `<paintingId>.glb` if present (removing a missing object isn't an error). */
 async function removeStaleModel(
@@ -27,6 +44,7 @@ async function removeStaleModel(
     console.error("[ar] stale model delete failed", paintingId, error)
     return { ok: false, error: error.message }
   }
+  expireArModelCache(paintingId)
   return { ok: true }
 }
 
@@ -113,6 +131,7 @@ export async function generateArModel(
       return { ok: false, error: uploadError.message }
     }
 
+    expireArModelCache(paintingId)
     return { ok: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to generate AR model"

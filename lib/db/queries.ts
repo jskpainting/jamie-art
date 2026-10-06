@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { isAuthBypassed } from "@/lib/supabase/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isSchemaSetupError } from "@/lib/schema-capabilities"
+import { arModelCacheTag } from "@/lib/ar/build-glb"
 import type {
   Bio,
   CommissionInquiry,
@@ -240,9 +241,12 @@ export async function getArModelUrl(paintingId: string): Promise<string | null> 
   if (!base) return null
   const url = `${base}/storage/v1/object/public/ar-models/${paintingId}.glb`
   try {
+    // Cached for an hour, but tagged per painting: the AR job expires the tag
+    // when it uploads or deletes the model, so a page viewed before the
+    // background build finished doesn't keep saying "no model" for an hour.
     const res = await fetch(url, {
       method: "HEAD",
-      next: { revalidate: 3600 },
+      next: { revalidate: 3600, tags: [arModelCacheTag(paintingId)] },
     })
     return res.ok ? url : null
   } catch {
