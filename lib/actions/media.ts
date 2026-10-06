@@ -160,27 +160,27 @@ export async function getMediaUsage(
     // Every lookup must check `error`: supabase-js resolves with { error }
     // rather than throwing, and a failed lookup silently read as "not used"
     // would let deleteMedia remove a photo the live site still shows.
-    const { data: settings, error: settingsErr } = await supabase
+    // Read every row, not .maybeSingle(): a stray second settings/bio row
+    // would make .maybeSingle() error and block every delete.
+    const { data: settingsRows, error: settingsErr } = await supabase
       .from("settings")
       .select("home_hero_image_url, about_image_url, commission_image_url")
-      .maybeSingle()
     if (settingsErr) throw settingsErr
-    if (settings?.home_hero_image_url === url) {
+    if (settingsRows?.some((s) => s.home_hero_image_url === url)) {
       usage.push({ label: "Home page hero", adminHref: "/admin/settings" })
     }
-    if (settings?.about_image_url === url) {
+    if (settingsRows?.some((s) => s.about_image_url === url)) {
       usage.push({ label: "About page photo", adminHref: "/admin/settings" })
     }
-    if (settings?.commission_image_url === url) {
+    if (settingsRows?.some((s) => s.commission_image_url === url)) {
       usage.push({ label: "Commission page photo", adminHref: "/admin/settings" })
     }
 
-    const { data: bio, error: bioErr } = await supabase
+    const { data: bioRows, error: bioErr } = await supabase
       .from("bio")
       .select("headshot_url")
-      .maybeSingle()
     if (bioErr) throw bioErr
-    if (bio?.headshot_url === url) {
+    if (bioRows?.some((b) => b.headshot_url === url)) {
       usage.push({ label: "About page headshot", adminHref: "/admin/bio" })
     }
 

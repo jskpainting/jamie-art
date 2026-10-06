@@ -17,7 +17,7 @@ import { updatePaintingTags, getAllTags } from "@/lib/actions/tags"
 import { getFieldOptions, touchFieldOptions } from "@/lib/actions/field-options"
 import {
   searchContacts,
-  findOrCreateContact,
+  findOrCreateContactAsAdmin,
   addPurchase,
   type ContactSearchResult,
 } from "@/lib/actions/crm"
@@ -221,7 +221,7 @@ export function PaintingFormDialog({
 
     if (!contactId && soldToAddNew && newPersonEmail.trim()) {
       const [first, ...rest] = newPersonName.trim().split(/\s+/)
-      const created = await findOrCreateContact({
+      const created = await findOrCreateContactAsAdmin({
         email: newPersonEmail.trim(),
         first_name: newPersonName.trim() ? first : null,
         last_name: newPersonName.trim() && rest.length ? rest.join(" ") : null,

@@ -126,6 +126,20 @@ export async function findOrCreateContact(input: {
   }
 }
 
+/**
+ * The admin-only entry point to findOrCreateContact, for the "Sold to" flow
+ * in the painting dialog. A client component importing a server action puts
+ * that action's ID in the browser bundle, so the unguarded version must never
+ * be imported by client code — anyone could call it to probe or add contacts.
+ */
+export async function findOrCreateContactAsAdmin(
+  input: Parameters<typeof findOrCreateContact>[0]
+): Promise<{ ok: true; id: string; created: boolean } | { ok: false; error: string }> {
+  const user = await getUser()
+  if (!user) return { ok: false, error: "Unauthorized" }
+  return findOrCreateContact(input)
+}
+
 // --- Groups ----------------------------------------------------------------
 
 export async function getGroups() {
