@@ -40,11 +40,13 @@ Last updated: 2026-10-06
 - Content-Security-Policy header.
 - Soft-404 status on /portfolio/* (visitors already see "not found").
 - Show cards "Generate missing" button.
-- Backlog: picture version of the text-only show card; email off the QR card;
-  database one-row lock for settings/bio; server-side HEIC conversion; code
-  cleanup.
+- Backlog (not needed for the site to be fully usable): picture version of
+  the text-only show card; database one-row lock for settings/bio;
+  server-side HEIC conversion; code cleanup.
 
 ## Done
+
+- 2026-10-06 — Email removed from the QR show card (name only on all cards).
 
 - 2026-10-06 — Deleted junk: 2 test enquiries, 3 commission enquiries (test,
   bot, owner's own test) and 2 subscribers (a sales pitch and the owner's own
