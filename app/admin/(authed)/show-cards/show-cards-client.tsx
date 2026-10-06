@@ -119,6 +119,15 @@ const CARDS_SORT_OPTIONS = [
   { value: "title", label: "Title A–Z" },
 ]
 
+// What the server renders (it can't see localStorage).
+const DEFAULT_STORED_STATE: StoredState = {
+  selections: {},
+  tagline: DEFAULT_TAGLINE,
+  layout: "auto",
+  paper: "letter",
+  style: "qr",
+}
+
 interface ShowCardsClientProps {
   paintings: PaintingForCards[]
   arModelIds: string[]
@@ -127,8 +136,9 @@ interface ShowCardsClientProps {
 }
 
 // false while the server renders and while the browser hydrates, true after.
-// The card style is restored from localStorage in the first client render, so
-// anything drawn from it must wait for this or it won't match the server HTML.
+// Everything below is restored from localStorage in the first client render,
+// so anything drawn from it must wait for this or it won't match the server
+// HTML (React doesn't patch class-only mismatches, and text mismatches throw).
 const noopSubscribe = () => () => {}
 function useHydrated() {
   return useSyncExternalStore(
@@ -162,13 +172,7 @@ export function ShowCardsClient({
   // localStorage synchronously during the first render; on the server (no
   // window) it falls back to defaults, same as an empty store.
   const [stored] = useState<StoredState>(() => {
-    const defaults: StoredState = {
-      selections: {},
-      tagline: DEFAULT_TAGLINE,
-      layout: "auto",
-      paper: "letter",
-      style: "qr",
-    }
+    const defaults = DEFAULT_STORED_STATE
     if (typeof window === "undefined") return defaults
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY)
@@ -197,8 +201,15 @@ export function ShowCardsClient({
   const [layout, setLayout] = useState<LayoutChoice>(stored.layout)
   const [paper, setPaper] = useState<Paper>(stored.paper)
   const [cardStyle, setCardStyle] = useState<CardStyle>(stored.style)
+  // Render from the server's defaults until hydration is done, then from the
+  // restored state, so the first client render matches the server HTML
+  // exactly. Handlers and printing always use the real state.
   const hydrated = useHydrated()
-  const shownStyle: CardStyle = hydrated ? cardStyle : "qr"
+  const shown: StoredState = hydrated
+    ? { selections, tagline, layout, paper, style: cardStyle }
+    : DEFAULT_STORED_STATE
+  const shownSelections = shown.selections
+  const shownStyle = shown.style
 
   // Persist on every change. Writing to localStorage (not calling setState)
   // is exactly what effects are for — this is not the restore step above.
@@ -227,8 +238,8 @@ export function ShowCardsClient({
   const visiblePaintings = useMemo(() => {
     const q = search.trim().toLowerCase()
     let rows = paintings.filter((p) => {
-      if (filter === "selected" && !selections[p.id]) return false
-      if (filter === "unselected" && selections[p.id]) return false
+      if (filter === "selected" && !shownSelections[p.id]) return false
+      if (filter === "unselected" && shownSelections[p.id]) return false
       if (filter === "with-ar" && !arModelSet.has(p.id)) return false
       if (filter === "without-ar" && arModelSet.has(p.id)) return false
       if (!q) return true
@@ -241,7 +252,7 @@ export function ShowCardsClient({
       rows = [...rows].sort((a, b) => a.title.localeCompare(b.title))
     }
     return rows
-  }, [paintings, search, filter, sort, selections, arModelSet])
+  }, [paintings, search, filter, sort, shownSelections, arModelSet])
 
   const groups = useMemo(() => {
     const map = new Map<string, { title: string; paintings: PaintingForCards[] }>()
@@ -281,7 +292,7 @@ export function ShowCardsClient({
     })
   }
 
-  const selectedIds = Object.keys(selections)
+  const selectedIds = Object.keys(shownSelections)
   const paintingCount = selectedIds.length
   // Selection deliberately survives a filter change (it is also restored from
   // localStorage), so any selected painting the filter is hiding must be
@@ -291,13 +302,13 @@ export function ShowCardsClient({
     [visiblePaintings]
   )
   const hiddenSelectedCount = selectedIds.filter((id) => !visibleIdSet.has(id)).length
-  const cardCount = Object.values(selections).reduce((sum, n) => sum + n, 0)
+  const cardCount = Object.values(shownSelections).reduce((sum, n) => sum + n, 0)
   const sheetCount = cardCount > 0 ? Math.ceil(cardCount / 10) : 0
 
   const proofPainting: PaintingForCards | undefined =
-    paintings.find((p) => selections[p.id]) ?? paintings[0]
+    paintings.find((p) => shownSelections[p.id]) ?? paintings[0]
   const proofQr = proofPainting ? qrByPaintingId[proofPainting.id] ?? "" : ""
-  const proofLayout = layout === "auto" ? undefined : layout
+  const proofLayout = shown.layout === "auto" ? undefined : shown.layout
 
   function handlePrint() {
     const params = new URLSearchParams()
@@ -308,7 +319,9 @@ export function ShowCardsClient({
     if (email) params.set("email", email)
     params.set(
       "c",
-      selectedIds.map((id) => `${id}:${selections[id]}`).join(",")
+      Object.keys(selections)
+        .map((id) => `${id}:${selections[id]}`)
+        .join(",")
     )
     window.open(`/admin/print/show-cards?${params.toString()}`, "_blank")
   }
@@ -325,7 +338,7 @@ export function ShowCardsClient({
               <ShowCard
                 painting={proofPainting}
                 qrSvg={proofQr}
-                tagline={tagline}
+                tagline={shown.tagline}
                 email={email}
                 layout={proofLayout}
               />
@@ -378,7 +391,7 @@ export function ShowCardsClient({
                 </label>
                 <Input
                   id="tagline-input"
-                  value={tagline}
+                  value={shown.tagline}
                   maxLength={40}
                   onChange={(e) => setTagline(e.target.value)}
                   placeholder="Optional — e.g. Scan to see it on your wall"
@@ -398,7 +411,7 @@ export function ShowCardsClient({
                       onClick={() => setLayout(opt.value)}
                       className={cn(
                         "rounded-[6px] px-3 py-1 text-sm transition-colors",
-                        layout === opt.value
+                        shown.layout === opt.value
                           ? "bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:text-foreground"
                       )}
@@ -424,7 +437,7 @@ export function ShowCardsClient({
                   onClick={() => setPaper(p)}
                   className={cn(
                     "rounded-[6px] px-3 py-1 text-sm transition-colors",
-                    paper === p
+                    shown.paper === p
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
@@ -495,8 +508,8 @@ export function ShowCardsClient({
             </div>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
               {group.paintings.map((p) => {
-                const selected = !!selections[p.id]
-                const copies = selections[p.id] ?? 1
+                const selected = !!shownSelections[p.id]
+                const copies = shownSelections[p.id] ?? 1
                 const hasAr = arModelSet.has(p.id)
                 return (
                   <div
